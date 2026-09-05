@@ -33,6 +33,8 @@ export interface Account {
   /** Cartão de crédito: dia do vencimento da fatura. */
   dueDay?: number | null;
   archived?: boolean;
+  /** Quando mudou pela última vez — é o que decide quem vence ao sincronizar. */
+  updatedAt: string;
 }
 
 export type CategoryKind = 'income' | 'expense';
@@ -44,6 +46,7 @@ export interface Category {
   color: SeriesColor;
   emoji: string;
   archived?: boolean;
+  updatedAt: string;
 }
 
 /** Entrada, saída ou movimentação entre contas próprias. */
@@ -129,6 +132,28 @@ export interface InstallmentPurchase {
   updatedAt: string;
 }
 
+/** As coleções que sincronizam, cada uma com registros de mesmo formato. */
+export type TableName = 'accounts' | 'categories' | 'entries' | 'recurring' | 'purchases';
+
+export const TABLE_NAMES: TableName[] = ['accounts', 'categories', 'entries', 'recurring', 'purchases'];
+
+/**
+ * Marca de exclusão.
+ *
+ * Sem ela, apagar no celular não teria como ser comunicado: o outro aparelho
+ * veria apenas um registro "que existe aqui e não lá" e o ressuscitaria na
+ * próxima sincronização.
+ *
+ * Ficam numa lista à parte, e não como um `deletedAt` dentro de cada registro,
+ * porque o app lê essas coleções em dezenas de lugares — bastaria um esquecer
+ * de filtrar para um lançamento apagado voltar a somar num total.
+ */
+export interface Tombstone {
+  table: TableName;
+  id: string;
+  deletedAt: string;
+}
+
 export interface FinanceData {
   version: number;
   accounts: Account[];
@@ -136,6 +161,13 @@ export interface FinanceData {
   entries: Entry[];
   recurring: RecurringRule[];
   purchases: InstallmentPurchase[];
+  tombstones: Tombstone[];
+}
+
+/** Qualquer registro sincronizável: identidade e data da última mudança. */
+export interface SyncableRecord {
+  id: string;
+  updatedAt: string;
 }
 
 /** Ocorrência ainda não materializada, exibida junto dos lançamentos reais. */

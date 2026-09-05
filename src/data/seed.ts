@@ -13,10 +13,11 @@ export function newId(): string {
 const now = () => new Date().toISOString();
 
 export function defaultAccounts(): Account[] {
+  const updatedAt = now();
   return [
-    { id: newId(), name: 'Conta corrente', kind: 'checking', openingBalance: 0, color: 'blue' },
-    { id: newId(), name: 'Carteira', kind: 'cash', openingBalance: 0, color: 'aqua' },
-    { id: newId(), name: 'Cartão de crédito', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 25, dueDay: 5 },
+    { id: newId(), name: 'Conta corrente', kind: 'checking', openingBalance: 0, color: 'blue', updatedAt },
+    { id: newId(), name: 'Carteira', kind: 'cash', openingBalance: 0, color: 'aqua', updatedAt },
+    { id: newId(), name: 'Cartão de crédito', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 25, dueDay: 5, updatedAt },
   ];
 }
 
@@ -44,9 +45,10 @@ const INCOME_CATEGORIES: [string, string, SeriesColor][] = [
 ];
 
 export function defaultCategories(): Category[] {
+  const updatedAt = now();
   return [
-    ...EXPENSE_CATEGORIES.map(([name, emoji, color]) => ({ id: newId(), name, kind: 'expense' as const, emoji, color })),
-    ...INCOME_CATEGORIES.map(([name, emoji, color]) => ({ id: newId(), name, kind: 'income' as const, emoji, color })),
+    ...EXPENSE_CATEGORIES.map(([name, emoji, color]) => ({ id: newId(), name, kind: 'expense' as const, emoji, color, updatedAt })),
+    ...INCOME_CATEGORIES.map(([name, emoji, color]) => ({ id: newId(), name, kind: 'income' as const, emoji, color, updatedAt })),
   ];
 }
 
@@ -59,6 +61,7 @@ export function initialData(): FinanceData {
     entries: [],
     recurring: [],
     purchases: [],
+    tombstones: [],
   };
 }
 

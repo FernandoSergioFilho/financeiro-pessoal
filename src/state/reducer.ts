@@ -11,25 +11,42 @@ import type {
   FinanceData,
   InstallmentPurchase,
   RecurringRule,
+  TableName,
+  Tombstone,
 } from '../domain/types.ts';
 
 export type Action =
   | { type: 'data/replace'; data: FinanceData }
   | { type: 'entry/create'; entry: Entry }
   | { type: 'entry/update'; id: string; patch: Partial<Entry>; updatedAt: string }
-  | { type: 'entry/delete'; id: string }
+  | { type: 'entry/delete'; id: string; deletedAt: string }
   | { type: 'occurrence/skip'; recurringId: string; date: string; updatedAt: string }
   | { type: 'recurring/create'; rule: RecurringRule }
   | { type: 'recurring/update'; id: string; patch: Partial<RecurringRule>; updatedAt: string }
-  | { type: 'recurring/delete'; id: string }
+  | { type: 'recurring/delete'; id: string; deletedAt: string }
   | { type: 'purchase/create'; purchase: InstallmentPurchase; entries: Entry[] }
-  | { type: 'purchase/delete'; id: string }
+  | { type: 'purchase/delete'; id: string; deletedAt: string }
   | { type: 'account/create'; account: Account }
-  | { type: 'account/update'; id: string; patch: Partial<Account> }
-  | { type: 'account/delete'; id: string }
+  | { type: 'account/update'; id: string; patch: Partial<Account>; updatedAt: string }
+  | { type: 'account/delete'; id: string; deletedAt: string }
   | { type: 'category/create'; category: Category }
-  | { type: 'category/update'; id: string; patch: Partial<Category> }
-  | { type: 'category/delete'; id: string };
+  | { type: 'category/update'; id: string; patch: Partial<Category>; updatedAt: string }
+  | { type: 'category/delete'; id: string; deletedAt: string };
+
+/**
+ * Registra a exclusão para que os outros aparelhos fiquem sabendo.
+ * Sem esse rastro, a próxima sincronização traria o registro de volta.
+ */
+function withTombstones(
+  state: FinanceData,
+  deletedAt: string,
+  ...targets: [TableName, string][]
+): Tombstone[] {
+  const novos = targets
+    .filter(([table, id]) => !state.tombstones.some((t) => t.table === table && t.id === id))
+    .map(([table, id]) => ({ table, id, deletedAt }));
+  return novos.length ? [...state.tombstones, ...novos] : state.tombstones;
+}
 
 /** Marca a ocorrência como pulada para que a projeção não a ressuscite. */
 function skipOccurrence(
@@ -77,9 +94,14 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
       // souber que aquele mês foi dispensado.
       const recurring =
         target?.recurringId && target.occurrenceDate
-          ? skipOccurrence(state.recurring, target.recurringId, target.occurrenceDate, target.updatedAt)
+          ? skipOccurrence(state.recurring, target.recurringId, target.occurrenceDate, action.deletedAt)
           : state.recurring;
-      return { ...state, entries, recurring };
+      return {
+        ...state,
+        entries,
+        recurring,
+        tombstones: withTombstones(state, action.deletedAt, ['entries', action.id]),
+      };
     }
 
     case 'occurrence/skip':
@@ -104,10 +126,14 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
         ...state,
         recurring: state.recurring.filter((rule) => rule.id !== action.id),
         // O que já aconteceu é histórico e fica; só perde o vínculo com a
-        // regra que deixou de existir.
+        // regra que deixou de existir. O `updatedAt` novo faz a alteração
+        // viajar para os outros aparelhos junto com a exclusão.
         entries: state.entries.map((entry) =>
-          entry.recurringId === action.id ? { ...entry, recurringId: null, occurrenceDate: null } : entry,
+          entry.recurringId === action.id
+            ? { ...entry, recurringId: null, occurrenceDate: null, updatedAt: action.deletedAt }
+            : entry,
         ),
+        tombstones: withTombstones(state, action.deletedAt, ['recurring', action.id]),
       };
 
     case 'purchase/create':
@@ -117,12 +143,22 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
         entries: [...state.entries, ...action.entries],
       };
 
-    case 'purchase/delete':
+    case 'purchase/delete': {
+      // Cada parcela apagada precisa do próprio rastro: para o outro
+      // aparelho, sumir a compra e sumir as parcelas são fatos distintos.
+      const parcelas = state.entries.filter((entry) => entry.purchaseId === action.id);
       return {
         ...state,
         purchases: state.purchases.filter((purchase) => purchase.id !== action.id),
         entries: state.entries.filter((entry) => entry.purchaseId !== action.id),
+        tombstones: withTombstones(
+          state,
+          action.deletedAt,
+          ['purchases', action.id],
+          ...parcelas.map((entry) => ['entries', entry.id] as [TableName, string]),
+        ),
       };
+    }
 
     case 'account/create':
       return { ...state, accounts: [...state.accounts, action.account] };
@@ -131,15 +167,24 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
       return {
         ...state,
         accounts: state.accounts.map((account) =>
-          account.id === action.id ? { ...account, ...action.patch } : account,
+          account.id === action.id ? { ...account, ...action.patch, updatedAt: action.updatedAt } : account,
         ),
       };
 
     case 'account/delete':
       // Com movimento na conta, apagar apagaria histórico junto: arquiva.
       return accountInUse(state, action.id)
-        ? reducer(state, { type: 'account/update', id: action.id, patch: { archived: true } })
-        : { ...state, accounts: state.accounts.filter((account) => account.id !== action.id) };
+        ? reducer(state, {
+            type: 'account/update',
+            id: action.id,
+            patch: { archived: true },
+            updatedAt: action.deletedAt,
+          })
+        : {
+            ...state,
+            accounts: state.accounts.filter((account) => account.id !== action.id),
+            tombstones: withTombstones(state, action.deletedAt, ['accounts', action.id]),
+          };
 
     case 'category/create':
       return { ...state, categories: [...state.categories, action.category] };
@@ -148,7 +193,7 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
       return {
         ...state,
         categories: state.categories.map((category) =>
-          category.id === action.id ? { ...category, ...action.patch } : category,
+          category.id === action.id ? { ...category, ...action.patch, updatedAt: action.updatedAt } : category,
         ),
       };
 
@@ -157,11 +202,16 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
         ...state,
         categories: state.categories.filter((category) => category.id !== action.id),
         entries: state.entries.map((entry) =>
-          entry.categoryId === action.id ? { ...entry, categoryId: null } : entry,
+          entry.categoryId === action.id
+            ? { ...entry, categoryId: null, updatedAt: action.deletedAt }
+            : entry,
         ),
         recurring: state.recurring.map((rule) =>
-          rule.categoryId === action.id ? { ...rule, categoryId: null } : rule,
+          rule.categoryId === action.id
+            ? { ...rule, categoryId: null, updatedAt: action.deletedAt }
+            : rule,
         ),
+        tombstones: withTombstones(state, action.deletedAt, ['categories', action.id]),
       };
   }
 }

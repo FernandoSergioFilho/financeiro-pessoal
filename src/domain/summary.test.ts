@@ -24,8 +24,8 @@ function entry(overrides: Partial<Entry> = {}): Entry {
   };
 }
 
-const conta: Account = { id: 'conta', name: 'Conta corrente', kind: 'checking', openingBalance: 100000, color: 'blue' };
-const poupanca: Account = { id: 'poupanca', name: 'Poupança', kind: 'savings', openingBalance: 0, color: 'aqua' };
+const conta: Account = { id: 'conta', name: 'Conta corrente', kind: 'checking', openingBalance: 100000, color: 'blue', updatedAt: '2026-01-01T00:00:00.000Z' };
+const poupanca: Account = { id: 'poupanca', name: 'Poupança', kind: 'savings', openingBalance: 0, color: 'aqua', updatedAt: '2026-01-01T00:00:00.000Z' };
 
 describe('entryDelta', () => {
   it('soma receita e subtrai despesa na conta do lançamento', () => {
@@ -114,8 +114,8 @@ describe('periodTotals', () => {
 
 describe('totalsByCategory', () => {
   const categories: Category[] = [
-    { id: 'alimentacao', name: 'Alimentação', kind: 'expense', color: 'blue', emoji: '🍽️' },
-    { id: 'transporte', name: 'Transporte', kind: 'expense', color: 'orange', emoji: '🚌' },
+    { id: 'alimentacao', name: 'Alimentação', kind: 'expense', color: 'blue', emoji: '🍽️', updatedAt: '2026-01-01T00:00:00.000Z' },
+    { id: 'transporte', name: 'Transporte', kind: 'expense', color: 'orange', emoji: '🚌', updatedAt: '2026-01-01T00:00:00.000Z' },
   ];
 
   it('agrupa por categoria e ordena do maior para o menor', () => {

@@ -31,8 +31,8 @@ import { accountInUse, reducer } from './reducer.ts';
 
 export type EntryDraft = Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>;
 export type RecurringDraft = Omit<RecurringRule, 'id' | 'createdAt' | 'updatedAt' | 'skippedDates'>;
-export type AccountDraft = Omit<Account, 'id'>;
-export type CategoryDraft = Omit<Category, 'id'>;
+export type AccountDraft = Omit<Account, 'id' | 'updatedAt'>;
+export type CategoryDraft = Omit<Category, 'id' | 'updatedAt'>;
 
 export interface FinanceApi {
   addEntry(draft: EntryDraft): Entry;
@@ -130,7 +130,7 @@ export function FinanceProvider({
         dispatch({ type: 'entry/update', id, patch, updatedAt: now() });
       },
       deleteEntry(id) {
-        dispatch({ type: 'entry/delete', id });
+        dispatch({ type: 'entry/delete', id, deletedAt: now() });
       },
       materialize(projection, patch) {
         const { id: _id, projected: _projected, ...rest } = projection;
@@ -152,7 +152,7 @@ export function FinanceProvider({
         dispatch({ type: 'recurring/update', id, patch, updatedAt: now() });
       },
       deleteRecurring(id) {
-        dispatch({ type: 'recurring/delete', id });
+        dispatch({ type: 'recurring/delete', id, deletedAt: now() });
       },
 
       addPurchase(draft) {
@@ -160,28 +160,28 @@ export function FinanceProvider({
         dispatch({ type: 'purchase/create', purchase, entries });
       },
       deletePurchase(id) {
-        dispatch({ type: 'purchase/delete', id });
+        dispatch({ type: 'purchase/delete', id, deletedAt: now() });
       },
 
       addAccount(draft) {
-        dispatch({ type: 'account/create', account: { ...draft, id: newId() } });
+        dispatch({ type: 'account/create', account: { ...draft, id: newId(), updatedAt: now() } });
       },
       updateAccount(id, patch) {
-        dispatch({ type: 'account/update', id, patch });
+        dispatch({ type: 'account/update', id, patch, updatedAt: now() });
       },
       deleteAccount(id) {
-        dispatch({ type: 'account/delete', id });
+        dispatch({ type: 'account/delete', id, deletedAt: now() });
       },
       isAccountInUse: () => false, // substituído abaixo, onde o estado atual é conhecido
 
       addCategory(draft) {
-        dispatch({ type: 'category/create', category: { ...draft, id: newId() } });
+        dispatch({ type: 'category/create', category: { ...draft, id: newId(), updatedAt: now() } });
       },
       updateCategory(id, patch) {
-        dispatch({ type: 'category/update', id, patch });
+        dispatch({ type: 'category/update', id, patch, updatedAt: now() });
       },
       deleteCategory(id) {
-        dispatch({ type: 'category/delete', id });
+        dispatch({ type: 'category/delete', id, deletedAt: now() });
       },
 
       replaceData(next) {
