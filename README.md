@@ -5,6 +5,9 @@ lançamentos, projeta **contas recorrentes** e acompanha **compras parceladas**.
 
 **No ar:** https://fernandosergiofilho.github.io/financeiro-pessoal/
 
+Cada envio para a branch principal roda os testes e, se passarem, publica sozinho — pela
+branch `gh-pages`, sem exigir nenhuma configuração manual no repositório.
+
 ## Instalar no celular
 
 O app é instalável: abre em tela cheia, com ícone próprio, e **funciona sem internet**.
