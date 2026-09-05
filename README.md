@@ -146,18 +146,35 @@ sincronização acontece por trás, e o que for lançado sem sinal sobe quando a
 
 1. Crie um projeto no [supabase.com](https://supabase.com) (plano gratuito).
 2. No **SQL Editor**, rode o arquivo [`supabase/schema.sql`](supabase/schema.sql).
-3. Em **Settings → API**, copie a *Project URL* e a chave **`anon`** para um `.env.local`
-   (veja `.env.example`). A chave `service_role` não entra aqui nem em lugar nenhum:
-   ela ignora todas as políticas de acesso.
-4. Para a versão publicada, as mesmas duas entram em **Settings → Secrets and variables →
-   Actions** do repositório, com os nomes `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+3. Em **Settings → API**, copie a *Project URL* e a chave **`anon`** para o
+   `.env.production` (veja `.env.example` para o formato). A chave `service_role` não
+   entra aqui nem em lugar nenhum: ela ignora todas as políticas de acesso.
 
 No app, a área fica em **Ajustes → Conta e sincronização**: você entra com um link enviado
 por e-mail (sem senha) e pode gerar um **código de convite** para a segunda pessoa.
 
-A chave `anon` é pública por natureza — vai dentro do JavaScript entregue ao navegador.
-Quem protege os dados são as políticas em `supabase/schema.sql`: toda leitura e escrita
-passa por "sou membro desta carteira".
+### Por que a chave fica versionada, e não num "secret"
+
+A chave `anon` é **pública por natureza**: ela é compilada dentro do JavaScript que o site
+entrega a qualquer visitante. Dá para conferir depois de um `npm run build`:
+
+```bash
+grep -c "eyJhbGciOi" dist/assets/index-*.js   # a chave está lá
+```
+
+Guardá-la num secret do GitHub não a esconderia de ninguém — só daria uma falsa sensação
+de segurança, além de exigir configuração manual a cada clone. Quem realmente protege os
+lançamentos são as políticas de acesso em `supabase/schema.sql`.
+
+**Confirme isso você mesmo**, antes de publicar e sempre que mexer no schema:
+
+```bash
+npm run verificar-seguranca
+```
+
+O script usa a mesma chave pública, sem estar logado, e tenta ler e gravar os seus dados.
+Ele distingue "o servidor negou" de "não cheguei ao servidor": numa rede com proxy ou com
+a URL errada ele avisa que **nada foi verificado**, em vez de dar um falso sinal verde.
 
 ### Como o conflito é resolvido
 

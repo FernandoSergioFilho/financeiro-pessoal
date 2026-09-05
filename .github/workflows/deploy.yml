@@ -36,13 +36,12 @@ jobs:
       - name: Checagem de tipos
         run: npm run typecheck
 
+      # A configuração do Supabase vem do .env.production versionado, e não de
+      # secrets. A chave `anon` é entregue ao navegador de todo visitante, então
+      # escondê-la num secret não protegeria nada — quem protege os dados são as
+      # políticas de acesso em supabase/schema.sql.
       - name: Build
         run: npm run build
-        env:
-          # Enquanto os segredos não existirem, estas variáveis chegam vazias
-          # e o aplicativo funciona em modo local, como hoje.
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

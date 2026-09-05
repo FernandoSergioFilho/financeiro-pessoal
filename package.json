@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "verificar-seguranca": "node scripts/verificar-seguranca.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",
