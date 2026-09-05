@@ -7,3 +7,4 @@ coverage/
 *.tsbuildinfo
 dist-single/
 financeiro.html
+dev-dist/

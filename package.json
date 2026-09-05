@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:single": "vite build --mode singlefile && node scripts/build-single.mjs",
+    "build:icons": "node scripts/build-icons.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -22,8 +23,10 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.63.0",
     "typescript": "^5.9.3",
     "vite": "^8.2.2",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^5.0.0"
   }
 }

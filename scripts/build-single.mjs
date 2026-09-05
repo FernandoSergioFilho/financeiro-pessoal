@@ -59,6 +59,24 @@ if (result.indexOf('<script>') < result.indexOf('<div id="root">')) {
   throw new Error('O script precisa vir depois do #root, senão o app não encontra onde montar.');
 }
 
+// O index.html aponta para ícones em arquivos separados, que fazem sentido no
+// site publicado mas não existem ao lado de um HTML solto na pasta de
+// downloads. O favicon entra embutido; o resto, que só serve para instalar o
+// app pelo navegador, sai fora.
+const favicon = await readFile(join(buildDir, 'favicon.svg'), 'utf8');
+const faviconInline = `data:image/svg+xml,${encodeURIComponent(favicon)}`;
+
+result = result
+  .replace(/href="\.\/favicon\.svg"/, () => `href="${faviconInline}"`)
+  .replace(/\s*<link[^>]+rel="apple-touch-icon"[^>]*>/, '')
+  .replace(/\s*<link[^>]+href="[^"]*manifest\.webmanifest"[^>]*>/, '')
+  .replace(/\s*<script[^>]+src="[^"]*registerSW\.js"[^>]*><\/script>/, '');
+
+if (/(src|href)="\.\//.test(result)) {
+  const sobrou = result.match(/(src|href)="\.\/[^"]*"/g);
+  throw new Error(`O arquivo único ficou com referência externa: ${sobrou?.join(', ')}`);
+}
+
 result = result.replace(
   '</head>',
   '  <!-- Arquivo único: abra com dois cliques. Tudo fica salvo neste navegador. -->\n  </head>',

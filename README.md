@@ -3,6 +3,20 @@
 Controle financeiro pessoal que roda no navegador — desktop e celular. Registra
 lançamentos, projeta **contas recorrentes** e acompanha **compras parceladas**.
 
+**No ar:** https://fernandosergiofilho.github.io/financeiro-pessoal/
+
+## Instalar no celular
+
+O app é instalável: abre em tela cheia, com ícone próprio, e **funciona sem internet**.
+
+- **Android (Chrome):** abra o endereço, toque nos três pontinhos e em *Instalar aplicativo*
+  (ou *Adicionar à tela inicial*).
+- **iPhone (Safari):** abra o endereço, toque no botão de compartilhar e em
+  *Adicionar à Tela de Início*.
+
+Sem conexão o app continua abrindo e aceitando lançamentos — eles ficam guardados no
+aparelho.
+
 Nesta primeira etapa tudo roda **local**, sem servidor e sem cadastro: os dados ficam
 guardados no próprio navegador. A camada de dados já foi desenhada para virar online sem
 mexer na interface (veja *Caminho para a versão online*).
