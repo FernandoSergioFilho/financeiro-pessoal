@@ -31,7 +31,7 @@ export function Dashboard({
   onNew: () => void;
   onNavigate: (page: string) => void;
 }) {
-  const { data } = useFinance();
+  const { data, cloud } = useFinance();
   const { accounts, categories } = useLookups();
   const monthEntries = useMonthEntries(month);
   const overdue = useOverdue();
@@ -63,19 +63,39 @@ export function Dashboard({
   const recent = useMemo(() => [...monthEntries].reverse().slice(0, 8), [monthEntries]);
 
   if (data.entries.length === 0 && data.recurring.length === 0) {
+    // A primeira tela é o único lugar onde alguém descobre que existe
+    // sincronização — daí o convite, com um botão que leva até ela em vez de
+    // deixar o usuário caçar onde fica.
+    const podeEntrar = cloud.enabled && cloud.status === 'signed-out';
+
+    const ondeFicaSalvo = !cloud.enabled
+      ? 'Tudo fica salvo só neste navegador.'
+      : cloud.status === 'ready'
+        ? 'Tudo fica salvo neste aparelho e sincronizado com os seus outros.'
+        : 'Tudo fica salvo neste aparelho — e, se você entrar com seu e-mail, aparece também no computador.';
+
     return (
       <Card>
         <EmptyState
           emoji="👋"
           title="Vamos começar"
           action={
-            <button type="button" className="btn primary" onClick={onNew}>
-              Criar o primeiro lançamento
-            </button>
+            // `wrap` porque os dois botões não cabem lado a lado numa tela de
+            // celular: sem isso, os dois ficam cortados nas pontas.
+            <div className="row wrap" style={{ justifyContent: 'center' }}>
+              <button type="button" className="btn primary" onClick={onNew}>
+                Criar o primeiro lançamento
+              </button>
+              {podeEntrar && (
+                <button type="button" className="btn" onClick={() => onNavigate('ajustes')}>
+                  Entrar para sincronizar
+                </button>
+              )}
+            </div>
           }
         >
-          Registre entradas e saídas, cadastre as contas que se repetem todo mês e as compras parceladas. Tudo fica
-          salvo só neste navegador.
+          Registre entradas e saídas, cadastre as contas que se repetem todo mês e as compras parceladas.{' '}
+          {ondeFicaSalvo}
         </EmptyState>
       </Card>
     );
