@@ -19,12 +19,20 @@ experimentar no computador.
 
 Duas ressalvas que valem saber antes de começar a digitar de verdade:
 
-- Os dados ficam presos **a esse arquivo, naquele navegador**. Mover para outro aparelho
-  ou para a versão online depois se faz por **Ajustes → Baixar backup** e, do outro lado,
+- Os lançamentos ficam **no navegador daquele aparelho**, não dentro do arquivo. O
+  arquivo é só o programa: levá-lo para outro computador leva o app, não o histórico.
+  Para mudar de aparelho, use **Ajustes → Baixar backup** e, do outro lado,
   **Restaurar backup**.
-- Mover ou renomear o arquivo pode fazer o navegador tratá-lo como outro endereço e
-  "perder" os lançamentos. Se o navegador recusar salvar (janela anônima, por exemplo), o
-  app avisa no topo — mas o backup é a rede de proteção.
+- Mover ou renomear o arquivo **não** perde nada no Chrome, que guarda o armazenamento de
+  todos os arquivos locais no mesmo lugar (verificado). Em outros navegadores pode variar,
+  e o backup é a garantia.
+- Se o navegador recusar salvar (janela anônima, por exemplo), o app avisa no topo em vez
+  de perder os dados em silêncio.
+
+**Não há sincronização entre aparelhos.** Lançar no celular e no notebook cria dois
+históricos separados, e restaurar um backup substitui o que estiver do outro lado, não
+mistura. Enquanto for local, vale eleger um aparelho como o oficial. É exatamente esse
+problema que a versão online resolveria.
 
 No celular esse caminho é frágil: abrir um arquivo baixado varia muito entre Android e
 iPhone, e o iOS costuma bloquear o armazenamento nesse modo. Para testar no telefone,
