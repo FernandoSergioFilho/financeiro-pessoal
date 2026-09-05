@@ -9,6 +9,7 @@ import { downloadCsv, downloadJson, entriesToCsv, readBackup } from '../../data/
 import { useLookups, useMonthEntries } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '../components/primitives.tsx';
+import { CloudPanel } from '../components/CloudPanel.tsx';
 import type { ThemeChoice } from '../theme.ts';
 
 const ACCOUNT_KINDS: { value: AccountKind; label: string }[] = [
@@ -225,7 +226,7 @@ export function SettingsPage({
   theme: ThemeChoice;
   onThemeChange: (theme: ThemeChoice) => void;
 }) {
-  const { data, api } = useFinance();
+  const { data, api, cloud } = useFinance();
   const { accounts, categories, accountName, categoryName } = useLookups();
   const monthEntries = useMonthEntries(month);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -248,6 +249,8 @@ export function SettingsPage({
 
   return (
     <>
+      <CloudPanel />
+
       <Card
         title="Contas"
         action={
@@ -372,8 +375,9 @@ export function SettingsPage({
       <div className="grid split">
         <Card title="Seus dados">
           <p className="muted" style={{ fontSize: '0.86rem', marginBottom: 12 }}>
-            Tudo fica salvo neste navegador, sem servidor. Faça backup antes de limpar o histórico ou trocar de
-            computador.
+            {cloud.status === 'ready'
+              ? 'Seus lançamentos ficam neste aparelho e também na sua carteira na nuvem. O backup continua valendo para guardar uma cópia fora dos dois.'
+              : 'Tudo fica salvo neste navegador, sem servidor. Faça backup antes de limpar o histórico ou trocar de computador.'}
           </p>
           <div className="row wrap">
             <button

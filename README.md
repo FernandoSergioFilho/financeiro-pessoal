@@ -131,7 +131,42 @@ contraste e faixa de luminosidade) nos temas claro e escuro. As cores são guard
 *nome de posição na paleta* (`'blue'`), não como hex, então o tema escuro usa outro passo
 da mesma família sem tocar nos dados.
 
-## Caminho para a versão online
+## Sincronizar entre aparelhos
+
+O app pode funcionar em dois modos, e o segundo é opcional:
+
+- **Só local** (sem configuração): os lançamentos ficam no navegador do aparelho.
+- **Com carteira compartilhada**: duas pessoas, cada uma com seu login, enxergam e editam
+  os mesmos lançamentos, de qualquer aparelho.
+
+Continua **local-first** nos dois casos: o app grava no navegador e funciona offline; a
+sincronização acontece por trás, e o que for lançado sem sinal sobe quando a conexão volta.
+
+### Ligar a sincronização
+
+1. Crie um projeto no [supabase.com](https://supabase.com) (plano gratuito).
+2. No **SQL Editor**, rode o arquivo [`supabase/schema.sql`](supabase/schema.sql).
+3. Em **Settings → API**, copie a *Project URL* e a chave **`anon`** para um `.env.local`
+   (veja `.env.example`). A chave `service_role` não entra aqui nem em lugar nenhum:
+   ela ignora todas as políticas de acesso.
+4. Para a versão publicada, as mesmas duas entram em **Settings → Secrets and variables →
+   Actions** do repositório, com os nomes `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+
+No app, a área fica em **Ajustes → Conta e sincronização**: você entra com um link enviado
+por e-mail (sem senha) e pode gerar um **código de convite** para a segunda pessoa.
+
+A chave `anon` é pública por natureza — vai dentro do JavaScript entregue ao navegador.
+Quem protege os dados são as políticas em `supabase/schema.sql`: toda leitura e escrita
+passa por "sou membro desta carteira".
+
+### Como o conflito é resolvido
+
+Por registro, o mais recente vence. Se cada pessoa editar um lançamento diferente, os dois
+sobrevivem. Se as duas editarem o mesmo, fica a alteração mais recente. Uma exclusão
+propaga para os outros aparelhos, mas uma edição *posterior* à exclusão ressuscita o
+registro — é mais fácil apagar de novo do que redigitar algo que sumiu sozinho.
+
+## Caminho para outra nuvem
 
 `src/data/repository.ts` define a interface `FinanceRepository` (`load`, `save`, `clear`),
 hoje implementada por `LocalStorageRepository`. A interface é assíncrona de propósito: a

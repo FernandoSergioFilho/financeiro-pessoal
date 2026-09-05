@@ -12,6 +12,7 @@ import { addMonthsToKey, currentMonthKey, formatMonthKey } from '../domain/date.
 import type { DisplayEntry } from '../domain/types.ts';
 import { useFinance } from '../state/store.tsx';
 import { EditEntryDialog, NewEntryDialog } from './components/EntryForms.tsx';
+import { SyncBadge } from './components/CloudPanel.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
 import { EntriesPage } from './pages/EntriesPage.tsx';
 import { PurchasesPage } from './pages/PurchasesPage.tsx';
@@ -133,6 +134,7 @@ export function App() {
               Hoje
             </button>
           )}
+          <SyncBadge />
         </header>
 
         <main className="content">

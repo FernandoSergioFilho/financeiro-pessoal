@@ -28,6 +28,7 @@ import { LocalStorageRepository, type FinanceRepository } from '../data/reposito
 import { emptyData } from '../data/schema.ts';
 import { demoData, initialData, newId } from '../data/seed.ts';
 import { accountInUse, reducer } from './reducer.ts';
+import { useCloud, type CloudApi, type CloudState } from './cloud.ts';
 
 export type EntryDraft = Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>;
 export type RecurringDraft = Omit<RecurringRule, 'id' | 'createdAt' | 'updatedAt' | 'skippedDates'>;
@@ -69,6 +70,9 @@ interface FinanceContextValue {
   /** Este navegador recusou gravar: o usuário precisa saber, e usar o backup. */
   storageBlocked: boolean;
   api: FinanceApi;
+  /** Sessão e sincronização. Desligadas quando o app roda só local. */
+  cloud: CloudState;
+  cloudApi: CloudApi;
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null);
@@ -111,6 +115,11 @@ export function FinanceProvider({
     }, 150);
     return () => clearTimeout(timer);
   }, [data, repository]);
+
+  const aplicarDaNuvem = useCallback((next: FinanceData) => {
+    dispatch({ type: 'data/replace', data: next });
+  }, []);
+  const [cloud, cloudApi] = useCloud(data, aplicarDaNuvem);
 
   const now = useCallback(() => new Date().toISOString(), []);
 
@@ -202,8 +211,10 @@ export function FinanceProvider({
       loading,
       storageBlocked,
       api: { ...api, isAccountInUse: (id) => accountInUse(data, id) },
+      cloud,
+      cloudApi,
     }),
-    [data, loading, storageBlocked, api],
+    [data, loading, storageBlocked, api, cloud, cloudApi],
   );
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
