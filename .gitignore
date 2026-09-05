@@ -5,3 +5,5 @@ dist/
 .vite/
 coverage/
 *.tsbuildinfo
+dist-single/
+financeiro.html

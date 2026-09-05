@@ -12,7 +12,13 @@ import { emptyData, migrate } from './schema.ts';
 
 export interface FinanceRepository {
   load(): Promise<FinanceData>;
-  save(data: FinanceData): Promise<void>;
+  /**
+   * `false` quando não foi possível gravar. Devolver em vez de lançar é
+   * proposital: quem chama precisa poder avisar o usuário, e uma exceção
+   * dentro de um efeito viraria rejeição não tratada — o app seguiria
+   * parecendo que salvou.
+   */
+  save(data: FinanceData): Promise<boolean>;
   clear(): Promise<void>;
 }
 
@@ -34,11 +40,23 @@ export class LocalStorageRepository implements FinanceRepository {
     }
   }
 
-  async save(data: FinanceData): Promise<void> {
-    window.localStorage.setItem(this.key, JSON.stringify(data));
+  async save(data: FinanceData): Promise<boolean> {
+    try {
+      window.localStorage.setItem(this.key, JSON.stringify(data));
+      return true;
+    } catch (error) {
+      // Janela anônima, armazenamento desativado, cota cheia, ou o arquivo
+      // aberto direto do disco em navegadores mais restritivos.
+      console.error('Não foi possível salvar os dados neste navegador.', error);
+      return false;
+    }
   }
 
   async clear(): Promise<void> {
-    window.localStorage.removeItem(this.key);
+    try {
+      window.localStorage.removeItem(this.key);
+    } catch {
+      // Nada a fazer: se não dá para escrever, também não dá para limpar.
+    }
   }
 }

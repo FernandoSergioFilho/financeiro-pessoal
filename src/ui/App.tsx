@@ -43,7 +43,7 @@ function pageFromHash(): string {
 }
 
 export function App() {
-  const { loading } = useFinance();
+  const { loading, storageBlocked } = useFinance();
   const [theme, setTheme] = useTheme();
   const [pageId, setPageId] = useState(pageFromHash);
   const [month, setMonth] = useState(currentMonthKey);
@@ -136,6 +136,21 @@ export function App() {
         </header>
 
         <main className="content">
+          {storageBlocked && (
+            <div className="banner warn">
+              <span className="emoji" aria-hidden="true">
+                ⚠️
+              </span>
+              <span>
+                <strong>Este navegador está bloqueando o salvamento automático</strong>
+                <br />
+                <span className="dim">
+                  O que você digitar se perde ao fechar a aba. Baixe um backup em Ajustes, ou abra o app em uma janela
+                  normal (não anônima).
+                </span>
+              </span>
+            </div>
+          )}
           {page.id === 'painel' && (
             <Dashboard month={month} onOpenEntry={setEditing} onNew={() => setCreating(true)} onNavigate={navigate} />
           )}

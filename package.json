@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:single": "vite build --mode singlefile && node scripts/build-single.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

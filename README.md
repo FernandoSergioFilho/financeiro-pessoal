@@ -7,12 +7,38 @@ Nesta primeira etapa tudo roda **local**, sem servidor e sem cadastro: os dados 
 guardados no próprio navegador. A camada de dados já foi desenhada para virar online sem
 mexer na interface (veja *Caminho para a versão online*).
 
-## Rodando
+## Testar sem instalar nada
+
+```bash
+npm run build:single
+```
+
+Gera um único `financeiro.html` (~270 kB) com CSS e JavaScript embutidos. Abra com dois
+cliques: funciona offline, sem servidor e sem instalar nada. É o jeito mais rápido de
+experimentar no computador.
+
+Duas ressalvas que valem saber antes de começar a digitar de verdade:
+
+- Os dados ficam presos **a esse arquivo, naquele navegador**. Mover para outro aparelho
+  ou para a versão online depois se faz por **Ajustes → Baixar backup** e, do outro lado,
+  **Restaurar backup**.
+- Mover ou renomear o arquivo pode fazer o navegador tratá-lo como outro endereço e
+  "perder" os lançamentos. Se o navegador recusar salvar (janela anônima, por exemplo), o
+  app avisa no topo — mas o backup é a rede de proteção.
+
+No celular esse caminho é frágil: abrir um arquivo baixado varia muito entre Android e
+iPhone, e o iOS costuma bloquear o armazenamento nesse modo. Para testar no telefone,
+prefira o `npm run dev` abaixo, acessando pelo Wi-Fi local.
+
+## Rodando o projeto
 
 ```bash
 npm install
 npm run dev      # abre em http://localhost:5173
 ```
+
+O servidor já escuta na rede local, então dá para abrir **no celular pelo mesmo Wi-Fi**:
+use o endereço `Network` que o comando imprime (algo como `http://192.168.0.10:5173`).
 
 Outros comandos:
 

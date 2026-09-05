@@ -66,6 +66,8 @@ export interface FinanceApi {
 interface FinanceContextValue {
   data: FinanceData;
   loading: boolean;
+  /** Este navegador recusou gravar: o usuário precisa saber, e usar o backup. */
+  storageBlocked: boolean;
   api: FinanceApi;
 }
 
@@ -82,6 +84,7 @@ export function FinanceProvider({
 }) {
   const [data, dispatch] = useReducer(reducer, emptyData());
   const [loading, setLoading] = useState(true);
+  const [storageBlocked, setStorageBlocked] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -103,7 +106,9 @@ export function FinanceProvider({
   // Salva depois que o usuário para de mexer, para não gravar a cada tecla.
   useEffect(() => {
     if (!hydrated.current) return;
-    const timer = setTimeout(() => void repository.save(data), 150);
+    const timer = setTimeout(() => {
+      void repository.save(data).then((ok) => setStorageBlocked(!ok));
+    }, 150);
     return () => clearTimeout(timer);
   }, [data, repository]);
 
@@ -192,8 +197,13 @@ export function FinanceProvider({
   }, [now]);
 
   const value = useMemo<FinanceContextValue>(
-    () => ({ data, loading, api: { ...api, isAccountInUse: (id) => accountInUse(data, id) } }),
-    [data, loading, api],
+    () => ({
+      data,
+      loading,
+      storageBlocked,
+      api: { ...api, isAccountInUse: (id) => accountInUse(data, id) },
+    }),
+    [data, loading, storageBlocked, api],
   );
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
