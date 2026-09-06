@@ -32,6 +32,24 @@ function horaCurta(iso: string): string {
   return hoje ? `às ${hora}` : `em ${formatDate(iso.slice(0, 10))}`;
 }
 
+/**
+ * Versão curta do mesmo estado. Na barra de um celular, "Sincronizado às
+ * 23:11" sozinho toma metade da largura e não sobra nada para o título da
+ * página — que foi exatamente o que aconteceu.
+ */
+function syncCurto(status: string, lastSyncedAt: string | null): string {
+  switch (status) {
+    case 'offline':
+      return 'Sem conexão';
+    case 'error':
+      return 'Erro';
+    case 'syncing':
+      return '';
+    default:
+      return lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+  }
+}
+
 /** Selo discreto na barra superior; some quando o app roda só local. */
 export function SyncBadge() {
   const { cloud, cloudApi } = useFinance();
@@ -39,17 +57,24 @@ export function SyncBadge() {
 
   const { status, lastSyncedAt } = cloud.sync;
   const tone = status === 'offline' || status === 'error' ? 'bad' : status === 'syncing' ? 'dim' : 'muted';
+  const completo = syncLabel(status, lastSyncedAt);
+  const icone = status === 'syncing' ? '⟳' : status === 'offline' ? '⚠' : '✓';
 
   return (
     <button
       type="button"
-      className="btn ghost sm"
+      className={`btn ghost sm sync-badge ${tone}`}
       onClick={cloudApi.sincronizarAgora}
-      title="Sincronizar agora"
-      style={{ whiteSpace: 'nowrap' }}
+      title={`${completo} — toque para sincronizar agora`}
+      aria-label={`${completo}. Sincronizar agora`}
     >
-      <span className={tone} style={{ fontSize: '0.78rem' }}>
-        {status === 'syncing' ? '⟳' : status === 'offline' ? '⚠' : '✓'} {syncLabel(status, lastSyncedAt)}
+      <span aria-hidden="true">{icone}</span>
+      {/* O mesmo texto em duas versões; o CSS escolhe pela largura da tela. */}
+      <span className="so-estreito" aria-hidden="true">
+        {syncCurto(status, lastSyncedAt)}
+      </span>
+      <span className="so-largo" aria-hidden="true">
+        {completo}
       </span>
     </button>
   );

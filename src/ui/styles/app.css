@@ -240,15 +240,35 @@ button, input, select, textarea { font: inherit; color: inherit; }
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 14px 24px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
-.topbar-title { flex: 1; min-width: 0; }
-.topbar-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* `min-width` de verdade, e não zero: com o selo de sincronização ao lado do
+   seletor de mês, a barra não cabia numa tela de celular e o título era
+   espremido até sobrar uma letra, com o subtítulo descendo em coluna, uma
+   palavra por linha. Agora o título tem um mínimo e quem não couber passa
+   para a linha de baixo. */
+.topbar-title { flex: 1 1 auto; min-width: 8.5rem; }
+.topbar-title h1,
+.topbar-title p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-title p { font-size: 0.82rem; color: var(--text-3); }
+
+/* Selo de sincronização: texto inteiro na tela grande, só o essencial na
+   pequena. As duas versões existem no HTML e o CSS escolhe — assim não depende
+   de medir nada em JavaScript. */
+/* `margin-left: auto` para que, quando o selo desce para a segunda linha da
+   barra, ele fique alinhado à direita, embaixo do seletor de mês, em vez de
+   solto no canto esquerdo. Na tela larga não muda nada: ele já é o último. */
+.sync-badge { margin-left: auto; font-size: 0.78rem; }
+.sync-badge .so-estreito { display: none; }
+@media (max-width: 620px) {
+  .sync-badge .so-estreito { display: inline; }
+  .sync-badge .so-largo { display: none; }
+}
 
 .content { padding: 22px 24px 40px; display: flex; flex-direction: column; gap: 18px; }
 
@@ -732,10 +752,8 @@ textarea.input { resize: vertical; min-height: 64px; }
 
 @media (max-width: 380px) {
   .grid.cols-2.keep, .grid.cols-4.keep { grid-template-columns: minmax(0, 1fr); }
-  /* Título, seletor de mês e estado da sincronização não cabem lado a lado:
-     em vez de espremer os três, o seletor desce para a linha seguinte. */
-  .topbar { flex-wrap: wrap; row-gap: 8px; }
-  .topbar-title { flex: 1 0 100%; }
+  /* Nesta largura o seletor de mês já desceu sozinho para a segunda linha;
+     aqui ele passa a ocupá-la inteira em vez de ficar espremido num canto. */
   .month-nav { flex: 1; }
   .month-nav .label { flex: 1; min-width: 0; }
 }
