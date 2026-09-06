@@ -14,18 +14,29 @@ import { LocalStorageRepository } from '../data/repository.ts';
 import { SupabaseRemote } from '../data/supabase-remote.ts';
 import { SyncingRepository, type SyncState } from '../data/sync-repository.ts';
 import {
-  acceptInvite,
-  createInvite,
-  ensureWallet,
+  aprovarPedido,
   getSupabase,
   isCloudEnabled,
+  membros,
+  meuAcesso,
   onAuthChange,
+  pedidosPendentes,
+  recusarPedido,
+  removerMembro,
   signIn,
   signOut,
   signUp,
+  souDono,
+  type Membro,
+  type Pedido,
 } from '../data/supabase.ts';
 
-export type CloudStatus = 'off' | 'signed-out' | 'connecting' | 'ready' | 'error';
+/**
+ * `pending` e `rejected` são quem se cadastrou e ainda não foi liberado pelo
+ * dono. Nesses dois estados não existe repositório de sincronização: não há
+ * carteira para sincronizar com.
+ */
+export type CloudStatus = 'off' | 'signed-out' | 'connecting' | 'ready' | 'pending' | 'rejected' | 'error';
 
 export interface CloudState {
   /** O app foi compilado com as chaves? Sem isso, tudo aqui fica desligado. */
@@ -33,6 +44,8 @@ export interface CloudState {
   status: CloudStatus;
   email: string | null;
   walletId: string | null;
+  /** Só o dono libera cadastros novos; a tela esconde o que ele não pode usar. */
+  dono: boolean;
   error?: string;
   sync: SyncState;
 }
@@ -41,9 +54,14 @@ export interface CloudApi {
   entrar(email: string, senha: string): Promise<void>;
   criarConta(email: string, senha: string): Promise<void>;
   sair(): Promise<void>;
-  convidar(): Promise<string>;
-  entrarComConvite(code: string): Promise<void>;
   sincronizarAgora(): void;
+  /** Tenta de novo o `meu_acesso()` — usado pelo botão "Já liberou?". */
+  reconferirAcesso(): Promise<void>;
+  pedidos(): Promise<Pedido[]>;
+  membros(): Promise<Membro[]>;
+  aprovar(userId: string): Promise<void>;
+  recusar(userId: string): Promise<void>;
+  remover(userId: string): Promise<void>;
 }
 
 /** De quanto em quanto tempo buscar o que o outro aparelho lançou. */
@@ -61,6 +79,7 @@ export function useCloud(
     status: enabled ? 'connecting' : 'off',
     email: null,
     walletId: null,
+    dono: false,
     sync: { status: 'idle', lastSyncedAt: null },
   });
 
@@ -78,6 +97,9 @@ export function useCloud(
 
   /* -------------------------------------------------- login e carteira */
 
+  /** Guardado para o botão "Já liberou?" poder repetir a checagem. */
+  const conectarRef = useRef<(email: string | null) => Promise<void>>(async () => {});
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -86,24 +108,44 @@ export function useCloud(
     const conectar = async (email: string | null) => {
       if (!email) {
         repo.current = null;
-        if (!cancelado) atualizar({ status: 'signed-out', email: null, walletId: null });
+        if (!cancelado) atualizar({ status: 'signed-out', email: null, walletId: null, dono: false });
         return;
       }
       try {
-        const walletId = await ensureWallet();
+        const acesso = await meuAcesso();
         if (cancelado) return;
-        repo.current = new SyncingRepository(new LocalStorageRepository(), new SupabaseRemote(walletId));
+
+        // Cadastrado e ainda não liberado: sem carteira, não há o que
+        // sincronizar. O app mostra a tela de espera.
+        if (acesso.situacao !== 'liberado' || !acesso.walletId) {
+          repo.current = null;
+          atualizar({
+            status: acesso.situacao === 'rejected' ? 'rejected' : 'pending',
+            email,
+            walletId: null,
+            dono: false,
+            error: undefined,
+          });
+          return;
+        }
+
+        repo.current = new SyncingRepository(new LocalStorageRepository(), new SupabaseRemote(acesso.walletId));
         repo.current.onStateChange((sync) => atualizar({ sync }));
         // Zerado para que a primeira sincronização mande tudo o que já existe
         // neste aparelho, em vez de só o que mudar daqui para frente.
         jaEnviado.current = '';
-        atualizar({ status: 'ready', email, walletId, error: undefined });
+        const dono = await souDono();
+        if (cancelado) return;
+        atualizar({ status: 'ready', email, walletId: acesso.walletId, dono, error: undefined });
       } catch (erro) {
+        // Sem rede, `meu_acesso()` falha. O app segue aberto e local — travar
+        // aqui deixaria o atalho instalado no celular inútil offline.
         if (!cancelado) {
           atualizar({ status: 'error', email, error: erro instanceof Error ? erro.message : String(erro) });
         }
       }
     };
+    conectarRef.current = conectar;
 
     void getSupabase()
       ?.auth.getSession()
@@ -169,21 +211,24 @@ export function useCloud(
     async sair() {
       await signOut();
       repo.current = null;
-      atualizar({ status: 'signed-out', email: null, walletId: null });
-    },
-    async convidar() {
-      if (!state.walletId) throw new Error('Entre na sua conta antes de convidar alguém.');
-      return createInvite(state.walletId);
-    },
-    async entrarComConvite(code) {
-      const walletId = await acceptInvite(code);
-      repo.current = new SyncingRepository(new LocalStorageRepository(), new SupabaseRemote(walletId));
-      repo.current.onStateChange((sync) => atualizar({ sync }));
-      jaEnviado.current = '';
-      atualizar({ walletId, status: 'ready' });
+      atualizar({ status: 'signed-out', email: null, walletId: null, dono: false });
     },
     sincronizarAgora() {
       void sincronizar();
+    },
+    async reconferirAcesso() {
+      await conectarRef.current(state.email);
+    },
+    pedidos: pedidosPendentes,
+    membros,
+    async aprovar(userId) {
+      await aprovarPedido(userId);
+    },
+    async recusar(userId) {
+      await recusarPedido(userId);
+    },
+    async remover(userId) {
+      await removerMembro(userId);
     },
   };
 

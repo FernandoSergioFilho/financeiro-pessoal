@@ -8,14 +8,94 @@ import { purchaseProgress } from '../../domain/installments.ts';
 import type { InstallmentPurchase } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
-import { Card, ConfirmDialog, Dot, EmptyState } from '../components/primitives.tsx';
+import { Card, ConfirmDialog, Dialog, Dot, EmptyState } from '../components/primitives.tsx';
 
 const HORIZON = 6;
 
-export function PurchasesPage({ onNew }: { onNew: () => void }) {
+/**
+ * Detalhes de uma compra, com o Apagar.
+ *
+ * Não tem edição: criar uma compra gera as N parcelas de uma vez, e mudar o
+ * valor ou o número delas significaria regerar tudo e decidir o que fazer com
+ * as parcelas já confirmadas. Para corrigir, apague e cadastre de novo — uma
+ * parcela isolada continua editável em Lançamentos, como sempre foi.
+ */
+function PurchaseDialog({ purchase, onClose }: { purchase: InstallmentPurchase; onClose: () => void }) {
   const { data, api } = useFinance();
   const { accountName, categoryById } = useLookups();
-  const [removing, setRemoving] = useState<InstallmentPurchase | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const progress = purchaseProgress(purchase, data.entries);
+  const category = categoryById(purchase.categoryId);
+
+  if (confirming) {
+    return (
+      <ConfirmDialog
+        title="Apagar compra parcelada"
+        message={`Todas as parcelas de "${purchase.description}" saem dos lançamentos, inclusive as já pagas.`}
+        onConfirm={() => {
+          api.deletePurchase(purchase.id);
+          onClose();
+        }}
+        onCancel={() => setConfirming(false)}
+      />
+    );
+  }
+
+  const linhas: [string, string][] = [
+    ['Conta', accountName(purchase.accountId)],
+    ['Categoria', category?.name ?? 'Sem categoria'],
+    ['Parcelas', `${purchase.installments}× ${formatMoney(Math.round(purchase.totalAmount / purchase.installments))}`],
+    ['Total', formatMoney(purchase.totalAmount)],
+    ['Já pagas', `${progress.paid} de ${progress.total}`],
+    ['Falta', formatMoney(progress.remainingAmount)],
+    ['Próxima', progress.nextDate ? formatDate(progress.nextDate) : 'Quitada'],
+    ['Primeira', formatDate(purchase.firstDate)],
+  ];
+
+  return (
+    <Dialog
+      title={purchase.description}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn danger" onClick={() => setConfirming(true)}>
+            Apagar
+          </button>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Fechar
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {linhas.map(([rotulo, valor]) => (
+          <div key={rotulo} className="row" style={{ gap: 12 }}>
+            <span className="dim" style={{ flex: 1, minWidth: 0, fontSize: '0.86rem' }}>
+              {rotulo}
+            </span>
+            <span className="num" style={{ fontWeight: 560 }}>
+              {valor}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="hint" style={{ marginTop: 12 }}>
+        Para mudar o valor ou o número de parcelas, apague e cadastre de novo. Uma parcela sozinha você edita em
+        Lançamentos.
+      </p>
+    </Dialog>
+  );
+}
+
+/**
+ * Consulta das compras parceladas. Cadastrar mora no "+ Novo lançamento";
+ * aqui a linha abre os detalhes.
+ */
+export function PurchasesPage({ onNew }: { onNew: () => void }) {
+  const { data } = useFinance();
+  const { accountName, categoryById } = useLookups();
+  const [aberta, setAberta] = useState<InstallmentPurchase | null>(null);
 
   const rows = useMemo(
     () =>
@@ -74,27 +154,19 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
         </Card>
       </div>
 
-      <Card
-        title="Compras parceladas"
-        action={
-          <button type="button" className="btn primary sm" onClick={onNew}>
-            Nova compra
-          </button>
-        }
-        tight
-      >
+      <Card title="Compras parceladas" tight>
         {rows.length === 0 ? (
           <EmptyState
             emoji="🧾"
             title="Nenhuma compra parcelada"
             action={
               <button type="button" className="btn primary" onClick={onNew}>
-                Cadastrar compra parcelada
+                Criar a primeira
               </button>
             }
           >
             Informe o valor total e o número de parcelas: cada parcela vira um lançamento nos meses seguintes,
-            somando exatamente o total.
+            somando exatamente o total. Use o botão de novo lançamento e escolha "Parcelado".
           </EmptyState>
         ) : (
           <div className="table-wrap">
@@ -106,7 +178,6 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
                   <th>Próxima</th>
                   <th className="right">Falta</th>
                   <th className="right">Total</th>
-                  <th className="right" />
                 </tr>
               </thead>
               <tbody>
@@ -114,7 +185,21 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
                   const category = categoryById(purchase.categoryId);
                   const done = progress.total > 0 ? progress.paid / progress.total : 0;
                   return (
-                    <tr key={purchase.id} style={progress.nextDate ? undefined : { opacity: 0.6 }}>
+                    <tr
+                      key={purchase.id}
+                      className="clicavel"
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Ver ${purchase.description}`}
+                      onClick={() => setAberta(purchase)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setAberta(purchase);
+                        }
+                      }}
+                      style={progress.nextDate ? undefined : { opacity: 0.6 }}
+                    >
                       <td>
                         <div className="row" style={{ gap: 8 }}>
                           <Dot color={category?.color} />
@@ -142,11 +227,6 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
                         {formatMoney(progress.remainingAmount)}
                       </td>
                       <td className="right num muted">{formatMoney(purchase.totalAmount)}</td>
-                      <td className="right">
-                        <button type="button" className="btn ghost sm" onClick={() => setRemoving(purchase)}>
-                          Apagar
-                        </button>
-                      </td>
                     </tr>
                   );
                 })}
@@ -156,17 +236,7 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
         )}
       </Card>
 
-      {removing && (
-        <ConfirmDialog
-          title="Apagar compra parcelada"
-          message={`Todas as parcelas de "${removing.description}" saem dos lançamentos, inclusive as já pagas.`}
-          onConfirm={() => {
-            api.deletePurchase(removing.id);
-            setRemoving(null);
-          }}
-          onCancel={() => setRemoving(null)}
-        />
-      )}
+      {aberta && <PurchaseDialog purchase={aberta} onClose={() => setAberta(null)} />}
     </>
   );
 }

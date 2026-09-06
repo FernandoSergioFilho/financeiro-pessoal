@@ -96,58 +96,62 @@ export async function diagnosticar(): Promise<Verificacao[]> {
     detalhe: `Logado como ${sessao.session.user.email}.`,
   });
 
-  /* --------------------------------------------------------- 3. a carteira */
+  /* ---------------------------------------------- 3. a situação do acesso */
 
-  let carteira: string | null = null;
+  // Chamar de verdade, e não só conferir que a função existe: um corpo de
+  // função plpgsql não é validado na criação, então "existe" já enganou uma
+  // vez — o convite antigo só quebrava na hora de usar.
+  let liberado = false;
   try {
-    const { data, error } = await comTempoLimite(supabase.rpc('my_wallet'));
+    const { data, error } = await comTempoLimite(supabase.rpc('meu_acesso'));
     if (error) throw new Error(error.message);
-    carteira = (data as string | null) ?? null;
+    const linha = (Array.isArray(data) ? data[0] : data) as { situacao?: string } | undefined;
+    liberado = linha?.situacao === 'liberado';
     resultado.push({
-      nome: 'Sua carteira',
-      situacao: 'ok',
-      detalhe: carteira ? 'Encontrada.' : 'Ainda não existe; será criada ao sincronizar.',
+      nome: 'Seu acesso',
+      situacao: liberado ? 'ok' : 'falha',
+      detalhe: liberado
+        ? 'Liberado: você é da carteira.'
+        : linha?.situacao === 'rejected'
+          ? 'Esta conta foi recusada.'
+          : 'Cadastro feito, esperando alguém liberar.',
+      comoResolver: liberado ? undefined : 'Peça para quem administra a carteira liberar o seu acesso em Ajustes.',
     });
   } catch (erro) {
     resultado.push({
-      nome: 'Sua carteira',
+      nome: 'Seu acesso',
       situacao: 'falha',
       detalhe: traduzirErro(erro instanceof Error ? erro.message : String(erro)),
       comoResolver: `Rode o supabase/schema.sql atualizado, ${PAINEL}.`,
     });
+    return resultado;
   }
 
-  /* ------------------------------------------------- 4. o convite funciona */
+  /* ------------------------------------------------ 4. gravar de verdade */
 
-  if (!carteira) {
+  if (!liberado) {
     resultado.push({
-      nome: 'Gerar convite',
+      nome: 'Ler e gravar',
       situacao: 'pulado',
-      detalhe: 'Depende de a carteira já existir.',
+      detalhe: 'Depende de o acesso estar liberado.',
     });
     return resultado;
   }
 
   try {
-    // Gera um convite de verdade: é a única forma de saber que a função
-    // roda, e não apenas que ela existe. O código extra é inofensivo — vale
-    // sete dias e ninguém precisa usá-lo.
-    const { data, error } = await comTempoLimite(supabase.rpc('create_invite', { w: carteira }));
+    const { error } = await comTempoLimite(supabase.from('records').select('record_id').limit(1));
     if (error) throw new Error(error.message);
     resultado.push({
-      nome: 'Gerar convite',
+      nome: 'Ler e gravar',
       situacao: 'ok',
-      detalhe: `Funcionou (código de teste ${String(data)}).`,
+      detalhe: 'A carteira responde e aceita a sua chave.',
     });
   } catch (erro) {
-    const msg = erro instanceof Error ? erro.message : String(erro);
     resultado.push({
-      nome: 'Gerar convite',
+      nome: 'Ler e gravar',
       situacao: 'falha',
-      detalhe: traduzirErro(msg),
-      comoResolver: msg.includes('gen_random_bytes')
-        ? `A função create_invite no banco é a versão antiga. Rode o supabase/schema.sql atualizado, ${PAINEL}.`
-        : `Rode o supabase/schema.sql atualizado, ${PAINEL}.`,
+      detalhe: traduzirErro(erro instanceof Error ? erro.message : String(erro)),
+      comoResolver: `Rode o supabase/schema.sql atualizado, ${PAINEL}.`,
     });
   }
 

@@ -667,6 +667,7 @@ export function RecurringDialog({ rule, onClose }: { rule?: RecurringRule; onClo
         },
   );
   const [submitted, setSubmitted] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const errors = recurringErrors(value);
   const shown = submitted ? errors : {};
@@ -681,12 +682,33 @@ export function RecurringDialog({ rule, onClose }: { rule?: RecurringRule; onClo
     onClose();
   }
 
+  // Apagar mora aqui, e não numa coluna de botões na lista: a aba de Fixas é
+  // de consulta, e a linha inteira abre este diálogo.
+  if (confirming && rule) {
+    return (
+      <ConfirmDialog
+        title="Apagar conta recorrente"
+        message={`"${rule.description}" some dos próximos meses. Os lançamentos que você já confirmou continuam no histórico.`}
+        onConfirm={() => {
+          api.deleteRecurring(rule.id);
+          onClose();
+        }}
+        onCancel={() => setConfirming(false)}
+      />
+    );
+  }
+
   return (
     <Dialog
       title={rule ? 'Editar conta recorrente' : 'Nova conta recorrente'}
       onClose={onClose}
       footer={
         <>
+          {rule && (
+            <button type="button" className="btn danger" onClick={() => setConfirming(true)}>
+              Apagar
+            </button>
+          )}
           <span className="spacer" />
           <button type="button" className="btn ghost" onClick={onClose}>
             Cancelar
@@ -710,7 +732,12 @@ export function RecurringDialog({ rule, onClose }: { rule?: RecurringRule; onClo
               checked={value.active}
               onChange={(e) => setValue((v) => ({ ...v, active: e.target.checked }))}
             />
-            <span>Ativa</span>
+            <span>
+              Ativa
+              <span className="hint" style={{ display: 'block' }}>
+                Desmarque para parar de gerar os próximos vencimentos, sem apagar o histórico.
+              </span>
+            </span>
           </label>
         )}
       </form>

@@ -3,13 +3,13 @@
  * à interface, reunido num lugar só dentro de Ajustes.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { formatDate } from '../../domain/date.ts';
 import { useFinance } from '../../state/store.tsx';
 import { diagnosticar, type Verificacao } from '../../data/diagnostico.ts';
-import { SENHA_MINIMA } from '../../data/supabase.ts';
-import { Card, Dialog, Field, Segmented } from './primitives.tsx';
+import { SENHA_MINIMA, type Membro, type Pedido } from '../../data/supabase.ts';
+import { Card, ConfirmDialog, Field, Segmented } from './primitives.tsx';
 
 /** Frase curta do estado atual, para caber na barra superior. */
 export function syncLabel(status: string, lastSyncedAt: string | null): string {
@@ -82,7 +82,7 @@ export function SyncBadge() {
 
 /* ------------------------------------------------------------------ login */
 
-function LoginForm() {
+export function LoginForm() {
   const { cloudApi } = useFinance();
   const [modo, setModo] = useState<'entrar' | 'criar'>('entrar');
   const [email, setEmail] = useState('');
@@ -173,110 +173,167 @@ function LoginForm() {
   );
 }
 
-/* ---------------------------------------------------------------- convite */
+/* ------------------------------------------------------- liberar o acesso */
 
-function InviteDialog({ onClose }: { onClose: () => void }) {
-  const { cloudApi } = useFinance();
-  const [codigo, setCodigo] = useState('');
+/**
+ * A fila de quem se cadastrou e está esperando, com a lista de quem já está
+ * dentro. Só o dono da carteira enxerga isto — e é o banco que garante:
+ * as funções recusam qualquer outro, então esconder aqui é conveniência,
+ * não segurança.
+ */
+function Aprovacoes() {
+  const { cloud, cloudApi } = useFinance();
+  const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
+  const [pessoas, setPessoas] = useState<Membro[]>([]);
   const [erro, setErro] = useState('');
-  const [gerando, setGerando] = useState(false);
+  const [ocupado, setOcupado] = useState('');
+  const [removendo, setRemovendo] = useState<Membro | null>(null);
 
-  async function gerar() {
+  const recarregar = useCallback(async () => {
     setErro('');
-    setGerando(true);
     try {
-      setCodigo(await cloudApi.convidar());
+      const [fila, lista] = await Promise.all([cloudApi.pedidos(), cloudApi.membros()]);
+      setPedidos(fila);
+      setPessoas(lista);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o convite.');
+      setPedidos([]);
+      setErro(e instanceof Error ? e.message : 'Não foi possível ler os pedidos.');
+    }
+  }, [cloudApi]);
+
+  useEffect(() => {
+    if (cloud.dono) void recarregar();
+  }, [cloud.dono, recarregar]);
+
+  if (!cloud.dono) return null;
+
+  async function decidir(userId: string, acao: 'aprovar' | 'recusar') {
+    setOcupado(userId);
+    setErro('');
+    try {
+      await (acao === 'aprovar' ? cloudApi.aprovar(userId) : cloudApi.recusar(userId));
+      await recarregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível concluir.');
     } finally {
-      setGerando(false);
+      setOcupado('');
+    }
+  }
+
+  async function remover(membro: Membro) {
+    setRemovendo(null);
+    setOcupado(membro.userId);
+    try {
+      await cloudApi.remover(membro.userId);
+      await recarregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível remover.');
+    } finally {
+      setOcupado('');
     }
   }
 
   return (
-    <Dialog
-      title="Convidar para a carteira"
-      onClose={onClose}
-      footer={
-        <>
-          <span className="spacer" />
-          <button type="button" className="btn ghost" onClick={onClose}>
-            Fechar
-          </button>
-        </>
-      }
-    >
-      <p className="muted" style={{ fontSize: '0.88rem' }}>
-        A outra pessoa entra com o e-mail dela e digita este código em Ajustes. A partir daí vocês dois
-        enxergam e editam os mesmos lançamentos.
-      </p>
-
-      {codigo ? (
-        <div className="banner">
-          <span className="emoji" aria-hidden="true">🔑</span>
-          <span>
-            <strong className="num" style={{ fontSize: '1.3rem', letterSpacing: '0.12em' }}>
-              {codigo}
-            </strong>
-            <br />
-            <span className="dim">Vale por 7 dias e só pode ser usado uma vez.</span>
-          </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="setting">
+        <div className="setting-text">
+          <div className="title">
+            Pedidos de acesso
+            {pedidos && pedidos.length > 0 && <span className="tag pendente-aviso">{pedidos.length}</span>}
+          </div>
+          <div className="dim">
+            Quem se cadastra no site fica esperando aqui e não enxerga nada até você liberar.
+          </div>
         </div>
-      ) : (
-        <button type="button" className="btn primary" onClick={() => void gerar()} disabled={gerando}>
-          {gerando ? 'Gerando…' : 'Gerar código de convite'}
+        <button type="button" className="btn sm" onClick={() => void recarregar()}>
+          Atualizar
         </button>
+      </div>
+
+      {pedidos === null ? (
+        <p className="hint">Carregando…</p>
+      ) : pedidos.length === 0 ? (
+        <p className="hint">Ninguém esperando.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {pedidos.map((pedido) => (
+            <div key={pedido.userId} className="setting">
+              <div className="setting-text">
+                <div className="title trunc" title={pedido.email}>
+                  {pedido.email}
+                </div>
+                <div className="dim">Pediu em {formatDate(pedido.pedidoEm.slice(0, 10))}</div>
+              </div>
+              <div className="row" style={{ gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn sm primary"
+                  disabled={ocupado === pedido.userId}
+                  onClick={() => void decidir(pedido.userId, 'aprovar')}
+                >
+                  Liberar
+                </button>
+                <button
+                  type="button"
+                  className="btn sm ghost"
+                  disabled={ocupado === pedido.userId}
+                  onClick={() => void decidir(pedido.userId, 'recusar')}
+                >
+                  Recusar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pessoas.length > 1 && (
+        <>
+          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
+          <div className="setting-text">
+            <div className="title">Quem está na carteira</div>
+          </div>
+          {pessoas.map((pessoa) => (
+            <div key={pessoa.userId} className="setting">
+              <div className="setting-text">
+                <div className="title trunc" title={pessoa.email}>
+                  {pessoa.email}
+                </div>
+                <div className="dim">{pessoa.dono ? 'Dono' : `Desde ${formatDate(pessoa.desde.slice(0, 10))}`}</div>
+              </div>
+              {!pessoa.dono && (
+                <button
+                  type="button"
+                  className="btn sm ghost"
+                  disabled={ocupado === pessoa.userId}
+                  onClick={() => setRemovendo(pessoa)}
+                >
+                  Tirar acesso
+                </button>
+              )}
+            </div>
+          ))}
+        </>
       )}
 
       {erro && <p className="error">{erro}</p>}
-    </Dialog>
-  );
-}
 
-function AceitarConvite() {
-  const { cloudApi } = useFinance();
-  const [codigo, setCodigo] = useState('');
-  const [erro, setErro] = useState('');
-  const [ok, setOk] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setErro('');
-    try {
-      await cloudApi.entrarComConvite(codigo);
-      setOk(true);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível usar o convite.');
-    }
-  }
-
-  if (ok) return <p className="hint">Pronto: vocês agora dividem a mesma carteira.</p>;
-
-  return (
-    // Mesmo bloco de ajuste: no celular o campo fica com a largura toda em vez
-    // de dividir a linha com o botão e mostrar meia palavra.
-    <form onSubmit={submit} className="setting top">
-      <div className="setting-text form-narrow">
-        <input
-          className="input num"
-          placeholder="Código do convite"
-          value={codigo}
-          onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-          style={{ letterSpacing: '0.1em' }}
-          aria-label="Código do convite"
+      {removendo && (
+        <ConfirmDialog
+          title="Tirar o acesso"
+          confirmLabel="Tirar acesso"
+          message={`${removendo.email} deixa de enxergar e editar os lançamentos. Os lançamentos que essa pessoa criou continuam na carteira.`}
+          onConfirm={() => void remover(removendo)}
+          onCancel={() => setRemovendo(null)}
         />
-        {erro && <span className="error">{erro}</span>}
-      </div>
-      <button type="submit" className="btn" disabled={!codigo.trim()}>
-        Entrar na carteira
-      </button>
-    </form>
+      )}
+    </div>
   );
 }
 
 /* ------------------------------------------------------------ diagnóstico */
 
-function Diagnostico() {
+export function Diagnostico() {
   const [itens, setItens] = useState<Verificacao[] | null>(null);
   const [rodando, setRodando] = useState(false);
 
@@ -327,7 +384,6 @@ function Diagnostico() {
 
 export function CloudPanel() {
   const { cloud, cloudApi } = useFinance();
-  const [convidando, setConvidando] = useState(false);
 
   if (!cloud.enabled) {
     return (
@@ -344,19 +400,11 @@ export function CloudPanel() {
     <Card title="Conta e sincronização">
       {cloud.status === 'connecting' && <p className="dim">Conectando…</p>}
 
-      {cloud.status === 'signed-out' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <LoginForm />
-          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
-          <Diagnostico />
-        </div>
-      )}
-
       {cloud.status === 'error' && (
         <div className="banner warn">
           <span className="emoji" aria-hidden="true">⚠️</span>
           <span>
-            <strong>Não foi possível preparar a sincronização</strong>
+            <strong>Não foi possível falar com o servidor</strong>
             <br />
             <span className="dim">{cloud.error}</span>
             <br />
@@ -389,29 +437,18 @@ export function CloudPanel() {
             </div>
           </div>
 
-          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
-
-          <div className="setting">
-            <div className="setting-text">
-              <div className="title">Dividir a carteira</div>
-              <div className="dim">
-                Gere um código para outra pessoa enxergar e editar os mesmos lançamentos.
-              </div>
-            </div>
-            <button type="button" className="btn sm" onClick={() => setConvidando(true)}>
-              Convidar
-            </button>
-          </div>
-
-          <AceitarConvite />
+          {cloud.dono && (
+            <>
+              <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
+              <Aprovacoes />
+            </>
+          )}
 
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
 
           <Diagnostico />
         </div>
       )}
-
-      {convidando && <InviteDialog onClose={() => setConvidando(false)} />}
     </Card>
   );
 }

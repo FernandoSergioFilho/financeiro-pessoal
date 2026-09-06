@@ -14,6 +14,7 @@ import { useFinance } from '../state/store.tsx';
 import { EditEntryDialog, NewEntryDialog } from './components/EntryForms.tsx';
 import { SyncBadge } from './components/CloudPanel.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
+import { EntrarPage, EsperandoPage } from './pages/EntrarPage.tsx';
 import { EntriesPage } from './pages/EntriesPage.tsx';
 import { PurchasesPage } from './pages/PurchasesPage.tsx';
 import { RecurringPage } from './pages/RecurringPage.tsx';
@@ -44,7 +45,7 @@ function pageFromHash(): string {
 }
 
 export function App() {
-  const { loading, storageBlocked } = useFinance();
+  const { loading, storageBlocked, cloud } = useFinance();
   const [theme, setTheme] = useTheme();
   const [pageId, setPageId] = useState(pageFromHash);
   const [month, setMonth] = useState(currentMonthKey);
@@ -65,15 +66,37 @@ export function App() {
 
   const page = PAGES.find((candidate) => candidate.id === pageId) ?? PAGES[0]!;
 
-  if (loading) {
-    return (
-      <div className="empty" style={{ minHeight: '100vh', justifyContent: 'center' }}>
-        <span className="emoji" aria-hidden="true">
-          💰
-        </span>
-        <p>Carregando…</p>
-      </div>
-    );
+  const carregando = (
+    <div className="empty" style={{ minHeight: '100vh', justifyContent: 'center' }}>
+      <span className="emoji" aria-hidden="true">
+        💰
+      </span>
+      <p>Carregando…</p>
+    </div>
+  );
+
+  if (loading) return carregando;
+
+  /*
+   * O portão. Três cuidados que precisam continuar valendo:
+   *
+   * 1. `cloud.enabled` falso não passa por aqui. É o financeiro.html de
+   *    arquivo único, que roda offline e não tem login nenhum — barrar ali
+   *    deixaria o arquivo inútil.
+   * 2. O portão olha a SESSÃO (`cloud.email`), não o status. Com a sessão
+   *    salva e sem rede, `meu_acesso()` falha e o status vira 'error'; nesse
+   *    caso o app abre normalmente, com o aviso que já existe em Ajustes. Se
+   *    exigisse 'ready', o atalho instalado no celular pararia de abrir sem
+   *    internet, que é metade da razão de ele existir.
+   * 3. 'connecting' mostra o carregando, e não a tela de entrar: senão quem
+   *    já está logado vê um piscar de tela de login a cada abertura.
+   */
+  if (cloud.enabled) {
+    if (cloud.status === 'connecting') return carregando;
+    if (!cloud.email) return <EntrarPage />;
+    if (cloud.status === 'pending' || cloud.status === 'rejected') {
+      return <EsperandoPage recusado={cloud.status === 'rejected'} />;
+    }
   }
 
   const nav = (className: string, labelOf: (p: Page) => string) =>
@@ -159,7 +182,7 @@ export function App() {
           {page.id === 'lancamentos' && (
             <EntriesPage month={month} onOpenEntry={setEditing} onNew={() => setCreating(true)} />
           )}
-          {page.id === 'recorrentes' && <RecurringPage />}
+          {page.id === 'recorrentes' && <RecurringPage onNew={() => setCreating(true)} />}
           {page.id === 'parceladas' && <PurchasesPage onNew={() => setCreating(true)} />}
           {page.id === 'ajustes' && <SettingsPage month={month} theme={theme} onThemeChange={setTheme} />}
         </main>

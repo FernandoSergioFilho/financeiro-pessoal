@@ -9,7 +9,7 @@ import type { RecurringRule } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { RecurringDialog } from '../components/EntryForms.tsx';
-import { Card, ConfirmDialog, Dot, EmptyState } from '../components/primitives.tsx';
+import { Card, Dot, EmptyState } from '../components/primitives.tsx';
 
 function nextDate(rule: RecurringRule): string | null {
   const from = today();
@@ -23,12 +23,15 @@ function monthlyCost(rule: RecurringRule): number {
   return Math.round(rule.amount * perMonth);
 }
 
-export function RecurringPage() {
-  const { data, api } = useFinance();
+/**
+ * Consulta das contas que se repetem. Não tem botão de cadastrar: isso mora
+ * num lugar só, o "+ Novo lançamento". Editar, pausar e apagar acontecem
+ * clicando na linha, que abre o mesmo diálogo do cadastro.
+ */
+export function RecurringPage({ onNew }: { onNew: () => void }) {
+  const { data } = useFinance();
   const { accountName, categoryById } = useLookups();
   const [editing, setEditing] = useState<RecurringRule | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [removing, setRemoving] = useState<RecurringRule | null>(null);
 
   const rules = useMemo(
     () => [...data.recurring].sort((a, b) => Number(b.active) - Number(a.active) || a.description.localeCompare(b.description)),
@@ -69,26 +72,19 @@ export function RecurringPage() {
         </div>
       </div>
 
-      <Card
-        title="Contas recorrentes"
-        action={
-          <button type="button" className="btn primary sm" onClick={() => setCreating(true)}>
-            Nova recorrente
-          </button>
-        }
-        tight
-      >
+      <Card title="Contas recorrentes" tight>
         {rules.length === 0 ? (
           <EmptyState
             emoji="🔁"
             title="Nenhuma conta recorrente"
             action={
-              <button type="button" className="btn primary" onClick={() => setCreating(true)}>
-                Cadastrar a primeira
+              <button type="button" className="btn primary" onClick={onNew}>
+                Criar a primeira
               </button>
             }
           >
             Cadastre aluguel, salário, assinaturas e mensalidades uma vez — os vencimentos aparecem sozinhos todo mês.
+            Use o botão de novo lançamento e escolha "Recorrente".
           </EmptyState>
         ) : (
           <div className="table-wrap">
@@ -99,7 +95,6 @@ export function RecurringPage() {
                   <th>Repetição</th>
                   <th>Próximo</th>
                   <th className="right">Valor</th>
-                  <th className="right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,7 +102,21 @@ export function RecurringPage() {
                   const category = categoryById(rule.categoryId);
                   const next = nextDate(rule);
                   return (
-                    <tr key={rule.id} style={rule.active ? undefined : { opacity: 0.55 }}>
+                    <tr
+                      key={rule.id}
+                      className="clicavel"
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Editar ${rule.description}`}
+                      onClick={() => setEditing(rule)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setEditing(rule);
+                        }
+                      }}
+                      style={rule.active ? undefined : { opacity: 0.55 }}
+                    >
                       <td>
                         <div className="row" style={{ gap: 8 }}>
                           <Dot color={category?.color} />
@@ -134,23 +143,6 @@ export function RecurringPage() {
                         {rule.kind === 'income' ? '+' : '−'}
                         {formatMoney(rule.amount)}
                       </td>
-                      <td className="right">
-                        <div className="row end" style={{ gap: 4 }}>
-                          <button
-                            type="button"
-                            className="btn ghost sm"
-                            onClick={() => api.updateRecurring(rule.id, { active: !rule.active })}
-                          >
-                            {rule.active ? 'Pausar' : 'Retomar'}
-                          </button>
-                          <button type="button" className="btn ghost sm" onClick={() => setEditing(rule)}>
-                            Editar
-                          </button>
-                          <button type="button" className="btn ghost sm" onClick={() => setRemoving(rule)}>
-                            Apagar
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   );
                 })}
@@ -160,19 +152,7 @@ export function RecurringPage() {
         )}
       </Card>
 
-      {creating && <RecurringDialog onClose={() => setCreating(false)} />}
       {editing && <RecurringDialog rule={editing} onClose={() => setEditing(null)} />}
-      {removing && (
-        <ConfirmDialog
-          title="Apagar conta recorrente"
-          message={`"${removing.description}" some dos próximos meses. Os lançamentos que você já confirmou continuam no histórico.`}
-          onConfirm={() => {
-            api.deleteRecurring(removing.id);
-            setRemoving(null);
-          }}
-          onCancel={() => setRemoving(null)}
-        />
-      )}
     </>
   );
 }

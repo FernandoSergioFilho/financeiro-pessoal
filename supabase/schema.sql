@@ -8,6 +8,10 @@
 -- significa que as políticas de acesso (RLS) deste arquivo são a ÚNICA
 -- barreira entre a sua carteira e o resto do mundo. Toda leitura e toda
 -- escrita passam por "sou membro desta carteira".
+--
+-- Quem se cadastra NÃO entra: fica pendente até o dono liberar. Isso é
+-- garantido aqui, e não na tela — sem virar membro, a RLS não devolve nem
+-- aceita um único registro, mesmo para quem chame a API direto.
 
 -- ---------------------------------------------------------------- tabelas
 
@@ -24,12 +28,29 @@ create table if not exists public.wallet_members (
   primary key (wallet_id, user_id)
 );
 
-create table if not exists public.wallet_invites (
-  code text primary key,
-  wallet_id uuid not null references public.wallets (id) on delete cascade,
-  created_by uuid not null references auth.users (id) on delete cascade,
-  expires_at timestamptz not null,
-  used_at timestamptz
+-- `owner` é quem libera cadastros novos. Coluna adicionada depois, daí o
+-- `if not exists` — a carteira que já existia precisa continuar valendo.
+alter table public.wallet_members
+  add column if not exists role text not null default 'member';
+
+-- Quem criou a carteira é o dono. Sem este preenchimento, a carteira que já
+-- existe ficaria sem dono e ninguém poderia aprovar ninguém.
+update public.wallet_members m
+  set role = 'owner'
+  where role <> 'owner'
+    and created_at = (
+      select min(created_at) from public.wallet_members outros
+      where outros.wallet_id = m.wallet_id
+    );
+
+-- Quem se cadastrou e ainda não foi liberado.
+create table if not exists public.access_requests (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  email text not null,
+  requested_at timestamptz not null default now(),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  decided_at timestamptz,
+  decided_by uuid references auth.users (id)
 );
 
 -- Uma tabela genérica em vez de cinco espelhando o domínio: o aplicativo
@@ -74,11 +95,17 @@ create trigger records_stamp_seq
   before insert or update on public.records
   for each row execute function public.stamp_record_seq();
 
+-- O convite por código foi substituído pela aprovação do dono: eram dois
+-- caminhos para a mesma coisa, e um a menos é um a menos para dar errado.
+drop function if exists public.create_invite(uuid);
+drop function if exists public.accept_invite(text);
+drop table if exists public.wallet_invites;
+
 -- ------------------------------------------------------------- permissões
 
 alter table public.wallets enable row level security;
 alter table public.wallet_members enable row level security;
-alter table public.wallet_invites enable row level security;
+alter table public.access_requests enable row level security;
 alter table public.records enable row level security;
 
 -- `security definer` de propósito: uma política em wallet_members que
@@ -96,6 +123,19 @@ as $$
   );
 $$;
 
+create or replace function public.is_owner()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.wallet_members
+    where user_id = auth.uid() and role = 'owner'
+  );
+$$;
+
 drop policy if exists wallets_select on public.wallets;
 create policy wallets_select on public.wallets
   for select using (public.is_wallet_member(id));
@@ -108,20 +148,15 @@ drop policy if exists members_select on public.wallet_members;
 create policy members_select on public.wallet_members
   for select using (public.is_wallet_member(wallet_id));
 
--- Sair da carteira é permitido; tirar outra pessoa, não.
+-- Sair da carteira é permitido; tirar outra pessoa, não (isso é do dono, e
+-- passa por remover_membro).
 drop policy if exists members_delete_self on public.wallet_members;
 create policy members_delete_self on public.wallet_members
-  for delete using (user_id = auth.uid());
+  for delete using (user_id = auth.uid() and role <> 'owner');
 
-drop policy if exists invites_select on public.wallet_invites;
-create policy invites_select on public.wallet_invites
-  for select using (public.is_wallet_member(wallet_id));
-
-drop policy if exists invites_insert on public.wallet_invites;
-create policy invites_insert on public.wallet_invites
-  for insert with check (
-    public.is_wallet_member(wallet_id) and created_by = auth.uid()
-  );
+-- `access_requests` fica sem policy nenhuma de propósito: com a RLS ligada,
+-- isso nega tudo. Todo acesso passa pelas funções abaixo, que conferem quem
+-- está pedindo — assim ninguém se aprova sozinho editando a tabela.
 
 -- O coração: os lançamentos só existem para quem é da carteira.
 drop policy if exists records_select on public.records;
@@ -141,87 +176,167 @@ create policy records_update on public.records
 -- exclusão (deleted_at), que precisa continuar visível para os outros
 -- aparelhos saberem que o registro morreu.
 
--- ---------------------------------------------------- criar e entrar
+-- ------------------------------------------------------- entrar e liberar
 
--- Cria a carteira e já coloca quem chamou como membro, numa operação só.
--- Sem isso haveria um instante em que a carteira existe sem dono.
-create or replace function public.create_wallet(wallet_name text default 'Nossa carteira')
-returns uuid
+-- A única porta de entrada do aplicativo. Devolve a carteira de quem chamou
+-- e a situação dele, criando o pedido de acesso quando for o caso.
+--
+-- Não existe função pública de criar carteira: a primeira nasce aqui, uma
+-- única vez, para a primeira pessoa que chegar. Antes, qualquer cadastrado
+-- ganhava uma carteira própria e saía usando o projeto à vontade.
+create or replace function public.meu_acesso()
+returns table (wallet_id uuid, situacao text)
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
+  quem uuid := auth.uid();
+  minha uuid;
   nova uuid;
+  pedido public.access_requests%rowtype;
 begin
-  if auth.uid() is null then
+  if quem is null then
     raise exception 'É preciso estar autenticado.';
   end if;
 
-  insert into public.wallets (name) values (wallet_name) returning id into nova;
-  insert into public.wallet_members (wallet_id, user_id) values (nova, auth.uid());
-  return nova;
-end;
-$$;
+  select m.wallet_id into minha
+    from public.wallet_members m
+    where m.user_id = quem
+    order by m.created_at
+    limit 1;
 
--- Gera um código de convite com validade curta.
-create or replace function public.create_invite(w uuid)
-returns text
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  novo_codigo text;
-begin
-  if not public.is_wallet_member(w) then
-    raise exception 'Só quem é da carteira pode convidar.';
+  if minha is not null then
+    return query select minha, 'liberado'::text;
+    return;
   end if;
 
-  -- `gen_random_uuid()` é nativo do Postgres e já é usado nas tabelas acima.
-  -- A versão anterior usava `gen_random_bytes`, que exige a extensão pgcrypto
-  -- e não vem ligada por padrão: a função era criada sem erro e só falhava na
-  -- hora de gerar o convite, com todo o resto do aplicativo funcionando.
-  novo_codigo := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
-  insert into public.wallet_invites (code, wallet_id, created_by, expires_at)
-    values (novo_codigo, w, auth.uid(), now() + interval '7 days');
-  return novo_codigo;
-end;
-$$;
-
--- Aceitar o convite é o único caminho para virar membro de uma carteira.
-create or replace function public.accept_invite(invite_code text)
-returns uuid
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  convite public.wallet_invites%rowtype;
-begin
-  if auth.uid() is null then
-    raise exception 'É preciso estar autenticado.';
+  -- Ninguém ainda: quem chega primeiro é o dono. Depois desta vez, a única
+  -- forma de entrar é ser aprovado.
+  if not exists (select 1 from public.wallets) then
+    insert into public.wallets (name) values ('Nossa carteira') returning id into nova;
+    insert into public.wallet_members (wallet_id, user_id, role) values (nova, quem, 'owner');
+    return query select nova, 'liberado'::text;
+    return;
   end if;
 
-  select * into convite from public.wallet_invites
-    where code = upper(invite_code) for update;
-
+  select * into pedido from public.access_requests where user_id = quem;
   if not found then
-    raise exception 'Convite não encontrado.';
-  end if;
-  if convite.used_at is not null then
-    raise exception 'Este convite já foi usado.';
-  end if;
-  if convite.expires_at < now() then
-    raise exception 'Este convite expirou.';
+    insert into public.access_requests (user_id, email)
+      values (quem, coalesce((select u.email from auth.users u where u.id = quem), ''))
+      returning * into pedido;
   end if;
 
-  insert into public.wallet_members (wallet_id, user_id)
-    values (convite.wallet_id, auth.uid())
+  return query select null::uuid, pedido.status;
+end;
+$$;
+
+-- Quem está esperando. Só o dono enxerga.
+create or replace function public.pedidos_pendentes()
+returns table (user_id uuid, email text, requested_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_owner() then
+    raise exception 'Só o dono da carteira pode ver os pedidos de acesso.';
+  end if;
+  return query
+    select r.user_id, r.email, r.requested_at
+    from public.access_requests r
+    where r.status = 'pending'
+    order by r.requested_at;
+end;
+$$;
+
+create or replace function public.aprovar_pedido(quem uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  carteira uuid;
+begin
+  if not public.is_owner() then
+    raise exception 'Só o dono da carteira pode liberar o acesso.';
+  end if;
+
+  select m.wallet_id into carteira
+    from public.wallet_members m
+    where m.user_id = auth.uid() and m.role = 'owner'
+    limit 1;
+
+  insert into public.wallet_members (wallet_id, user_id, role)
+    values (carteira, quem, 'member')
     on conflict do nothing;
 
-  update public.wallet_invites set used_at = now() where code = convite.code;
-  return convite.wallet_id;
+  update public.access_requests
+    set status = 'approved', decided_at = now(), decided_by = auth.uid()
+    where user_id = quem;
+end;
+$$;
+
+create or replace function public.recusar_pedido(quem uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_owner() then
+    raise exception 'Só o dono da carteira pode recusar um pedido.';
+  end if;
+  update public.access_requests
+    set status = 'rejected', decided_at = now(), decided_by = auth.uid()
+    where user_id = quem;
+end;
+$$;
+
+-- Tirar alguém depois de ter liberado. O acesso precisa poder ser desfeito,
+-- senão aprovar é uma decisão sem volta.
+create or replace function public.remover_membro(quem uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_owner() then
+    raise exception 'Só o dono da carteira pode remover alguém.';
+  end if;
+  if quem = auth.uid() then
+    raise exception 'O dono não pode remover a si mesmo.';
+  end if;
+
+  delete from public.wallet_members where user_id = quem and role <> 'owner';
+  update public.access_requests
+    set status = 'rejected', decided_at = now(), decided_by = auth.uid()
+    where user_id = quem;
+end;
+$$;
+
+-- Quem está na carteira hoje, para a tela de Ajustes.
+create or replace function public.membros()
+returns table (user_id uuid, email text, role text, created_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_owner() then
+    raise exception 'Só o dono da carteira pode ver os membros.';
+  end if;
+  return query
+    select m.user_id, coalesce(u.email, '')::text, m.role, m.created_at
+    from public.wallet_members m
+    left join auth.users u on u.id = m.user_id
+    where m.wallet_id in (
+      select w.wallet_id from public.wallet_members w
+      where w.user_id = auth.uid()
+    )
+    order by m.created_at;
 end;
 $$;
 
@@ -238,3 +353,7 @@ as $$
   order by created_at
   limit 1;
 $$;
+
+-- Criar carteira deixou de ser público: a primeira nasce dentro de
+-- meu_acesso() e não deve haver uma segunda.
+drop function if exists public.create_wallet(text);

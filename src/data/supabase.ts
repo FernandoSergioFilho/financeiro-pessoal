@@ -109,36 +109,90 @@ export function onAuthChange(listener: (user: User | null) => void): () => void 
   return () => data.subscription.unsubscribe();
 }
 
-/* ---------------------------------------------------------------- carteira */
+/* ------------------------------------------------------- acesso e carteira */
 
-/** A carteira de quem está logado; cria uma na primeira vez. */
-export async function ensureWallet(): Promise<string> {
-  const supabase = getSupabase();
-  if (!supabase) throw new Error('A sincronização não está configurada neste aplicativo.');
+/** Situação de quem está logado perante a carteira. */
+export type Situacao = 'liberado' | 'pending' | 'rejected';
 
-  const { data: existente, error: erroBusca } = await supabase.rpc('my_wallet');
-  if (erroBusca) throw new Error(traduzirErro(erroBusca.message));
-  if (existente) return existente as string;
-
-  const { data: nova, error } = await supabase.rpc('create_wallet', { wallet_name: 'Nossa carteira' });
-  if (error) throw new Error(traduzirErro(error.message));
-  return nova as string;
+export interface Acesso {
+  /** Nulo enquanto o acesso não foi liberado. */
+  walletId: string | null;
+  situacao: Situacao;
 }
 
-export async function createInvite(walletId: string): Promise<string> {
+function exigirCliente(): SupabaseClient {
   const supabase = getSupabase();
   if (!supabase) throw new Error('A sincronização não está configurada neste aplicativo.');
-  const { data, error } = await supabase.rpc('create_invite', { w: walletId });
-  if (error) throw new Error(traduzirErro(error.message));
-  return data as string;
+  return supabase;
 }
 
-export async function acceptInvite(code: string): Promise<string> {
-  const supabase = getSupabase();
-  if (!supabase) throw new Error('A sincronização não está configurada neste aplicativo.');
-  const { data, error } = await supabase.rpc('accept_invite', { invite_code: code.trim() });
+/**
+ * A única porta de entrada. Quem já é da carteira recebe o id dela; quem se
+ * cadastrou e ainda não foi liberado recebe `pending` e nenhuma carteira.
+ *
+ * Antes isto criava uma carteira para qualquer pessoa autenticada, o que
+ * deixava o projeto aberto para qualquer um que abrisse o endereço.
+ */
+export async function meuAcesso(): Promise<Acesso> {
+  const { data, error } = await exigirCliente().rpc('meu_acesso');
   if (error) throw new Error(traduzirErro(error.message));
-  return data as string;
+
+  // A função devolve uma tabela de uma linha só.
+  const linha = (Array.isArray(data) ? data[0] : data) as
+    | { wallet_id: string | null; situacao: Situacao }
+    | undefined;
+  if (!linha) throw new Error('O servidor não disse qual é a sua situação.');
+  return { walletId: linha.wallet_id, situacao: linha.situacao };
+}
+
+export interface Pedido {
+  userId: string;
+  email: string;
+  pedidoEm: string;
+}
+
+export async function pedidosPendentes(): Promise<Pedido[]> {
+  const { data, error } = await exigirCliente().rpc('pedidos_pendentes');
+  if (error) throw new Error(traduzirErro(error.message));
+  return ((data ?? []) as { user_id: string; email: string; requested_at: string }[]).map((linha) => ({
+    userId: linha.user_id,
+    email: linha.email,
+    pedidoEm: linha.requested_at,
+  }));
+}
+
+export interface Membro {
+  userId: string;
+  email: string;
+  dono: boolean;
+  desde: string;
+}
+
+export async function membros(): Promise<Membro[]> {
+  const { data, error } = await exigirCliente().rpc('membros');
+  if (error) throw new Error(traduzirErro(error.message));
+  return ((data ?? []) as { user_id: string; email: string; role: string; created_at: string }[]).map((linha) => ({
+    userId: linha.user_id,
+    email: linha.email,
+    dono: linha.role === 'owner',
+    desde: linha.created_at,
+  }));
+}
+
+async function chamar(funcao: string, quem: string): Promise<void> {
+  const { error } = await exigirCliente().rpc(funcao, { quem });
+  if (error) throw new Error(traduzirErro(error.message));
+}
+
+export const aprovarPedido = (userId: string) => chamar('aprovar_pedido', userId);
+export const recusarPedido = (userId: string) => chamar('recusar_pedido', userId);
+export const removerMembro = (userId: string) => chamar('remover_membro', userId);
+
+/** Só o dono vê a fila e libera gente; a tela esconde o que ele não pode usar. */
+export async function souDono(): Promise<boolean> {
+  const { data, error } = await exigirCliente().rpc('is_owner');
+  if (error) return false;
+  return data === true;
 }
 
 /**
@@ -166,6 +220,9 @@ export function traduzirErro(mensagem: string): string {
   if (m.includes('rate limit') || m.includes('too many')) {
     return 'Muitas tentativas seguidas. Espere um minuto e tente de novo.';
   }
+  // As mensagens das funções de aprovação já vêm em português e explicam a
+  // regra; repassar direto é melhor do que traduzir para algo mais vago.
+  if (m.includes('só o dono') || m.includes('autenticado')) return mensagem;
   if (m.includes('invalid') && m.includes('email')) return 'E-mail inválido.';
   if (m.includes('failed to fetch') || m.includes('networkerror')) {
     return 'Sem conexão com o servidor.';
@@ -180,8 +237,8 @@ export function traduzirErro(mensagem: string): string {
   // tudo igual esconde a causa real em vez de ajudar.
   if (
     m.includes('schema cache') ||
-    /relation .*(wallets|wallet_members|wallet_invites|records).* does not exist/.test(m) ||
-    /function .*(create_wallet|create_invite|accept_invite|my_wallet|is_wallet_member).* does not exist/.test(m)
+    /relation .*(wallets|wallet_members|access_requests|records).* does not exist/.test(m) ||
+    /function .*(meu_acesso|pedidos_pendentes|aprovar_pedido|recusar_pedido|remover_membro|membros|my_wallet|is_wallet_member|is_owner).* does not exist/.test(m)
   ) {
     return 'O banco ainda não tem a estrutura: rode o supabase/schema.sql no SQL Editor.';
   }

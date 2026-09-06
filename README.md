@@ -91,6 +91,10 @@ Para experimentar sem digitar nada: **Ajustes → Carregar dados de exemplo**.
   entradas × saídas nos últimos seis meses e saldo por conta. Alerta de contas vencidas
   que continuam como previstas.
 - **Contas e categorias** editáveis, com cores e ícones.
+
+Cadastrar as três coisas — avulso, parcelado e recorrente — acontece num lugar só, o botão
+**+ Novo lançamento**. As abas *Fixas* e *Parcelas* são de consulta: para corrigir ou
+apagar uma delas, clique na linha.
 - **Backup e planilha** — exportar os lançamentos do mês em CSV (abre direto no Excel e no
   LibreOffice em português), baixar um backup completo em JSON e restaurá-lo depois.
 - Tema claro/escuro (ou o do sistema), navegação lateral no desktop e barra inferior com
@@ -138,9 +142,10 @@ da mesma família sem tocar nos dados.
 
 O app pode funcionar em dois modos, e o segundo é opcional:
 
-- **Só local** (sem configuração): os lançamentos ficam no navegador do aparelho.
-- **Com carteira compartilhada**: duas pessoas, cada uma com seu login, enxergam e editam
-  os mesmos lançamentos, de qualquer aparelho.
+- **Só local** (sem configuração): os lançamentos ficam no navegador do aparelho, sem
+  login nenhum. É o modo do `financeiro.html` de arquivo único.
+- **Com carteira compartilhada**: o app **exige login** — a primeira tela é a de entrar — e
+  duas pessoas, cada uma com sua conta, enxergam e editam os mesmos lançamentos.
 
 Continua **local-first** nos dois casos: o app grava no navegador e funciona offline; a
 sincronização acontece por trás, e o que for lançado sem sinal sobe quando a conexão volta.
@@ -155,13 +160,28 @@ sincronização acontece por trás, e o que for lançado sem sinal sobe quando a
 
 4. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**.
 
-No app, a área fica em **Ajustes → Conta e sincronização**: cada pessoa cria uma conta com
-e-mail e senha, e quem já está dentro gera um **código de convite** para a outra.
+### Quem entra, e quem não entra
+
+O endereço publicado é aberto: qualquer um pode abri-lo. O que decide o acesso é isto:
+
+- Sem entrar, a primeira tela é a de login. Nenhuma página do app é montada.
+- Quem se cadastra fica **pendente** e vê uma tela de espera. Não enxerga nem grava nada.
+- O **dono** — a primeira pessoa a entrar, que ganhou a carteira — libera ou recusa cada
+  pedido em **Ajustes → Pedidos de acesso**, e pode tirar o acesso de alguém depois.
+
+A tela é só a aparência disso. A regra mora nas políticas de acesso do banco: sem ser
+membro da carteira, o servidor não devolve nem aceita um único registro, mesmo para quem
+chame a API por fora do aplicativo. É por isso que o `supabase/test/` exercita justamente
+esses casos.
 
 O login é por senha, e não por link enviado no e-mail, por um motivo prático: o serviço de
 e-mail que vem com o Supabase envia no máximo duas mensagens por hora e **só entrega para
 endereços da organização do projeto** — as demais são descartadas sem erro nenhum. Numa
 carteira compartilhada, a segunda pessoa nunca receberia o link.
+
+Pelo mesmo motivo, avisar por e-mail que alguém pediu acesso depende de um serviço de fora.
+Isso é **opcional** e fica em [`supabase/email-aviso.sql`](supabase/email-aviso.sql), com o
+passo a passo. Sem ele, os pedidos continuam aparecendo em Ajustes.
 
 ### Por que a chave fica versionada, e não num "secret"
 
@@ -178,12 +198,21 @@ lançamentos são as políticas de acesso em `supabase/schema.sql`.
 
 ### Testar o banco de verdade
 
-O `supabase/schema.sql` é exercitado contra um Postgres real — criar carteira, gerar
-convite, o outro aceitar, os dois enxergarem os mesmos lançamentos, e um estranho não
-enxergar nada:
+O `supabase/schema.sql` é exercitado contra um Postgres real, como quatro pessoas
+diferentes — o dono, um aprovado, um pendente e um estranho. O que ele prova, e é o
+motivo de existir: quem não foi liberado **não lê nem grava nada**, não se aprova sozinho
+e não consegue entrar editando a tabela de pedidos.
 
 ```bash
 supabase/test/testar-schema.sh supabase/schema.sql
+```
+
+E, porque o banco de verdade já tem dados, a migração também é exercitada: colar o schema
+novo por cima do antigo tem que manter os membros, os lançamentos, e o dono como dono —
+se o papel não fosse preenchido, ninguém poderia aprovar mais ninguém.
+
+```bash
+supabase/test/testar-migracao.sh supabase/test/schema-anterior.sql supabase/schema.sql
 ```
 
 O ambiente simulado **não instala a extensão pgcrypto**, de propósito: foi assim que um
