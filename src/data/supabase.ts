@@ -170,7 +170,19 @@ export function traduzirErro(mensagem: string): string {
   if (m.includes('failed to fetch') || m.includes('networkerror')) {
     return 'Sem conexão com o servidor.';
   }
-  if (m.includes('does not exist') || m.includes('schema cache')) {
+  // Uma extensão que falta é diferente de um schema que falta: a mensagem
+  // genérica mandaria rodar de novo um SQL que já rodou.
+  if (m.includes('gen_random_bytes')) {
+    return 'O banco está sem a extensão pgcrypto. Rode o supabase/schema.sql atualizado, que não depende mais dela.';
+  }
+  // Só as nossas tabelas e funções indicam schema faltando. Um "does not
+  // exist" solto pode ser qualquer dependência interna do banco, e traduzir
+  // tudo igual esconde a causa real em vez de ajudar.
+  if (
+    m.includes('schema cache') ||
+    /relation .*(wallets|wallet_members|wallet_invites|records).* does not exist/.test(m) ||
+    /function .*(create_wallet|create_invite|accept_invite|my_wallet|is_wallet_member).* does not exist/.test(m)
+  ) {
     return 'O banco ainda não tem a estrutura: rode o supabase/schema.sql no SQL Editor.';
   }
   return mensagem;

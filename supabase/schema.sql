@@ -178,7 +178,11 @@ begin
     raise exception 'Só quem é da carteira pode convidar.';
   end if;
 
-  novo_codigo := upper(substr(encode(gen_random_bytes(6), 'hex'), 1, 8));
+  -- `gen_random_uuid()` é nativo do Postgres e já é usado nas tabelas acima.
+  -- A versão anterior usava `gen_random_bytes`, que exige a extensão pgcrypto
+  -- e não vem ligada por padrão: a função era criada sem erro e só falhava na
+  -- hora de gerar o convite, com todo o resto do aplicativo funcionando.
+  novo_codigo := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
   insert into public.wallet_invites (code, wallet_id, created_by, expires_at)
     values (novo_codigo, w, auth.uid(), now() + interval '7 days');
   return novo_codigo;

@@ -35,8 +35,23 @@ describe('traduzirErro', () => {
     expect(traduzirErro('Signups not allowed for this instance')).toContain('novos cadastros');
   });
 
-  it('avisa que falta rodar o schema quando a tabela não existe', () => {
+  it('avisa que falta rodar o schema quando uma tabela nossa não existe', () => {
     expect(traduzirErro('relation "public.records" does not exist')).toContain('schema.sql');
+    expect(traduzirErro('Could not find the function public.create_invite in the schema cache'))
+      .toContain('schema.sql');
+  });
+
+  it('não confunde dependência faltando com schema faltando', () => {
+    // Este erro já mandou o usuário rodar de novo um SQL que ele acabara de
+    // rodar com sucesso: a função existia, faltava a extensão que ela usava.
+    const t = traduzirErro('function gen_random_bytes(integer) does not exist');
+    expect(t).toContain('pgcrypto');
+    expect(t).not.toContain('ainda não tem a estrutura');
+  });
+
+  it('não engole um "does not exist" que não é nosso', () => {
+    const original = 'column "alguma_coisa" does not exist';
+    expect(traduzirErro(original)).toBe(original);
   });
 
   it('distingue falta de conexão de erro do servidor', () => {
