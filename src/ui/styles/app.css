@@ -156,6 +156,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .dim { color: var(--text-3); }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
+.trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -171,11 +172,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   grid-template-columns: 244px 1fr;
 }
 
+/* `fixed`, e não `sticky`: a coluna da grade continua reservando os 244px, mas
+   a barra passa a ocupar a altura da janela inteira. Grudada, ela terminava
+   junto com a primeira dobra e o fundo claro cortava no meio da página. */
 .sidebar {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100vh;
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 244px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -223,8 +227,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav-icon { width: 20px; text-align: center; font-size: 15px; }
 .nav-spacer { flex: 1; }
 
-.main { display: flex; flex-direction: column; min-width: 0; }
+/* A barra lateral saiu do fluxo, então o conteúdo precisa ser mandado para a
+   segunda coluna — senão ele se coloca sozinho na primeira, por baixo dela. */
+.main { grid-column: 2; display: flex; flex-direction: column; min-width: 0; }
 
+/* Fundo opaco, sem transparência nem desfoque: a barra fica por cima do
+   conteúdo que rola, e translúcida ela deixava o texto de baixo aparecer
+   atrás do título e dos botões de mês. O desfoque também dependia de
+   `backdrop-filter`, que nem todo navegador aplica igual. */
 .topbar {
   position: sticky;
   top: 0;
@@ -233,8 +243,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-items: center;
   gap: 12px;
   padding: 14px 24px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(8px);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 .topbar-title { flex: 1; min-width: 0; }
@@ -266,6 +275,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card-body { padding: 16px; }
 .card-body.tight { padding: 8px; }
 
+/* Sempre `minmax(0, 1fr)`: o `1fr` puro tem um mínimo automático de min-content,
+   então uma coluna com um botão de rótulo longo se recusa a encolher e o cartão
+   vaza para fora da tela. */
 .grid { display: grid; gap: 14px; }
 .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -291,7 +303,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: 0.88rem;
   font-weight: 560;
   cursor: pointer;
-  white-space: nowrap;
+  /* Um rótulo longo numa coluna estreita quebra em duas linhas em vez de
+     estourar o cartão — que era o que acontecia com `white-space: nowrap`. */
+  max-width: 100%;
+  text-wrap: pretty;
 }
 .btn:hover { background: var(--surface-2); }
 .btn:active { transform: translateY(1px); }
@@ -349,13 +364,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
 
-/* Lista de lançamentos */
-.entries { display: flex; flex-direction: column; }
+/* Lista de lançamentos
+   A largura que decide o formato da linha é a do cartão, não a da janela: no
+   painel esta lista divide a tela com os gráficos, então a mesma janela de
+   1000px pode dar 900px de linha numa página e 250px na outra. Por isso o
+   ajuste é por @container e não por @media. */
+.entries { display: flex; flex-direction: column; container-type: inline-size; }
 .entry {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr) auto auto;
+  /* Descrição e valor na primeira linha; categoria, conta e etiquetas na
+     segunda, ocupando também a largura do valor. Assim a linha de detalhe tem
+     a largura toda do cartão e não precisa cortar nomes. */
+  grid-template-areas:
+    'date title amount actions'
+    'date meta  meta   actions';
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 2px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -366,22 +392,71 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .entry:hover { background: var(--surface-2); border-color: var(--border); }
 .entry + .entry { border-top: 1px solid var(--border); border-radius: var(--radius-sm); }
-.entry.no-date { grid-template-columns: minmax(0, 1fr) auto auto; }
+.entry.no-date {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'title amount actions'
+    'meta  meta   actions';
+}
 .entry-date {
+  grid-area: date;
   font-size: 0.74rem; font-weight: 620; color: var(--text-3);
   text-transform: uppercase; letter-spacing: 0.02em; text-align: center;
 }
-.entry-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .entry-title {
+  grid-area: title;
   display: flex; align-items: center; gap: 7px; min-width: 0;
   font-weight: 560;
 }
-.entry-title .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entry-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.76rem; color: var(--text-3); }
-.entry-amount { font-weight: 620; text-align: right; white-space: nowrap; }
+.entry-meta {
+  grid-area: meta;
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0; font-size: 0.76rem; color: var(--text-3);
+}
+/* Uma linha só, com reticências: deixar quebrar faria cada lançamento ter uma
+   altura diferente e a lista perderia o ritmo. */
+.entry-title .text, .entry-meta .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-meta .tag { flex: none; }
+/* Faltando espaço, é o nome da conta que encurta: a categoria diz mais sobre
+   o lançamento, e a conta já aparece pela cor do ponto. */
+.entry-meta .cat { flex: 0 1 auto; }
+.entry-meta .acc { flex: 0 8 auto; }
+.entry-amount { grid-area: amount; font-weight: 620; text-align: right; white-space: nowrap; }
 .entry-amount.projected { opacity: 0.75; }
-.entry-actions { display: flex; gap: 2px; opacity: 0; }
-.entry:hover .entry-actions, .entry:focus-within .entry-actions { opacity: 1; }
+/* No celular não existe passar o mouse: se as ações só aparecessem no hover, o
+   ✓ de "já paguei" — que o aviso do painel manda usar — não existiria lá. */
+.entry-actions { grid-area: actions; display: flex; gap: 2px; }
+@media (hover: hover) {
+  .entry-actions { opacity: 0; }
+  .entry:hover .entry-actions, .entry:focus-within .entry-actions { opacity: 1; }
+}
+
+/* Cartão de celular: a coluna da data e os espaços entre colunas encolhem para
+   sobrar largura à descrição. */
+@container (max-width: 480px) {
+  .entry { grid-template-columns: 40px minmax(0, 1fr) auto auto; column-gap: 8px; }
+}
+
+/* Cartão estreito: o valor não cabe ao lado da descrição sem espremê-la até
+   sumir, então desce para a linha de baixo. */
+@container (max-width: 330px) {
+  .entry {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'date title  actions'
+      'date meta   actions'
+      'date amount actions';
+    column-gap: 8px;
+  }
+  .entry.no-date {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title  actions'
+      'meta   actions'
+      'amount actions';
+  }
+  .entry-amount { text-align: left; }
+}
 
 .day-heading {
   display: flex; align-items: baseline; gap: 8px;
@@ -401,9 +476,30 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .empty p { max-width: 34ch; font-size: 0.86rem; }
 
 /* Formulários */
+.form-narrow { max-width: 26rem; }
+
+/* Bloco de ajuste: a explicação de um lado, a ação do outro. Numa tela de
+   celular os dois lado a lado ficam com menos de um terço da largura cada —
+   o texto vira uma coluna de três linhas e o campo não mostra o que se digita.
+   Abaixo de 560px a ação desce para baixo do texto, cada um com a largura toda. */
+.setting { display: flex; align-items: center; gap: 12px; }
+.setting-text { flex: 1; min-width: 0; }
+.setting-text .title { font-weight: 560; font-size: 0.9rem; }
+.setting-text .dim { font-size: 0.8rem; }
+.setting > .btn { flex: none; }
+.setting.top { align-items: flex-start; }
+
+@media (max-width: 560px) {
+  .setting { flex-direction: column; align-items: stretch; gap: 8px; }
+  .setting > .btn { align-self: flex-start; }
+}
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .field > label { font-size: 0.78rem; font-weight: 600; color: var(--text-2); }
-.field .hint { font-size: 0.74rem; color: var(--text-3); }
+/* Solto, e não `.field .hint`: a mesma explicação curta aparece dentro de
+   campos, ao lado de um marcador e no fim de um cartão. Presa ao `.field`, ela
+   saía com o tamanho do texto normal nesses outros lugares. */
+.hint { font-size: 0.78rem; color: var(--text-3); }
+.field .hint { font-size: 0.74rem; }
 .field .error { font-size: 0.74rem; color: var(--bad); }
 
 .input, .select, textarea.input {
@@ -442,8 +538,10 @@ textarea.input { resize: vertical; min-height: 64px; }
 .segmented button[aria-pressed='true'][data-tone='income'] { color: var(--good); }
 .segmented button[aria-pressed='true'][data-tone='expense'] { color: var(--bad); }
 
-.switch { display: flex; align-items: center; gap: 9px; cursor: pointer; }
-.switch input { width: 16px; height: 16px; accent-color: var(--accent); }
+/* `flex-start`: com a explicação embaixo, centralizar deixava o quadradinho
+   flutuando entre as duas linhas em vez de junto do rótulo. */
+.switch { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.switch input { flex: none; width: 16px; height: 16px; margin-top: 3px; accent-color: var(--accent); }
 
 /* Diálogo */
 .overlay {
@@ -486,7 +584,15 @@ textarea.input { resize: vertical; min-height: 64px; }
 .table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .table tr:last-child td { border-bottom: 0; }
 .table td.right, .table th.right { text-align: right; }
+/* Numa largura pequena a tabela rola de lado dentro do cartão. Sem o
+   `min-width`, em vez de rolar ela espreme as colunas e "Cartão de crédito"
+   vira quatro linhas de uma palavra. */
 .table-wrap { overflow-x: auto; }
+/* Cada coluna fica com a largura do que tem dentro e, se a soma não couber, o
+   cartão rola de lado. Deixando quebrar, o navegador espremia as colunas e
+   "Conta corrente" descia em três linhas de uma palavra. */
+.table-wrap .table { min-width: 30rem; }
+.table-wrap .table th, .table-wrap .table td { white-space: nowrap; }
 
 /* Barra de progresso das parcelas */
 .progress {
@@ -543,30 +649,34 @@ textarea.input { resize: vertical; min-height: 64px; }
    Mobile
    ========================================================================= */
 
+/* A lista de lançamentos ao lado dos gráficos só cabe em tela larga. Abaixo
+   disso as duas metades ficam estreitas demais e a linha do lançamento perde a
+   descrição — melhor uma coluna só. */
+@media (max-width: 1080px) {
+  .grid.split { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 900px) {
-  .grid.split, .grid.cols-4, .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.cols-4, .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
   .sidebar { display: none; }
+  .main { grid-column: 1; }
 
   .topbar { padding: 12px 14px; }
-  .content { padding: 14px 14px 96px; gap: 14px; }
+  /* Espaço embaixo para a barra de navegação e o botão redondo flutuante: sem
+     ele, os dois cobrem o último cartão da página. */
+  .content { padding: 14px 14px calc(132px + env(safe-area-inset-bottom)); gap: 14px; }
 
-  .grid.cols-2, .grid.cols-3, .grid.cols-4, .grid.split { grid-template-columns: 1fr; }
+  .grid.cols-2, .grid.cols-3, .grid.cols-4, .grid.split { grid-template-columns: minmax(0, 1fr); }
   .grid.cols-2.keep, .grid.cols-4.keep { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  .entry { grid-template-columns: 42px minmax(0, 1fr) auto; gap: 8px; padding: 9px 8px; }
-  .entry.no-date { grid-template-columns: minmax(0, 1fr) auto; }
+  .entry { padding: 9px 8px; }
   .entry-amount { font-size: 0.92rem; }
-  /* Numa tela estreita, a descrição é o que importa: o resto fica em uma
-     linha só para não empurrar o título até virar reticências. */
-  .entry-meta { flex-wrap: nowrap; overflow: hidden; }
-  .entry-meta > span:not(.tag) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   h1 { font-size: 1.2rem; }
-  .entry-actions { display: none; }
   .stat-value { font-size: 1.3rem; }
 
   .month-nav .label { min-width: 7.6rem; font-size: 0.82rem; }
@@ -580,8 +690,7 @@ textarea.input { resize: vertical; min-height: 64px; }
     grid-auto-columns: 1fr;
     gap: 2px;
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
-    background: color-mix(in srgb, var(--surface) 94%, transparent);
-    backdrop-filter: blur(10px);
+    background: var(--surface);
     border-top: 1px solid var(--border);
   }
   .mobile-nav button {
@@ -622,5 +731,11 @@ textarea.input { resize: vertical; min-height: 64px; }
 }
 
 @media (max-width: 380px) {
-  .grid.cols-2.keep, .grid.cols-4.keep { grid-template-columns: 1fr; }
+  .grid.cols-2.keep, .grid.cols-4.keep { grid-template-columns: minmax(0, 1fr); }
+  /* Título, seletor de mês e estado da sincronização não cabem lado a lado:
+     em vez de espremer os três, o seletor desce para a linha seguinte. */
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .topbar-title { flex: 1 0 100%; }
+  .month-nav { flex: 1; }
+  .month-nav .label { flex: 1; min-width: 0; }
 }

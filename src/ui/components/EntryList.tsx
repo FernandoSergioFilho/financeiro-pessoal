@@ -59,30 +59,38 @@ export function EntryRow({
     >
       {showDate && <span className="entry-date num">{formatDayMonth(entry.date)}</span>}
 
-      <span className="entry-main">
-        <span className="entry-title">
-          <Dot color={category?.color} />
-          <span className="text">{entry.description}</span>
-          {entry.installmentNumber && (
-            <span className="tag installment">
-              {entry.installmentNumber}/{entry.installmentTotal}
-            </span>
-          )}
-          {entry.recurringId && <span className="tag recurring">🔁</span>}
+      {/* Título e detalhe são filhos diretos da grade: dentro de um invólucro,
+          a coluna deles encolhia a zero em cartões estreitos e o valor acabava
+          impresso por cima do nome da conta. */}
+      <span className="entry-title">
+        <Dot color={category?.color} />
+        <span className="text">{entry.description}</span>
+      </span>
+      {/* As etiquetas ficam na segunda linha, e não junto da descrição: na
+          largura de um celular elas comiam o espaço dela e "Supermercado"
+          virava "Sup…" — o nome é justamente o que se procura na lista. */}
+      <span className="entry-meta">
+        <span className="text cat">{category?.name ?? 'Sem categoria'}</span>
+        <span aria-hidden="true">·</span>
+        <span className="text acc">
+          {accountName(entry.accountId)}
+          {entry.kind === 'transfer' && ` → ${accountName(entry.toAccountId)}`}
         </span>
-        <span className="entry-meta">
-          <span>{category?.name ?? 'Sem categoria'}</span>
-          <span aria-hidden="true">·</span>
-          <span>
-            {accountName(entry.accountId)}
-            {entry.kind === 'transfer' && ` → ${accountName(entry.toAccountId)}`}
+        {entry.installmentNumber && (
+          <span className="tag installment">
+            {entry.installmentNumber}/{entry.installmentTotal}
           </span>
-          {pending && (
-            <span className={overdue ? 'tag pending bad' : 'tag pending'}>
-              {overdue ? 'Atrasado' : 'Previsto'}
-            </span>
-          )}
-        </span>
+        )}
+        {entry.recurringId && (
+          <span className="tag recurring" title="Conta que se repete todo mês">
+            🔁
+          </span>
+        )}
+        {pending && (
+          <span className={overdue ? 'tag pending bad' : 'tag pending'}>
+            {overdue ? 'Atrasado' : 'Previsto'}
+          </span>
+        )}
       </span>
 
       <span className={`entry-amount num ${amountClass(entry)}${isProjection(entry) ? ' projected' : ''}`}>

@@ -87,7 +87,9 @@ function LoginForm() {
   return (
     // `noValidate` de propósito: os campos mantêm o `type` certo para o
     // teclado do celular, mas a mensagem que aparece é a nossa, em português.
-    <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    // `form-narrow` porque campo de e-mail e senha esticados na largura de um
+    // monitor ficam desconfortáveis de ler e de mirar.
+    <form onSubmit={submit} noValidate className="form-narrow" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <p className="muted" style={{ fontSize: '0.88rem' }}>
         Entre para ver os mesmos lançamentos no celular e no computador.
       </p>
@@ -226,8 +228,10 @@ function AceitarConvite() {
   if (ok) return <p className="hint">Pronto: vocês agora dividem a mesma carteira.</p>;
 
   return (
-    <form onSubmit={submit} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+    // Mesmo bloco de ajuste: no celular o campo fica com a largura toda em vez
+    // de dividir a linha com o botão e mostrar meia palavra.
+    <form onSubmit={submit} className="setting top">
+      <div className="setting-text form-narrow">
         <input
           className="input num"
           placeholder="Código do convite"
@@ -264,12 +268,10 @@ function Diagnostico() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="row wrap">
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 560, fontSize: '0.9rem' }}>Verificar configuração</div>
-          <div className="dim" style={{ fontSize: '0.8rem' }}>
-            Testa cada peça em separado e diz o que falta.
-          </div>
+      <div className="setting">
+        <div className="setting-text">
+          <div className="title">Verificar configuração</div>
+          <div className="dim">Testa cada peça em separado e diz o que falta.</div>
         </div>
         <button type="button" className="btn sm" onClick={() => void verificar()} disabled={rodando}>
           {rodando ? 'Verificando…' : 'Verificar'}
@@ -340,29 +342,34 @@ export function CloudPanel() {
 
       {cloud.status === 'ready' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="row wrap">
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 560 }}>{cloud.email}</div>
-              <div className="dim" style={{ fontSize: '0.8rem' }}>
+          <div className="setting">
+            <div className="setting-text">
+              {/* O e-mail não quebra em pedaços: fica numa linha só e, se não
+                  couber, termina em reticências. */}
+              <div className="title trunc" title={cloud.email ?? undefined}>
+                {cloud.email}
+              </div>
+              <div className="dim">
                 {syncLabel(cloud.sync.status, cloud.sync.lastSyncedAt)}
                 {cloud.sync.status === 'offline' && ' — o que você lançar sobe quando a conexão voltar'}
               </div>
             </div>
-            <span className="spacer" />
-            <button type="button" className="btn sm" onClick={cloudApi.sincronizarAgora}>
-              Sincronizar agora
-            </button>
-            <button type="button" className="btn sm ghost" onClick={() => void cloudApi.sair()}>
-              Sair
-            </button>
+            <div className="row" style={{ gap: 8 }}>
+              <button type="button" className="btn sm" onClick={cloudApi.sincronizarAgora}>
+                Sincronizar agora
+              </button>
+              <button type="button" className="btn sm ghost" onClick={() => void cloudApi.sair()}>
+                Sair
+              </button>
+            </div>
           </div>
 
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
 
-          <div className="row wrap">
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontWeight: 560, fontSize: '0.9rem' }}>Dividir a carteira</div>
-              <div className="dim" style={{ fontSize: '0.8rem' }}>
+          <div className="setting">
+            <div className="setting-text">
+              <div className="title">Dividir a carteira</div>
+              <div className="dim">
                 Gere um código para outra pessoa enxergar e editar os mesmos lançamentos.
               </div>
             </div>
