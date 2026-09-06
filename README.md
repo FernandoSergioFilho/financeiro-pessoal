@@ -176,7 +176,24 @@ Guardá-la num secret do GitHub não a esconderia de ninguém — só daria uma 
 de segurança, além de exigir configuração manual a cada clone. Quem realmente protege os
 lançamentos são as políticas de acesso em `supabase/schema.sql`.
 
-**Confirme isso você mesmo**, antes de publicar e sempre que mexer no schema:
+### Testar o banco de verdade
+
+O `supabase/schema.sql` é exercitado contra um Postgres real — criar carteira, gerar
+convite, o outro aceitar, os dois enxergarem os mesmos lançamentos, e um estranho não
+enxergar nada:
+
+```bash
+supabase/test/testar-schema.sh supabase/schema.sql
+```
+
+O ambiente simulado **não instala a extensão pgcrypto**, de propósito: foi assim que um
+convite quebrado passou despercebido uma vez, porque o Postgres não valida o corpo de uma
+função ao criá-la e o erro só aparecia no clique.
+
+Dentro do app há ainda **Ajustes → Verificar configuração**, que testa cada peça contra o
+seu projeto e diz qual falta.
+
+**Confirme as permissões você mesmo**, antes de publicar e sempre que mexer no schema:
 
 ```bash
 npm run verificar-seguranca

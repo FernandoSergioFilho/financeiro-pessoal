@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react';
 
 import { formatDate } from '../../domain/date.ts';
 import { useFinance } from '../../state/store.tsx';
+import { diagnosticar, type Verificacao } from '../../data/diagnostico.ts';
 import { SENHA_MINIMA } from '../../data/supabase.ts';
 import { Card, Dialog, Field, Segmented } from './primitives.tsx';
 
@@ -244,6 +245,57 @@ function AceitarConvite() {
   );
 }
 
+/* ------------------------------------------------------------ diagnóstico */
+
+function Diagnostico() {
+  const [itens, setItens] = useState<Verificacao[] | null>(null);
+  const [rodando, setRodando] = useState(false);
+
+  async function verificar() {
+    setRodando(true);
+    try {
+      setItens(await diagnosticar());
+    } finally {
+      setRodando(false);
+    }
+  }
+
+  const icone = (s: Verificacao['situacao']) => (s === 'ok' ? '✅' : s === 'falha' ? '❌' : '⏭️');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="row wrap">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 560, fontSize: '0.9rem' }}>Verificar configuração</div>
+          <div className="dim" style={{ fontSize: '0.8rem' }}>
+            Testa cada peça em separado e diz o que falta.
+          </div>
+        </div>
+        <button type="button" className="btn sm" onClick={() => void verificar()} disabled={rodando}>
+          {rodando ? 'Verificando…' : 'Verificar'}
+        </button>
+      </div>
+
+      {itens && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {itens.map((item) => (
+            <div key={item.nome} style={{ fontSize: '0.84rem' }}>
+              <div>
+                <span aria-hidden="true">{icone(item.situacao)}</span>{' '}
+                <strong>{item.nome}</strong>
+              </div>
+              <div className="dim" style={{ paddingLeft: 22 }}>{item.detalhe}</div>
+              {item.comoResolver && (
+                <div className="bad" style={{ paddingLeft: 22 }}>→ {item.comoResolver}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ painel */
 
 export function CloudPanel() {
@@ -265,7 +317,13 @@ export function CloudPanel() {
     <Card title="Conta e sincronização">
       {cloud.status === 'connecting' && <p className="dim">Conectando…</p>}
 
-      {cloud.status === 'signed-out' && <LoginForm />}
+      {cloud.status === 'signed-out' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <LoginForm />
+          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
+          <Diagnostico />
+        </div>
+      )}
 
       {cloud.status === 'error' && (
         <div className="banner warn">
@@ -314,6 +372,10 @@ export function CloudPanel() {
           </div>
 
           <AceitarConvite />
+
+          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
+
+          <Diagnostico />
         </div>
       )}
 
