@@ -7,7 +7,8 @@ import { useState, type FormEvent } from 'react';
 
 import { formatDate } from '../../domain/date.ts';
 import { useFinance } from '../../state/store.tsx';
-import { Card, Dialog, Field } from './primitives.tsx';
+import { SENHA_MINIMA } from '../../data/supabase.ts';
+import { Card, Dialog, Field, Segmented } from './primitives.tsx';
 
 /** Frase curta do estado atual, para caber na barra superior. */
 export function syncLabel(status: string, lastSyncedAt: string | null): string {
@@ -57,52 +58,52 @@ export function SyncBadge() {
 
 function LoginForm() {
   const { cloudApi } = useFinance();
+  const [modo, setModo] = useState<'entrar' | 'criar'>('entrar');
   const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const [enviado, setEnviado] = useState(false);
   const [erro, setErro] = useState('');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setErro('');
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setErro('Digite um e-mail válido.');
+    if (senha.length < SENHA_MINIMA) {
+      return setErro(`A senha precisa ter pelo menos ${SENHA_MINIMA} caracteres.`);
+    }
 
     setEnviando(true);
     try {
-      await cloudApi.entrar(email);
-      setEnviado(true);
+      if (modo === 'entrar') await cloudApi.entrar(email, senha);
+      else await cloudApi.criarConta(email, senha);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível enviar o link.');
+      setErro(e instanceof Error ? e.message : 'Não foi possível entrar.');
     } finally {
       setEnviando(false);
     }
   }
 
-  if (enviado) {
-    return (
-      <div className="banner">
-        <span className="emoji" aria-hidden="true">📬</span>
-        <span>
-          <strong>Link enviado para {email}</strong>
-          <br />
-          <span className="dim">
-            Abra o e-mail neste mesmo aparelho e toque no link para entrar. Ele vale por uma hora.
-          </span>
-        </span>
-      </div>
-    );
-  }
-
   return (
-    // `noValidate` de propósito: o campo continua sendo `type="email"` para o
-    // celular abrir o teclado certo, mas a mensagem que aparece é a nossa, em
-    // português, e não a do navegador.
+    // `noValidate` de propósito: os campos mantêm o `type` certo para o
+    // teclado do celular, mas a mensagem que aparece é a nossa, em português.
     <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <p className="muted" style={{ fontSize: '0.88rem' }}>
-        Entre para ver os mesmos lançamentos no celular e no computador. Você recebe um link por e-mail —
-        não precisa criar nem decorar senha.
+        Entre para ver os mesmos lançamentos no celular e no computador.
       </p>
-      <Field label="Seu e-mail" error={erro}>
+
+      <Segmented
+        options={[
+          { value: 'entrar', label: 'Entrar' },
+          { value: 'criar', label: 'Criar conta' },
+        ]}
+        value={modo}
+        onChange={(next) => {
+          setModo(next);
+          setErro('');
+        }}
+      />
+
+      <Field label="Seu e-mail">
         {(id) => (
           <input
             id={id}
@@ -115,9 +116,29 @@ function LoginForm() {
           />
         )}
       </Field>
+
+      <Field
+        label="Senha"
+        error={erro}
+        hint={modo === 'criar' ? `Pelo menos ${SENHA_MINIMA} caracteres.` : undefined}
+      >
+        {(id) => (
+          <input
+            id={id}
+            type="password"
+            className="input"
+            // Diz ao gerenciador de senhas se é para guardar uma nova ou
+            // preencher a que já existe.
+            autoComplete={modo === 'criar' ? 'new-password' : 'current-password'}
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+          />
+        )}
+      </Field>
+
       <div className="row">
         <button type="submit" className="btn primary" disabled={enviando}>
-          {enviando ? 'Enviando…' : 'Receber link de acesso'}
+          {enviando ? 'Aguarde…' : modo === 'entrar' ? 'Entrar' : 'Criar conta'}
         </button>
       </div>
     </form>

@@ -20,8 +20,9 @@ import {
   getSupabase,
   isCloudEnabled,
   onAuthChange,
-  sendMagicLink,
+  signIn,
   signOut,
+  signUp,
 } from '../data/supabase.ts';
 
 export type CloudStatus = 'off' | 'signed-out' | 'connecting' | 'ready' | 'error';
@@ -37,7 +38,8 @@ export interface CloudState {
 }
 
 export interface CloudApi {
-  entrar(email: string): Promise<void>;
+  entrar(email: string, senha: string): Promise<void>;
+  criarConta(email: string, senha: string): Promise<void>;
   sair(): Promise<void>;
   convidar(): Promise<string>;
   entrarComConvite(code: string): Promise<void>;
@@ -158,8 +160,11 @@ export function useCloud(
   /* -------------------------------------------------------------- ações */
 
   const api: CloudApi = {
-    async entrar(email) {
-      await sendMagicLink(email);
+    async entrar(email, senha) {
+      await signIn(email, senha);
+    },
+    async criarConta(email, senha) {
+      await signUp(email, senha);
     },
     async sair() {
       await signOut();

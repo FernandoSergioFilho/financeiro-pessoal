@@ -153,8 +153,15 @@ sincronização acontece por trás, e o que for lançado sem sinal sobe quando a
    `.env.production` (veja `.env.example` para o formato). A chave `service_role` não
    entra aqui nem em lugar nenhum: ela ignora todas as políticas de acesso.
 
-No app, a área fica em **Ajustes → Conta e sincronização**: você entra com um link enviado
-por e-mail (sem senha) e pode gerar um **código de convite** para a segunda pessoa.
+4. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**.
+
+No app, a área fica em **Ajustes → Conta e sincronização**: cada pessoa cria uma conta com
+e-mail e senha, e quem já está dentro gera um **código de convite** para a outra.
+
+O login é por senha, e não por link enviado no e-mail, por um motivo prático: o serviço de
+e-mail que vem com o Supabase envia no máximo duas mensagens por hora e **só entrega para
+endereços da organização do projeto** — as demais são descartadas sem erro nenhum. Numa
+carteira compartilhada, a segunda pessoa nunca receberia o link.
 
 ### Por que a chave fica versionada, e não num "secret"
 
