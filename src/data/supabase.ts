@@ -95,6 +95,42 @@ export async function signOut(): Promise<void> {
   await getSupabase()?.auth.signOut();
 }
 
+/**
+ * Troca a senha de quem já está logado.
+ *
+ * Não precisa da senha antiga nem de e-mail nenhum: a sessão ativa já é a
+ * prova de que a pessoa é dona da conta. É o único jeito de resolver uma senha
+ * esquecida sem depender de entrega de e-mail — basta estar logado em algum
+ * aparelho.
+ */
+export async function trocarSenha(nova: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('A sincronização não está configurada neste aplicativo.');
+
+  const { error } = await supabase.auth.updateUser({ password: nova });
+  if (error) throw new Error(traduzirErro(error.message));
+}
+
+/**
+ * Manda o link de recuperação para quem não está logado em lugar nenhum.
+ *
+ * Depende de o projeto conseguir entregar e-mail — que é a parte frágil, e
+ * está explicada no README. O app não tem como contornar isso: trocar a senha
+ * de alguém sem prova de identidade exigiria a chave de administrador, que
+ * ignora todas as políticas de acesso e por isso nunca pode ir para dentro do
+ * JavaScript entregue ao navegador.
+ */
+export async function pedirRecuperacao(email: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('A sincronização não está configurada neste aplicativo.');
+
+  // Volta para o próprio endereço de onde saiu, seja o site publicado, o
+  // localhost do desenvolvimento ou uma subpasta qualquer.
+  const destino = `${window.location.origin}${window.location.pathname}`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: destino });
+  if (error) throw new Error(traduzirErro(error.message));
+}
+
 export async function currentUser(): Promise<User | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
@@ -102,10 +138,20 @@ export async function currentUser(): Promise<User | null> {
   return data.user ?? null;
 }
 
-export function onAuthChange(listener: (user: User | null) => void): () => void {
+/**
+ * O evento é repassado junto porque um caso precisa ser distinguido: quem
+ * chega pelo link de recuperação **já vem com sessão válida**. Sem olhar o
+ * evento, o app deixaria a pessoa entrar direto e ela nunca chegaria a
+ * escolher a senha nova — que era o motivo de ela ter clicado no link.
+ */
+export function onAuthChange(
+  listener: (user: User | null, recuperandoSenha: boolean) => void,
+): () => void {
   const supabase = getSupabase();
   if (!supabase) return () => {};
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => listener(session?.user ?? null));
+  const { data } = supabase.auth.onAuthStateChange((evento, session) =>
+    listener(session?.user ?? null, evento === 'PASSWORD_RECOVERY'),
+  );
   return () => data.subscription.unsubscribe();
 }
 

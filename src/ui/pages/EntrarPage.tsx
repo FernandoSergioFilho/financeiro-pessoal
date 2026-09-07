@@ -12,7 +12,7 @@
 import { useState } from 'react';
 
 import { useFinance } from '../../state/store.tsx';
-import { Diagnostico, LoginForm } from '../components/CloudPanel.tsx';
+import { Diagnostico, LoginForm, TrocarSenha } from '../components/CloudPanel.tsx';
 
 function Moldura({ children }: { children: React.ReactNode }) {
   return (
@@ -59,6 +59,36 @@ export function EntrarPage() {
           Não consigo entrar
         </button>
       )}
+    </Moldura>
+  );
+}
+
+/**
+ * Onde o link de recuperação cai.
+ *
+ * Reusa o mesmo `TrocarSenha` de Ajustes: o link já traz uma sessão válida, e
+ * daí em diante é exatamente a mesma operação de quem troca a senha estando
+ * logado. Duplicar o formulário só criaria dois lugares para consertar.
+ */
+export function NovaSenhaPage() {
+  const { cloud, cloudApi } = useFinance();
+
+  return (
+    <Moldura>
+      <div className="card">
+        <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="setting-text">
+            <div className="title">Escolha uma senha nova</div>
+            <div className="dim">
+              {cloud.email ? `Para a conta ${cloud.email}.` : 'Você chegou pelo link de recuperação.'}
+            </div>
+          </div>
+          <TrocarSenha />
+          <button type="button" className="btn ghost sm" onClick={() => void cloudApi.sair()}>
+            Cancelar e voltar ao login
+          </button>
+        </div>
+      </div>
     </Moldura>
   );
 }

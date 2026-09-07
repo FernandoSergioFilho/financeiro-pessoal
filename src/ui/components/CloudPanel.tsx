@@ -9,7 +9,7 @@ import { formatDate } from '../../domain/date.ts';
 import { useFinance } from '../../state/store.tsx';
 import { diagnosticar, type Verificacao } from '../../data/diagnostico.ts';
 import { SENHA_MINIMA, type Membro, type Pedido } from '../../data/supabase.ts';
-import { Card, ConfirmDialog, Field, Segmented } from './primitives.tsx';
+import { Card, ConfirmDialog, Dialog, Field, Segmented } from './primitives.tsx';
 
 /** Frase curta do estado atual, para caber na barra superior. */
 export function syncLabel(status: string, lastSyncedAt: string | null): string {
@@ -89,6 +89,7 @@ export function LoginForm() {
   const [senha, setSenha] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
+  const [recuperando, setRecuperando] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -164,9 +165,213 @@ export function LoginForm() {
         )}
       </Field>
 
-      <div className="row">
+      <div className="row wrap">
         <button type="submit" className="btn primary" disabled={enviando}>
           {enviando ? 'Aguarde…' : modo === 'entrar' ? 'Entrar' : 'Criar conta'}
+        </button>
+        {modo === 'entrar' && (
+          <button type="button" className="btn ghost sm" onClick={() => setRecuperando(true)}>
+            Esqueci minha senha
+          </button>
+        )}
+      </div>
+
+      {recuperando && <RecuperarDialog email={email} onClose={() => setRecuperando(false)} />}
+    </form>
+  );
+}
+
+/**
+ * Pede o link de recuperação.
+ *
+ * O texto avisa que o e-mail pode não chegar, e diz o caminho que não depende
+ * dele. Prometer uma mensagem que o projeto talvez não consiga entregar é pior
+ * do que não ter o botão: a pessoa fica esperando em vez de resolver.
+ */
+function RecuperarDialog({ email: inicial, onClose }: { email: string; onClose: () => void }) {
+  const { cloudApi } = useFinance();
+  const [email, setEmail] = useState(inicial);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setErro('');
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setErro('Digite um e-mail válido.');
+    setEnviando(true);
+    try {
+      await cloudApi.pedirRecuperacao(email);
+      setEnviado(true);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível pedir a recuperação.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Dialog
+      title="Esqueci minha senha"
+      onClose={onClose}
+      footer={
+        <>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Fechar
+          </button>
+          {!enviado && (
+            <button type="submit" form="recuperar-form" className="btn primary" disabled={enviando}>
+              {enviando ? 'Enviando…' : 'Mandar o link'}
+            </button>
+          )}
+        </>
+      }
+    >
+      {enviado ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="banner">
+            <span className="emoji" aria-hidden="true">
+              📬
+            </span>
+            <span>
+              <strong>Pedido enviado para {email}</strong>
+              <br />
+              <span className="dim">
+                Abra o link da mensagem neste mesmo aparelho e você poderá escolher a senha nova.
+              </span>
+            </span>
+          </div>
+          <p className="hint">
+            Não chegou em alguns minutos? Veja o spam. Se ainda assim não vier, é limitação do envio de
+            e-mail do projeto, não da sua conta — use o caminho de baixo.
+          </p>
+        </div>
+      ) : (
+        <form id="recuperar-form" onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Field label="Seu e-mail" error={erro}>
+            {(id) => (
+              <input
+                id={id}
+                type="email"
+                className="input"
+                autoComplete="email"
+                placeholder="voce@exemplo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            )}
+          </Field>
+        </form>
+      )}
+
+      <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
+      <p className="hint">
+        <strong>Se você ainda estiver logado em outro aparelho</strong>, não precisa de e-mail nenhum: lá em
+        Ajustes existe "Trocar senha", que define uma senha nova na hora. É o caminho mais garantido.
+      </p>
+    </Dialog>
+  );
+}
+
+/* --------------------------------------------------------- trocar a senha */
+
+/**
+ * Define uma senha nova estando logado.
+ *
+ * Não pede a senha antiga porque não precisa: a sessão ativa já prova que a
+ * conta é sua. É por isso que este é o caminho que não depende de e-mail —
+ * basta continuar logado em qualquer aparelho.
+ */
+export function TrocarSenha({ aoConcluir }: { aoConcluir?: () => void }) {
+  const { cloudApi } = useFinance();
+  const [aberto, setAberto] = useState(false);
+  const [nova, setNova] = useState('');
+  const [repetir, setRepetir] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [pronto, setPronto] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setErro('');
+    if (nova.length < SENHA_MINIMA) return setErro(`A senha precisa ter pelo menos ${SENHA_MINIMA} caracteres.`);
+    if (nova !== repetir) return setErro('As duas senhas não são iguais.');
+
+    setSalvando(true);
+    try {
+      await cloudApi.trocarSenha(nova);
+      setPronto(true);
+      setNova('');
+      setRepetir('');
+      aoConcluir?.();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível trocar a senha.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (pronto) {
+    return (
+      <p className="hint" role="status">
+        Senha trocada. Use a nova para entrar nos outros aparelhos.
+      </p>
+    );
+  }
+
+  if (!aberto) {
+    return (
+      <div className="setting">
+        <div className="setting-text">
+          <div className="title">Trocar senha</div>
+          <div className="dim">
+            Define uma senha nova agora, sem precisar da antiga nem de e-mail. Serve para entrar nos outros
+            aparelhos.
+          </div>
+        </div>
+        <button type="button" className="btn sm" onClick={() => setAberto(true)}>
+          Trocar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="form-narrow" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="setting-text">
+        <div className="title">Trocar senha</div>
+      </div>
+      <Field label="Senha nova" hint={`Pelo menos ${SENHA_MINIMA} caracteres.`}>
+        {(id) => (
+          <input
+            id={id}
+            type="password"
+            className="input"
+            autoComplete="new-password"
+            value={nova}
+            onChange={(e) => setNova(e.target.value)}
+          />
+        )}
+      </Field>
+      <Field label="Repita a senha nova" error={erro}>
+        {(id) => (
+          <input
+            id={id}
+            type="password"
+            className="input"
+            autoComplete="new-password"
+            value={repetir}
+            onChange={(e) => setRepetir(e.target.value)}
+          />
+        )}
+      </Field>
+      <div className="row wrap">
+        <button type="submit" className="btn primary" disabled={salvando}>
+          {salvando ? 'Salvando…' : 'Salvar senha'}
+        </button>
+        <button type="button" className="btn ghost" onClick={() => setAberto(false)}>
+          Cancelar
         </button>
       </div>
     </form>
@@ -436,6 +641,9 @@ export function CloudPanel() {
               </button>
             </div>
           </div>
+
+          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: 0 }} />
+          <TrocarSenha />
 
           {cloud.dono && (
             <>

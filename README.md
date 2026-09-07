@@ -183,6 +183,31 @@ Pelo mesmo motivo, avisar por e-mail que alguém pediu acesso depende de um serv
 Isso é **opcional** e fica em [`supabase/email-aviso.sql`](supabase/email-aviso.sql), com o
 passo a passo. Sem ele, os pedidos continuam aparecendo em Ajustes.
 
+### Senha esquecida
+
+Há dois caminhos, e a diferença entre eles importa:
+
+- **"Trocar senha", em Ajustes** — para quem ainda está logado em algum aparelho. A sessão
+  ativa já prova que a conta é sua, então não pede a senha antiga nem manda e-mail nenhum.
+  **É o caminho garantido**, e resolve o caso mais comum: esqueci no computador, mas o
+  celular continua logado.
+- **"Esqueci minha senha", na tela de entrar** — para quem não está logado em lugar nenhum.
+  Manda um link por e-mail, e aí esbarra na mesma limitação de sempre: o remetente embutido
+  do Supabase entrega pouquíssimas mensagens por hora e só para endereços da organização do
+  projeto. Para valer para qualquer endereço, configure um **SMTP próprio** em
+  *Project Settings → Authentication → SMTP Settings* (o mesmo serviço do `email-aviso.sql`
+  serve). Sem isso, o link pode simplesmente não chegar.
+
+O aplicativo **não tem como** trocar a senha de alguém sem uma dessas duas provas de
+identidade. Fazer isso exigiria a chave `service_role`, que ignora todas as políticas de
+acesso — colocá-la no JavaScript entregue ao navegador anularia a proteção inteira. Por isso
+o último recurso é o painel do Supabase, em *Authentication → Users*.
+
+> Uma armadilha que vale conhecer: **não apague o usuário** no painel para "recomeçar".
+> `wallet_members.user_id` tem `on delete cascade`, então apagar o usuário derruba junto a
+> participação e a condição de dono. A carteira continuaria existindo, uma conta nova cairia
+> em "pendente" e não sobraria ninguém para aprovar.
+
 ### Por que a chave fica versionada, e não num "secret"
 
 A chave `anon` é **pública por natureza**: ela é compilada dentro do JavaScript que o site

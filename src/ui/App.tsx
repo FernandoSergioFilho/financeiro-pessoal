@@ -14,7 +14,7 @@ import { useFinance } from '../state/store.tsx';
 import { EditEntryDialog, NewEntryDialog } from './components/EntryForms.tsx';
 import { SyncBadge } from './components/CloudPanel.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
-import { EntrarPage, EsperandoPage } from './pages/EntrarPage.tsx';
+import { EntrarPage, EsperandoPage, NovaSenhaPage } from './pages/EntrarPage.tsx';
 import { EntriesPage } from './pages/EntriesPage.tsx';
 import { PurchasesPage } from './pages/PurchasesPage.tsx';
 import { RecurringPage } from './pages/RecurringPage.tsx';
@@ -92,6 +92,9 @@ export function App() {
    *    já está logado vê um piscar de tela de login a cada abertura.
    */
   if (cloud.enabled) {
+    // Antes de tudo: quem veio pelo link de recuperação já tem sessão válida,
+    // então sem esta linha entraria direto no app sem trocar a senha.
+    if (cloud.trocandoSenha) return <NovaSenhaPage />;
     if (cloud.status === 'connecting') return carregando;
     if (!cloud.email) return <EntrarPage />;
     if (cloud.status === 'pending' || cloud.status === 'rejected') {

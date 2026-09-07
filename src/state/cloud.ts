@@ -23,10 +23,12 @@ import {
   pedidosPendentes,
   recusarPedido,
   removerMembro,
+  pedirRecuperacao,
   signIn,
   signOut,
   signUp,
   souDono,
+  trocarSenha,
   type Membro,
   type Pedido,
 } from '../data/supabase.ts';
@@ -46,6 +48,8 @@ export interface CloudState {
   walletId: string | null;
   /** Só o dono libera cadastros novos; a tela esconde o que ele não pode usar. */
   dono: boolean;
+  /** Chegou pelo link de recuperação e ainda precisa escolher a senha nova. */
+  trocandoSenha: boolean;
   error?: string;
   sync: SyncState;
 }
@@ -54,6 +58,10 @@ export interface CloudApi {
   entrar(email: string, senha: string): Promise<void>;
   criarConta(email: string, senha: string): Promise<void>;
   sair(): Promise<void>;
+  /** Define uma senha nova estando logado — não precisa da antiga nem de e-mail. */
+  trocarSenha(nova: string): Promise<void>;
+  /** Manda o link de recuperação para quem não está logado em lugar nenhum. */
+  pedirRecuperacao(email: string): Promise<void>;
   sincronizarAgora(): void;
   /** Tenta de novo o `meu_acesso()` — usado pelo botão "Já liberou?". */
   reconferirAcesso(): Promise<void>;
@@ -80,6 +88,7 @@ export function useCloud(
     email: null,
     walletId: null,
     dono: false,
+    trocandoSenha: false,
     sync: { status: 'idle', lastSyncedAt: null },
   });
 
@@ -151,7 +160,16 @@ export function useCloud(
       ?.auth.getSession()
       .then(({ data: sessao }) => conectar(sessao.session?.user.email ?? null));
 
-    const parar = onAuthChange((user) => void conectar(user?.email ?? null));
+    const parar = onAuthChange((user, recuperandoSenha) => {
+      // Quem chega pelo link de recuperação já vem com sessão válida. Se
+      // seguisse direto para `conectar`, entraria no app sem nunca escolher a
+      // senha nova — justamente o que ele veio fazer.
+      if (recuperandoSenha) {
+        atualizar({ trocandoSenha: true, email: user?.email ?? null, status: 'signed-out' });
+        return;
+      }
+      void conectar(user?.email ?? null);
+    });
     return () => {
       cancelado = true;
       parar();
@@ -211,8 +229,16 @@ export function useCloud(
     async sair() {
       await signOut();
       repo.current = null;
-      atualizar({ status: 'signed-out', email: null, walletId: null, dono: false });
+      atualizar({ status: 'signed-out', email: null, walletId: null, dono: false, trocandoSenha: false });
     },
+    async trocarSenha(nova) {
+      await trocarSenha(nova);
+      // Depois de trocar pelo link de recuperação, segue para o app: a sessão
+      // já é válida e não faz sentido pedir para entrar de novo.
+      atualizar({ trocandoSenha: false });
+      await conectarRef.current(state.email);
+    },
+    pedirRecuperacao,
     sincronizarAgora() {
       void sincronizar();
     },
