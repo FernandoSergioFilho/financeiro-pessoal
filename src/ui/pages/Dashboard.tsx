@@ -2,10 +2,12 @@
 
 import { useMemo } from 'react';
 
-import { addMonthsToKey, formatDate, monthEnd, today } from '../../domain/date.ts';
+import { addDays, addMonthsToKey, formatDate, monthEnd, monthStart, today } from '../../domain/date.ts';
 import { formatMoney } from '../../domain/money.ts';
 import {
   accountBalance,
+  categoryChanges,
+  dailyBalance,
   monthlySeries,
   netWorth,
   periodTotals,
@@ -14,7 +16,7 @@ import {
 import type { DisplayEntry } from '../../domain/types.ts';
 import { entriesInRange, useLookups, useMonthEntries, useOverdue } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
-import { CategoryBars, MonthlyBars } from '../components/charts.tsx';
+import { CategoryBars, ComparativoCategorias, MonthlyBars, SaldoDoMes } from '../components/charts.tsx';
 import { EntryList } from '../components/EntryList.tsx';
 import { Card, Dot, EmptyState } from '../components/primitives.tsx';
 
@@ -59,6 +61,27 @@ export function Dashboard({
     const range = entriesInRange(data, `${months[0]}-01`, monthEnd(months.at(-1)!));
     return monthlySeries(range, months);
   }, [data, month]);
+
+  // O saldo com que o mês começou: tudo que aconteceu antes do dia 1.
+  const saldoDeAbertura = useMemo(() => {
+    const anterior = entriesInRange(data, '0000-01-01', addDays(monthStart(month), -1));
+    return netWorth(accounts, anterior, { upTo: addDays(monthStart(month), -1) });
+  }, [accounts, data, month]);
+
+  const percurso = useMemo(
+    () => dailyBalance(monthEntries, month, saldoDeAbertura, today()),
+    [monthEntries, month, saldoDeAbertura],
+  );
+
+  const mesAnterior = useMemo(() => {
+    const chave = addMonthsToKey(month, -1);
+    return entriesInRange(data, monthStart(chave), monthEnd(chave));
+  }, [data, month]);
+
+  const mudancas = useMemo(
+    () => categoryChanges(monthEntries, mesAnterior, categories),
+    [monthEntries, mesAnterior, categories],
+  );
 
   const recent = useMemo(() => [...monthEntries].reverse().slice(0, 8), [monthEntries]);
 
@@ -133,6 +156,24 @@ export function Dashboard({
           <span className={`stat-value num ${totals.net < 0 ? 'bad' : 'good'}`}>{formatMoney(totals.net)}</span>
           <span className="stat-hint">Saldo projetado: {formatMoney(projected)}</span>
         </div>
+      </div>
+
+      {/* `start`: sem isto os dois cartões esticam até a altura do mais alto, e
+          o gráfico de linha fica com um vazio enorme embaixo. */}
+      <div className="grid split" style={{ alignItems: 'start' }}>
+        <Card title="Saldo ao longo do mês">
+          <SaldoDoMes data={percurso} />
+        </Card>
+
+        <Card title="O que mudou desde o mês passado">
+          {mudancas.length > 0 ? (
+            <ComparativoCategorias data={mudancas} />
+          ) : (
+            <p className="dim" style={{ fontSize: '0.86rem' }}>
+              Nada mudou em relação ao mês anterior — ou ainda não há com o que comparar.
+            </p>
+          )}
+        </Card>
       </div>
 
       <div className="grid split">

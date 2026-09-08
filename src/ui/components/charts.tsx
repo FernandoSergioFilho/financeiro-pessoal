@@ -11,8 +11,8 @@
 import { useState } from 'react';
 
 import { formatCompact, formatMoney } from '../../domain/money.ts';
-import type { CategoryTotal, MonthPoint } from '../../domain/summary.ts';
-import { formatMonthKey } from '../../domain/date.ts';
+import type { CategoryChange, CategoryTotal, DayPoint, MonthPoint } from '../../domain/summary.ts';
+import { formatDayMonth, formatMonthKey } from '../../domain/date.ts';
 import { colorVar } from './primitives.tsx';
 
 export function CategoryBars({ data, limit = 7 }: { data: CategoryTotal[]; limit?: number }) {
@@ -105,6 +105,159 @@ export function MonthlyBars({ data, currentKey }: { data: MonthPoint[]; currentK
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------- saldo ao longo do mês */
+
+/**
+ * A linha do saldo, dia a dia, até o fim do mês.
+ *
+ * Uma linha só, então não há legenda: o título nomeia a série. O que precisa
+ * ser distinguido é o trecho já acontecido do que ainda é previsão — e isso vai
+ * por traço (contínuo × tracejado) mais rótulo direto, não por cor. Assim
+ * continua legível impresso, em preto e branco e para quem não distingue cores.
+ */
+export function SaldoDoMes({ data }: { data: DayPoint[] }) {
+  const [ativo, setAtivo] = useState<number | null>(null);
+  if (data.length < 2) return null;
+
+  const A = 150;
+  const PAD = { top: 12, right: 10, bottom: 20, left: 10 };
+
+  const valores = data.map((p) => p.balance);
+  const max = Math.max(...valores, 0);
+  const min = Math.min(...valores, 0);
+  const amplitude = max - min || 1;
+
+  const x = (i: number) => PAD.left + (i / (data.length - 1)) * (100 - PAD.left - PAD.right);
+  const y = (v: number) => PAD.top + (1 - (v - min) / amplitude) * (A - PAD.top - PAD.bottom);
+
+  const caminho = (pontos: DayPoint[], desde: number) =>
+    pontos.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(desde + i).toFixed(2)} ${y(p.balance).toFixed(2)}`).join(' ');
+
+  const corteVirada = data.findIndex((p) => p.projected);
+  const realizado = corteVirada === -1 ? data : data.slice(0, corteVirada);
+  // A previsão começa no último ponto realizado, senão a linha aparece cortada.
+  const previsto = corteVirada === -1 ? [] : data.slice(Math.max(corteVirada - 1, 0));
+  const inicioPrevisto = Math.max(corteVirada - 1, 0);
+
+  const zero = min < 0 && max > 0 ? y(0) : null;
+  const fim = data.at(-1)!;
+  const p = ativo === null ? null : data[ativo];
+
+  return (
+    <div className="chart">
+      <div className="linha-saldo">
+        <svg viewBox={`0 0 100 ${A}`} preserveAspectRatio="none" role="img"
+          aria-label={`Saldo dia a dia, terminando o mês em ${formatMoney(fim.balance)}`}>
+          {zero !== null && (
+            <line x1={PAD.left} x2={100 - PAD.right} y1={zero} y2={zero}
+              stroke="var(--border-strong)" strokeWidth="0.4" strokeDasharray="1.5 1.5" vectorEffect="non-scaling-stroke" />
+          )}
+          {realizado.length > 1 && (
+            <path d={caminho(realizado, 0)} fill="none" stroke="var(--accent)" strokeWidth="2"
+              strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          )}
+          {previsto.length > 1 && (
+            <path d={caminho(previsto, inicioPrevisto)} fill="none" stroke="var(--accent)" strokeWidth="2"
+              strokeDasharray="4 3" opacity="0.65" strokeLinejoin="round" strokeLinecap="round"
+              vectorEffect="non-scaling-stroke" />
+          )}
+          {p && (
+            <>
+              <line x1={x(ativo!)} x2={x(ativo!)} y1={PAD.top} y2={A - PAD.bottom}
+                stroke="var(--border-strong)" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
+              <circle cx={x(ativo!)} cy={y(p.balance)} r="3.5" fill="var(--accent)"
+                stroke="var(--surface)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+            </>
+          )}
+          {/* Faixas invisíveis: o alvo do toque é bem maior que a linha. */}
+          {data.map((_, i) => (
+            <rect key={i} x={x(i) - 1.5} y={0} width={3} height={A} fill="transparent"
+              onMouseEnter={() => setAtivo(i)} onMouseLeave={() => setAtivo(null)}
+              onTouchStart={() => setAtivo(i)} />
+          ))}
+        </svg>
+
+        {p && (
+          <div className="linha-saldo-dica" style={{ left: `${x(ativo!)}%` }}>
+            <strong className="num">{formatMoney(p.balance)}</strong>
+            <span className="dim">
+              {formatDayMonth(p.date)}
+              {p.projected ? ' · previsto' : ''}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Rótulo direto no lugar de legenda: uma série só, dois trechos. */}
+      <div className="row wrap" style={{ gap: 14, fontSize: '0.76rem' }}>
+        <span className="legend-item">
+          <span className="traco-cheio" aria-hidden="true" /> Já aconteceu
+        </span>
+        <span className="legend-item">
+          <span className="traco-pontilhado" aria-hidden="true" /> Previsto
+        </span>
+        <span className="spacer" />
+        <span className={fim.balance < 0 ? 'bad' : 'muted'}>
+          Fecha em <strong className="num">{formatMoney(fim.balance)}</strong>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------- o que mudou em relação ao mês anterior */
+
+/**
+ * Barras divergentes: gastou mais para a direita, menos para a esquerda.
+ *
+ * A cor não é verde/vermelho de propósito. O validador de paleta reprovou esse
+ * par para daltonismo (ΔE 5.7 no tema escuro, abaixo do piso); azul e laranja
+ * passam com folga nos dois temas. E, de qualquer forma, quem carrega o sentido
+ * aqui é o lado do eixo, não a cor.
+ */
+export function ComparativoCategorias({ data, limit = 6 }: { data: CategoryChange[]; limit?: number }) {
+  if (data.length === 0) return null;
+
+  const linhas = data.slice(0, limit);
+  const maior = Math.max(...linhas.map((l) => Math.abs(l.diff)), 1);
+
+  return (
+    <div className="comparativo">
+      {linhas.map((linha) => {
+        const largura = (Math.abs(linha.diff) / maior) * 50;
+        const subiu = linha.diff > 0;
+        return (
+          <div className="comparativo-linha" key={linha.category?.id ?? 'sem'}>
+            <span className="bar-label">
+              <span className="text">{linha.category?.name ?? 'Sem categoria'}</span>
+            </span>
+            <span className="comparativo-eixo">
+              <span
+                className="comparativo-barra"
+                style={{
+                  width: `${largura}%`,
+                  [subiu ? 'left' : 'right']: '50%',
+                  background: subiu ? 'var(--series-orange)' : 'var(--series-blue)',
+                }}
+              />
+            </span>
+            {/* O número usa cor de texto, não a da barra: a cor identifica a
+                marca, e repeti-la no texto só reduz o contraste da leitura. O
+                sinal e o lado do eixo já dizem se subiu ou caiu. */}
+            <span className="comparativo-valor num muted">
+              {subiu ? '+' : '−'}
+              {formatMoney(Math.abs(linha.diff))}
+            </span>
+          </div>
+        );
+      })}
+      <p className="hint">
+        Comparado ao mês anterior. À direita, em laranja, o que subiu; à esquerda, em azul, o que caiu.
+      </p>
     </div>
   );
 }

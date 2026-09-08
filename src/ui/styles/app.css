@@ -821,3 +821,54 @@ textarea.input { resize: vertical; min-height: 64px; }
   /* Acima da barra de navegação, senão os botões ficam por baixo dela. */
   .aviso-versao { bottom: calc(74px + env(safe-area-inset-bottom)); }
 }
+
+/* Linha do saldo ao longo do mês */
+.linha-saldo { position: relative; }
+.linha-saldo svg { display: block; width: 100%; height: 150px; overflow: visible; }
+.linha-saldo-dica {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  font-size: 0.76rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Amostras do traço, para o rótulo direto dispensar legenda colorida. */
+.traco-cheio, .traco-pontilhado { width: 18px; height: 0; border-top: 2px solid var(--accent); }
+.traco-pontilhado { border-top-style: dashed; opacity: 0.65; }
+
+/* Comparação com o mês anterior: divergente em torno do eixo central */
+.comparativo { display: flex; flex-direction: column; gap: 9px; }
+.comparativo-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+.comparativo-eixo {
+  grid-column: 1 / -1;
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+/* A linha do meio é o zero: é a posição, e não a cor, que diz subiu ou caiu. */
+.comparativo-eixo::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: -2px; bottom: -2px;
+  width: 1px;
+  background: var(--border-strong);
+}
+.comparativo-barra { position: absolute; top: 0; bottom: 0; border-radius: 3px; min-width: 2px; }
+.comparativo-valor { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }

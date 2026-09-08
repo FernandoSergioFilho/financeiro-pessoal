@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { accountBalance, entryDelta, monthlySeries, netWorth, periodTotals, totalsByCategory } from './summary.ts';
-import type { Account, Category, Entry } from './types.ts';
+import {
+  accountBalance,
+  categoryChanges,
+  dailyBalance,
+  entryDelta,
+  monthlySeries,
+  netWorth,
+  periodTotals,
+  totalsByCategory,
+} from './summary.ts';
+import type { Account, Category, DisplayEntry, Entry } from './types.ts';
 
 function entry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -155,5 +164,100 @@ describe('monthlySeries', () => {
       { key: '2026-08', income: 100000, expense: 40000, net: 60000 },
       { key: '2026-09', income: 0, expense: 0, net: 0 },
     ]);
+  });
+});
+
+/* ------------------------------------------------- saldo dia a dia */
+
+describe('dailyBalance', () => {
+  const entrada = (date: string, amount: number): DisplayEntry =>
+    ({ id: date + amount, date, description: 'x', amount, kind: 'income', accountId: 'a', status: 'settled',
+       createdAt: '', updatedAt: '' }) as DisplayEntry;
+  const saida = (date: string, amount: number): DisplayEntry =>
+    ({ id: date + amount, date, description: 'x', amount, kind: 'expense', accountId: 'a', status: 'settled',
+       createdAt: '', updatedAt: '' }) as DisplayEntry;
+
+  it('cobre o mês inteiro, um ponto por dia', () => {
+    const pontos = dailyBalance([], '2026-02', 0, '2026-02-15');
+    expect(pontos).toHaveLength(28);
+    expect(pontos[0]?.date).toBe('2026-02-01');
+    expect(pontos.at(-1)?.date).toBe('2026-02-28');
+  });
+
+  it('acumula a partir do saldo de abertura', () => {
+    const pontos = dailyBalance([entrada('2026-03-02', 1000), saida('2026-03-04', 300)], '2026-03', 5000, '2026-03-31');
+    expect(pontos[0]?.balance).toBe(5000); // dia 1, sem movimento
+    expect(pontos[1]?.balance).toBe(6000); // dia 2
+    expect(pontos[2]?.balance).toBe(6000); // dia 3, sem movimento: mantém
+    expect(pontos[3]?.balance).toBe(5700); // dia 4
+    expect(pontos.at(-1)?.balance).toBe(5700);
+  });
+
+  it('marca como previsto só o que vem depois de hoje', () => {
+    const pontos = dailyBalance([], '2026-03', 0, '2026-03-10');
+    expect(pontos.find((p) => p.date === '2026-03-10')?.projected).toBe(false);
+    expect(pontos.find((p) => p.date === '2026-03-11')?.projected).toBe(true);
+  });
+
+  // Sai de uma conta e entra na outra: o total não muda.
+  it('ignora transferência entre contas próprias', () => {
+    const transferencia = { id: 't', date: '2026-03-05', description: 'x', amount: 900, kind: 'transfer',
+      accountId: 'a', toAccountId: 'b', status: 'settled', createdAt: '', updatedAt: '' } as DisplayEntry;
+    const pontos = dailyBalance([transferencia], '2026-03', 100, '2026-03-31');
+    expect(pontos.every((p) => p.balance === 100)).toBe(true);
+  });
+
+  it('vários lançamentos no mesmo dia entram juntos', () => {
+    const pontos = dailyBalance([saida('2026-03-03', 100), saida('2026-03-03', 250)], '2026-03', 1000, '2026-03-31');
+    expect(pontos[2]?.balance).toBe(650);
+  });
+});
+
+/* ------------------------------------- comparação com o mês anterior */
+
+describe('categoryChanges', () => {
+  const cats = [
+    { id: 'c1', name: 'Alimentação', kind: 'expense', emoji: '🍽', color: 'blue', updatedAt: '' },
+    { id: 'c2', name: 'Lazer', kind: 'expense', emoji: '🎬', color: 'orange', updatedAt: '' },
+  ] as Category[];
+  const gasto = (id: string, categoryId: string | null, amount: number): DisplayEntry =>
+    ({ id, date: '2026-03-01', description: 'x', amount, kind: 'expense', accountId: 'a', categoryId,
+       status: 'settled', createdAt: '', updatedAt: '' }) as DisplayEntry;
+
+  it('mostra quanto cada categoria subiu ou desceu', () => {
+    const mudou = categoryChanges(
+      [gasto('1', 'c1', 5000), gasto('2', 'c2', 1000)],
+      [gasto('3', 'c1', 3000), gasto('4', 'c2', 4000)],
+      cats,
+    );
+    expect(mudou.map((m) => [m.category?.name, m.diff])).toEqual([
+      ['Lazer', -3000],
+      ['Alimentação', 2000],
+    ]);
+  });
+
+  it('ordena pelo tamanho da mudança, não pelo valor gasto', () => {
+    const mudou = categoryChanges(
+      [gasto('1', 'c1', 10000), gasto('2', 'c2', 500)],
+      [gasto('3', 'c1', 9900), gasto('4', 'c2', 100)],
+      cats,
+    );
+    expect(mudou[0]?.category?.name).toBe('Lazer'); // +400 pesa mais que +100
+  });
+
+  it('deixa de fora quem não mudou — não informa nada', () => {
+    const mudou = categoryChanges([gasto('1', 'c1', 5000)], [gasto('2', 'c1', 5000)], cats);
+    expect(mudou).toEqual([]);
+  });
+
+  it('conta categoria que apareceu ou sumiu de um mês para o outro', () => {
+    const mudou = categoryChanges([gasto('1', 'c1', 5000)], [], cats);
+    expect(mudou[0]).toMatchObject({ current: 5000, previous: 0, diff: 5000 });
+  });
+
+  it('não mistura entradas com saídas', () => {
+    const salario = { id: 's', date: '2026-03-01', description: 'x', amount: 90000, kind: 'income',
+      accountId: 'a', categoryId: 'c1', status: 'settled', createdAt: '', updatedAt: '' } as DisplayEntry;
+    expect(categoryChanges([salario], [], cats)).toEqual([]);
   });
 });

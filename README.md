@@ -87,9 +87,11 @@ Para experimentar sem digitar nada: **Ajustes → Carregar dados de exemplo**.
   seguintes.
 - **Compras parceladas** — informe o total e o número de parcelas; cada parcela vira um
   lançamento nos meses seguintes, somando **exatamente** o total.
-- **Painel do mês** — saldo de hoje, entradas, saídas, sobra, gastos por categoria,
-  entradas × saídas nos últimos seis meses e saldo por conta. Alerta de contas vencidas
-  que continuam como previstas.
+- **Painel do mês** — saldo de hoje, entradas, saídas, sobra, **o saldo caminhando dia a
+  dia até o fim do mês** (o já acontecido em linha cheia, o previsto tracejado), **o que
+  mudou em relação ao mês anterior** por categoria, gastos por categoria, entradas × saídas
+  nos últimos seis meses e saldo por conta. Alerta de contas vencidas que continuam como
+  previstas.
 - **Contas e categorias** editáveis, com cores e ícones.
 
 Cadastrar as três coisas — avulso, parcelado e recorrente — acontece num lugar só, o botão
@@ -149,7 +151,10 @@ mês preserva o dia quando ele existe (31/01 + 1 mês = 28/02, mas 31/01 + 3 mes
 ### Cores
 
 A paleta de categorias e dos gráficos foi validada para daltonismo (separação em CVD,
-contraste e faixa de luminosidade) nos temas claro e escuro. As cores são guardadas como
+contraste e faixa de luminosidade) nos temas claro e escuro. O validador é rodado, não
+estimado: foi ele que reprovou verde/vermelho no gráfico divergente — ΔE 5.7 no tema
+escuro, abaixo do piso — e o par virou azul/laranja, que passa com folga nos dois temas.
+De qualquer forma, quem carrega o sentido ali é o lado do eixo, não a cor. As cores são guardadas como
 *nome de posição na paleta* (`'blue'`), não como hex, então o tema escuro usa outro passo
 da mesma família sem tocar nos dados.
 

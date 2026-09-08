@@ -1,6 +1,6 @@
 /** Agregações de saldo e resumo do mês. */
 
-import { monthKey } from './date.ts';
+import { addDays, monthEnd, monthKey, monthStart } from './date.ts';
 import type { Account, Category, DisplayEntry } from './types.ts';
 
 /**
@@ -145,4 +145,96 @@ export function monthlySeries(
     const bucket = buckets.get(key)!;
     return { key, income: bucket.income, expense: bucket.expense, net: bucket.income - bucket.expense };
   });
+}
+
+/* ------------------------------------------------- saldo dia a dia do mês */
+
+export interface DayPoint {
+  date: string;
+  /** Saldo ao fim daquele dia, somando tudo que veio antes. */
+  balance: number;
+  /** Depois de hoje: ainda não aconteceu, é o que está previsto. */
+  projected: boolean;
+}
+
+/**
+ * O saldo caminhando dia a dia até o fim do mês.
+ *
+ * Responde a pergunta que o painel ainda não respondia — "vou fechar o mês no
+ * azul?" —, porque o total do mês esconde o percurso: dá para terminar positivo
+ * tendo passado três semanas no vermelho, e é no percurso que a conta estoura.
+ *
+ * Transferência entre contas próprias não mexe no total: sai de um lado e entra
+ * no outro. Por isso ela é ignorada aqui, como em `periodTotals`.
+ */
+export function dailyBalance(
+  entries: readonly DisplayEntry[],
+  month: string,
+  startingBalance: number,
+  todayIso: string,
+): DayPoint[] {
+  const porDia = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.kind === 'transfer') continue;
+    const delta = entry.kind === 'income' ? entry.amount : -entry.amount;
+    porDia.set(entry.date, (porDia.get(entry.date) ?? 0) + delta);
+  }
+
+  const fim = monthEnd(month);
+  const pontos: DayPoint[] = [];
+  let saldo = startingBalance;
+
+  for (let dia = monthStart(month); dia <= fim; dia = addDays(dia, 1)) {
+    saldo += porDia.get(dia) ?? 0;
+    pontos.push({ date: dia, balance: saldo, projected: dia > todayIso });
+  }
+  return pontos;
+}
+
+/* --------------------------------------- comparação com o mês anterior */
+
+export interface CategoryChange {
+  category: Category | undefined;
+  current: number;
+  previous: number;
+  /** Positivo: gastou mais que no mês anterior. */
+  diff: number;
+}
+
+/**
+ * Quanto cada categoria mudou em relação ao mês anterior.
+ *
+ * O gráfico de gastos por categoria diz onde o dinheiro foi; este diz o que
+ * saiu do normal, que é a informação que leva a fazer alguma coisa.
+ */
+export function categoryChanges(
+  current: readonly DisplayEntry[],
+  previous: readonly DisplayEntry[],
+  categories: readonly Category[],
+  kind: Category['kind'] = 'expense',
+): CategoryChange[] {
+  const somar = (entries: readonly DisplayEntry[]) => {
+    const totais = new Map<string, number>();
+    for (const entry of entries) {
+      if (entry.kind === 'transfer') continue;
+      if ((entry.kind === 'income' ? 'income' : 'expense') !== kind) continue;
+      const chave = entry.categoryId ?? '';
+      totais.set(chave, (totais.get(chave) ?? 0) + entry.amount);
+    }
+    return totais;
+  };
+
+  const agora = somar(current);
+  const antes = somar(previous);
+  const porId = new Map(categories.map((c) => [c.id, c]));
+
+  return [...new Set([...agora.keys(), ...antes.keys()])]
+    .map((id) => {
+      const atual = agora.get(id) ?? 0;
+      const anterior = antes.get(id) ?? 0;
+      return { category: porId.get(id), current: atual, previous: anterior, diff: atual - anterior };
+    })
+    // Só entra quem mudou: uma categoria idêntica aos dois meses não informa nada.
+    .filter((linha) => linha.diff !== 0)
+    .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
 }
