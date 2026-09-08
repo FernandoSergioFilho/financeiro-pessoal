@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 
 import { addDays, addMonthsToKey, formatDate, monthEnd, monthKey, today } from '../../domain/date.ts';
+import { agruparPorInstituicao } from '../../domain/institutions.ts';
 import { formatMoney } from '../../domain/money.ts';
 import {
   INICIO_DOS_TEMPOS,
@@ -243,30 +244,53 @@ export function Dashboard({
 
       <Card title="Saldo por conta">
         <div className="grid cols-3">
-          {accounts
-            .filter((account) => !account.archived)
-            .map((account) => {
-              const balance = accountBalance(account, data.entries, { onlySettled: true });
-              const withPending = accountBalance(account, entriesInRange(data, INICIO_DOS_TEMPOS, janela.ate), {
+          {agruparPorInstituicao(accounts.filter((account) => !account.archived)).map((grupo) => {
+            const saldos = grupo.contas.map((account) => ({
+              account,
+              balance: accountBalance(account, data.entries, { onlySettled: true }),
+              withPending: accountBalance(account, entriesInRange(data, INICIO_DOS_TEMPOS, janela.ate), {
                 upTo: janela.ate,
-              });
-              return (
-                <div key={account.id} className="row" style={{ alignItems: 'flex-start', gap: 10 }}>
-                  <Dot color={account.color} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 560 }}>{account.name}</div>
-                    <div className={`num ${balance < 0 ? 'bad' : ''}`} style={{ fontSize: '1.05rem', fontWeight: 620 }}>
-                      {formatMoney(balance)}
-                    </div>
-                    {withPending !== balance && (
-                      <div className="dim" style={{ fontSize: '0.76rem' }}>
-                        {formatMoney(withPending)} com os previstos
-                      </div>
-                    )}
+              }),
+            }));
+            // O subtotal do banco: o que sobra ali depois de pagar a fatura do
+            // cartão, que é a pergunta que se faz olhando "Nubank" como um todo.
+            const soma = saldos.reduce((total, linha) => total + linha.balance, 0);
+            const agrupado = grupo.contas.length > 1;
+
+            return (
+              <div key={grupo.nome} style={{ minWidth: 0 }}>
+                {agrupado && (
+                  <div className="row" style={{ gap: 8, marginBottom: 4 }}>
+                    <span className="dim" style={{ fontSize: '0.74rem', fontWeight: 640, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                      {grupo.nome}
+                    </span>
+                    <span className="spacer" />
+                    <span className={`num ${soma < 0 ? 'bad' : ''}`} style={{ fontSize: '0.86rem', fontWeight: 620 }}>
+                      {formatMoney(soma)}
+                    </span>
                   </div>
+                )}
+                <div className="grid" style={{ gap: 8 }}>
+                  {saldos.map(({ account, balance, withPending }) => (
+                    <div key={account.id} className="row" style={{ alignItems: 'flex-start', gap: 10 }}>
+                      <Dot color={account.color} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 560 }}>{account.name}</div>
+                        <div className={`num ${balance < 0 ? 'bad' : ''}`} style={{ fontSize: '1.05rem', fontWeight: 620 }}>
+                          {formatMoney(balance)}
+                        </div>
+                        {withPending !== balance && (
+                          <div className="dim" style={{ fontSize: '0.76rem' }}>
+                            {formatMoney(withPending)} com os previstos
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
         </div>
       </Card>
     </>

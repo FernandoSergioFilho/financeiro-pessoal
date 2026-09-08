@@ -19,6 +19,7 @@ import { migrate } from './data/schema.ts';
 import { contaEmUso, moverConta, usoDaConta } from './domain/accounts.ts';
 import { addMonths, monthKey, today } from './domain/date.ts';
 import { contarDuplicados, juntarDuplicados } from './domain/duplicates.ts';
+import { agruparPorInstituicao } from './domain/institutions.ts';
 import { buildPurchase } from './domain/installments.ts';
 import { intervaloDoPeriodo, intervaloVisivel, limiteDaPrevisao, moverPeriodo, type Periodo } from './domain/period.ts';
 import { projectAll } from './domain/recurrence.ts';
@@ -40,13 +41,21 @@ function usar(inicial: FinanceData, ...acoes: Action[]): FinanceData {
   return acoes.reduce(reducer, inicial);
 }
 
-const conta = (data: FinanceData, nome: string) => data.accounts.find((a) => a.name === nome)!;
+/** "Nubank / Conta corrente" ou só "Amex": o nome como aparece na tela. */
+const conta = (data: FinanceData, caminho: string) => {
+  const [banco, nome] = caminho.includes(' / ') ? caminho.split(' / ') : [null, caminho];
+  const achada = data.accounts.find(
+    (a) => a.name === nome && (banco === null || a.institution === banco),
+  );
+  if (!achada) throw new Error(`Conta não encontrada na carteira de exemplo: ${caminho}`);
+  return achada;
+};
 const categoria = (data: FinanceData, nome: string) => data.categories.find((c) => c.name === nome)!;
 
 function lancamento(data: FinanceData, over: Partial<Entry> = {}): Entry {
   return {
     id: 'novo', date: HOJE, description: 'Padaria', amount: 2400,
-    kind: 'expense', accountId: conta(data, 'Nubank').id, toAccountId: null,
+    kind: 'expense', accountId: conta(data, 'Nubank / Conta corrente').id, toAccountId: null,
     categoryId: categoria(data, 'Alimentação').id, status: 'settled',
     recurringId: null, occurrenceDate: null, purchaseId: null,
     installmentNumber: null, installmentTotal: null,
@@ -57,6 +66,18 @@ function lancamento(data: FinanceData, over: Partial<Entry> = {}): Entry {
 /* ------------------------------------------------ a carteira faz sentido */
 
 describe('a carteira de exemplo', () => {
+  it('agrupa a conta e o cartão do mesmo banco, sem misturar os saldos', () => {
+    const data = carteira();
+    const grupos = agruparPorInstituicao(data.accounts);
+    const nubank = grupos.find((g) => g.nome === 'Nubank')!;
+    expect(nubank.contas.map((c) => c.kind)).toEqual(['checking', 'credit_card']);
+    // Continuam sendo dois registros: dinheiro na conta e fatura a pagar não
+    // são a mesma coisa.
+    expect(new Set(nubank.contas.map((c) => c.id)).size).toBe(2);
+    // E nenhuma conta se perde no agrupamento.
+    expect(grupos.flatMap((g) => g.contas)).toHaveLength(data.accounts.length);
+  });
+
   it('tem o tamanho do caso real: 2 pessoas, 3 contas, 4 cartões', () => {
     const data = carteira();
     expect(data.accounts.filter((a) => a.kind === 'checking')).toHaveLength(3);
@@ -126,7 +147,7 @@ describe('registrar, editar e apagar', () => {
     const gerarId = (() => { let n = 0; return () => `sim${(n += 1)}`; })();
     const { purchase, entries } = buildPurchase(
       { description: 'Celular', totalAmount: 359900, installments: 10, firstDate: HOJE,
-        accountId: conta(inicial, 'Nubank cartão').id, categoryId: null },
+        accountId: conta(inicial, 'Nubank / Cartão').id, categoryId: null },
       gerarId, AGORA,
     );
 
@@ -170,7 +191,7 @@ describe('registrar, editar e apagar', () => {
 
   it('transferência move dinheiro entre contas sem virar receita nem despesa', () => {
     const inicial = carteira();
-    const de = conta(inicial, 'Nubank');
+    const de = conta(inicial, 'Nubank / Conta corrente');
     const para = conta(inicial, 'Tesouro Direto');
     const antesDe = accountBalance(de, inicial.entries);
     const antesPara = accountBalance(para, inicial.entries);
@@ -323,7 +344,7 @@ describe('não volta a acontecer', () => {
   it('mover tudo de uma conta e apagá-la não perde um centavo', () => {
     const inicial = carteira();
     const bb = conta(inicial, 'Banco do Brasil');
-    const nubank = conta(inicial, 'Nubank');
+    const nubank = conta(inicial, 'Nubank / Conta corrente');
     const patrimonioAntes = netWorth(inicial.accounts, inicial.entries);
     const saldoBB = accountBalance(bb, inicial.entries);
 

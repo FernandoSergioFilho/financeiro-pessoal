@@ -225,3 +225,39 @@ describe('juntarDuplicados', () => {
     expect(segunda.resumo.registrosRemapeados).toBe(0);
   });
 });
+
+/*
+ * Duas contas chamadas "Cartão" em bancos diferentes não são a mesma coisa.
+ * Juntá-las misturaria duas faturas num saldo só — o oposto do que o
+ * agrupamento por instituição serve para fazer.
+ */
+describe('contas de bancos diferentes', () => {
+  it('mesmo nome em bancos diferentes não é repetição', () => {
+    const data = {
+      version: 2,
+      accounts: [
+        { id: 'a1', name: 'Cartão', kind: 'credit_card', openingBalance: 0, color: 'violet',
+          institution: 'Nubank', updatedAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'a2', name: 'Cartão', kind: 'credit_card', openingBalance: 0, color: 'orange',
+          institution: 'Itaú', updatedAt: '2026-01-01T00:00:00.000Z' },
+      ],
+      categories: [], entries: [], recurring: [], purchases: [], tombstones: [],
+    } as unknown as FinanceData;
+    expect(contarDuplicados(data).contas).toBe(0);
+    expect(juntarDuplicados(data, '2026-09-08T00:00:00.000Z').data).toBe(data);
+  });
+
+  it('mesmo nome no mesmo banco continua sendo repetição', () => {
+    const data = {
+      version: 2,
+      accounts: [
+        { id: 'a1', name: 'Cartão', kind: 'credit_card', openingBalance: 0, color: 'violet',
+          institution: 'Nubank', updatedAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'a2', name: 'cartao', kind: 'credit_card', openingBalance: 0, color: 'violet',
+          institution: 'nubank', updatedAt: '2026-02-01T00:00:00.000Z' },
+      ],
+      categories: [], entries: [], recurring: [], purchases: [], tombstones: [],
+    } as unknown as FinanceData;
+    expect(contarDuplicados(data).contas).toBe(1);
+  });
+});

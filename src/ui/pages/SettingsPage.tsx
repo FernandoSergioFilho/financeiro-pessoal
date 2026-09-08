@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { descreverUso, limparComprasOrfas, moverConta, usoDaConta } from '../../domain/accounts.ts';
 import { descreverCopia, type Copia } from '../../domain/backup.ts';
+import { agruparPorInstituicao, instituicoesConhecidas, sugerirInstituicao } from '../../domain/institutions.ts';
 import { contarDuplicados, juntarDuplicados } from '../../domain/duplicates.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { accountBalance } from '../../domain/summary.ts';
@@ -58,14 +59,23 @@ function ColorPicker({ value, onChange }: { value: SeriesColor; onChange: (color
 }
 
 function AccountDialog({ account, onClose }: { account?: Account; onClose: () => void }) {
-  const { api } = useFinance();
+  const { data, api } = useFinance();
   const [name, setName] = useState(account?.name ?? '');
   const [kind, setKind] = useState<AccountKind>(account?.kind ?? 'checking');
   const [opening, setOpening] = useState<number | null>(account?.openingBalance ?? 0);
   const [color, setColor] = useState<SeriesColor>(account?.color ?? 'blue');
   const [closingDay, setClosingDay] = useState(account?.closingDay ?? 25);
   const [dueDay, setDueDay] = useState(account?.dueDay ?? 5);
+  const [institution, setInstitution] = useState(account?.institution ?? '');
   const [error, setError] = useState('');
+
+  const conhecidas = useMemo(() => instituicoesConhecidas(data.accounts), [data.accounts]);
+  // Oferecido, nunca aplicado sozinho: adivinhar e gravar calado foi como o
+  // app acabou com contas repetidas antes.
+  const palpite = useMemo(
+    () => (institution.trim() ? null : sugerirInstituicao(data.accounts, name, { ignorar: account?.id })),
+    [data.accounts, name, institution, account?.id],
+  );
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -75,6 +85,7 @@ function AccountDialog({ account, onClose }: { account?: Account; onClose: () =>
       kind,
       openingBalance: opening ?? 0,
       color,
+      institution: institution.trim() || null,
       closingDay: kind === 'credit_card' ? closingDay : null,
       dueDay: kind === 'credit_card' ? dueDay : null,
     };
@@ -121,6 +132,40 @@ function AccountDialog({ account, onClose }: { account?: Account; onClose: () =>
             {(id) => <MoneyInput id={id} value={opening} onChange={setOpening} />}
           </Field>
         </div>
+
+        <Field
+          label="Banco"
+          hint={
+            palpite ? (
+              <>
+                Junta esta conta e o cartão do mesmo banco numa linha só.{' '}
+                <button type="button" className="link" onClick={() => setInstitution(palpite)}>
+                  É {palpite}?
+                </button>
+              </>
+            ) : (
+              'Opcional. Junta a conta e o cartão do mesmo banco numa linha só — os saldos continuam separados.'
+            )
+          }
+        >
+          {(id) => (
+            <>
+              <input
+                id={id}
+                className="input"
+                list="bancos-conhecidos"
+                placeholder="Nubank, Itaú…"
+                value={institution}
+                onChange={(e) => setInstitution(e.target.value)}
+              />
+              <datalist id="bancos-conhecidos">
+                {conhecidas.map((banco) => (
+                  <option key={banco} value={banco} />
+                ))}
+              </datalist>
+            </>
+          )}
+        </Field>
 
         {kind === 'credit_card' && (
           <div className="grid cols-2">
@@ -746,7 +791,24 @@ export function SettingsPage({
               </tr>
             </thead>
             <tbody>
-              {accounts.map((account) => (
+              {agruparPorInstituicao(accounts).flatMap((grupo) => [
+                // O cabeçalho do banco só existe quando há mais de uma conta
+                // nele: para a carteira solta, ele seria uma linha a mais
+                // dizendo o que já está escrito ao lado.
+                ...(grupo.avulsa || grupo.contas.length === 1
+                  ? []
+                  : [
+                      <tr key={`grupo-${grupo.nome}`} className="linha-banco">
+                        <td colSpan={5}>
+                          {grupo.nome}
+                          <span className="dim" style={{ fontWeight: 400 }}>
+                            {' '}
+                            · {grupo.contas.length} contas
+                          </span>
+                        </td>
+                      </tr>,
+                    ]),
+                ...grupo.contas.map((account) => (
                 <tr key={account.id} style={account.archived ? { opacity: 0.55 } : undefined}>
                   <td>
                     <div className="row" style={{ gap: 8 }}>
@@ -794,7 +856,8 @@ export function SettingsPage({
                     </div>
                   </td>
                 </tr>
-              ))}
+                )),
+              ])}
             </tbody>
           </table>
         </div>

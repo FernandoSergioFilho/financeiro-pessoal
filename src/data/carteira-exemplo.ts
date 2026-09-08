@@ -45,18 +45,21 @@ export function carteiraExemplo({ hoje }: OpcoesCarteira): FinanceData {
     id: id(), name: nome, kind, openingBalance, color, updatedAt: stamp, ...extra,
   });
 
+  // A conta e o cartão do mesmo banco carregam a mesma instituição: são
+  // saldos separados (dinheiro na conta × fatura a pagar), mas uma linha só
+  // na tela. Ver `domain/institutions.ts`.
   const accounts: Account[] = [
-    conta('Nubank', 'checking', 480000, 'violet'),
-    conta('Itaú', 'checking', 265000, 'orange'),
+    conta('Conta corrente', 'checking', 480000, 'violet', { institution: 'Nubank' }),
+    conta('Cartão', 'credit_card', 0, 'violet', { institution: 'Nubank', closingDay: 28, dueDay: 5 }),
+    conta('Conta corrente', 'checking', 265000, 'orange', { institution: 'Itaú' }),
+    conta('Cartão', 'credit_card', 0, 'orange', { institution: 'Itaú', closingDay: 20, dueDay: 1 }),
     conta('Banco do Brasil', 'checking', 132000, 'aqua'),
-    conta('Nubank cartão', 'credit_card', 0, 'violet', { closingDay: 28, dueDay: 5 }),
-    conta('Itaú cartão', 'credit_card', 0, 'orange', { closingDay: 20, dueDay: 1 }),
     conta('Inter cartão', 'credit_card', 0, 'blue', { closingDay: 25, dueDay: 10 }),
     conta('Amex', 'credit_card', 0, 'magenta', { closingDay: 15, dueDay: 25 }),
     conta('Tesouro Direto', 'investment', 1500000, 'green'),
     conta('Carteira', 'cash', 12000, 'yellow'),
   ];
-  const [nubank, itau, bb, nucard, itaucard, intercard, amex, tesouro] = accounts as [
+  const [nubank, nucard, itau, itaucard, bb, intercard, amex, tesouro] = accounts as [
     Account, Account, Account, Account, Account, Account, Account, Account, Account,
   ];
 

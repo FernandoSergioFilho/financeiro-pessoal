@@ -106,6 +106,12 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
+- **Contas agrupadas por banco** — um banco tem conta corrente *e* cartão, e agora eles
+  aparecem juntos numa linha só, com o subtotal do grupo no painel. Os dois saldos continuam
+  separados de propósito: o dinheiro que está na conta e a fatura que se deve são coisas
+  diferentes, e somá-las daria um número que não existe em lugar nenhum. Ao cadastrar
+  "Nubank cartão" com um "Nubank" já existente, o app oferece o agrupamento — oferece, nunca
+  aplica sozinho.
 - **Cópias automáticas** — o app guarda sozinho o estado anterior de tempos em tempos, e
   **sempre no instante antes de uma perda grande** (um "apagar tudo" sem querer, uma
   importação torta, uma sincronização que trouxe a carteira vazia por cima da cheia). São

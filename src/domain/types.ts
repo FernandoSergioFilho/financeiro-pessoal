@@ -27,6 +27,13 @@ export interface Account {
   kind: AccountKind;
   /** Saldo do dia em que a conta passou a ser controlada aqui. */
   openingBalance: number;
+  /**
+   * O banco a que ela pertence, quando faz sentido agrupar: "Nubank" reúne a
+   * conta corrente e o cartão numa linha só, sem misturar os dois saldos —
+   * o dinheiro que está na conta e a fatura que se deve são coisas
+   * diferentes, e somá-las daria um número que não existe.
+   */
+  institution?: string | null;
   color: SeriesColor;
   /** Cartão de crédito: dia do fechamento da fatura. */
   closingDay?: number | null;

@@ -13,7 +13,7 @@
  */
 
 import { chaveDeNome } from './text.ts';
-import type { Category, FinanceData, Tombstone } from './types.ts';
+import type { Account, Category, FinanceData, Tombstone } from './types.ts';
 
 export interface GrupoJuntado {
   /** O nome como ficou — o do sobrevivente. */
@@ -103,8 +103,18 @@ function chaveDeCategoria(categoria: Category): string {
   return `${categoria.kind}:${chaveDeNome(categoria.name)}`;
 }
 
+/**
+ * Conta repetida é a de mesmo nome **no mesmo banco**. "Cartão" no Nubank e
+ * "Cartão" no Itaú são duas coisas diferentes, e juntá-las misturaria duas
+ * faturas num saldo só — exatamente o contrário do que o agrupamento por
+ * instituição existe para fazer.
+ */
+function chaveDeConta(conta: Account): string {
+  return `${chaveDeNome(conta.institution ?? '')}:${chaveDeNome(conta.name)}`;
+}
+
 export function contarDuplicados(data: FinanceData): { contas: number; categorias: number } {
-  const contas = agrupar(data.accounts, (a) => chaveDeNome(a.name)).reduce((t, g) => t + g.length - 1, 0);
+  const contas = agrupar(data.accounts, chaveDeConta).reduce((t, g) => t + g.length - 1, 0);
   const categorias = agrupar(data.categories, chaveDeCategoria).reduce((t, g) => t + g.length - 1, 0);
   return { contas, categorias };
 }
@@ -112,7 +122,7 @@ export function contarDuplicados(data: FinanceData): { contas: number; categoria
 export function juntarDuplicados(data: FinanceData, agora: string): ResultadoJuncao {
   const usos = contarUsos(data);
 
-  const gruposContas = agrupar(data.accounts, (a) => chaveDeNome(a.name));
+  const gruposContas = agrupar(data.accounts, chaveDeConta);
   const gruposCategorias = agrupar(data.categories, chaveDeCategoria);
 
   // De cada id que sai para o id que fica.

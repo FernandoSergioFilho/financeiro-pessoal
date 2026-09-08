@@ -130,6 +130,44 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* --------------- 2b. o banco com conta e cartão numa linha só */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/ajustes`);
+  await page.waitForTimeout(700);
+
+  const tabela = await page.evaluate(() =>
+    [...document.querySelectorAll('table tbody tr')].map((tr) => ({
+      banco: tr.classList.contains('linha-banco'),
+      texto: (tr.textContent ?? '').trim(),
+    })),
+  );
+  const cabecalhos = tabela.filter((l) => l.banco).map((l) => l.texto);
+  if (!cabecalhos.some((t) => t.startsWith('Nubank'))) {
+    erro(`a lista de contas não agrupou o Nubank: ${JSON.stringify(cabecalhos)}`);
+  } else if (!cabecalhos.some((t) => t.startsWith('Itaú'))) {
+    erro(`a lista de contas não agrupou o Itaú: ${JSON.stringify(cabecalhos)}`);
+  } else if (cabecalhos.some((t) => t.startsWith('Carteira'))) {
+    erro('a conta avulsa virou cabeçalho de banco à toa');
+  } else ok(`contas agrupadas por banco: ${cabecalhos.map((t) => t.split('·')[0].trim()).join(', ')}`);
+
+  // O painel também: subtotal do banco, sem misturar os dois saldos.
+  await page.goto(`${APP}#/painel`);
+  await page.waitForTimeout(700);
+  const semRepetido = await page.evaluate(() => {
+    const cartao = [...document.querySelectorAll('.card')].find((c) =>
+      c.querySelector('h2, h3')?.textContent?.includes('Saldo por conta'),
+    );
+    return (cartao?.textContent ?? '').match(/Cartão/g)?.length ?? 0;
+  });
+  if (semRepetido !== 2) erro(`o painel deveria mostrar os dois cartões nomeados "Cartão" (achou ${semRepetido})`);
+  else ok('o painel mostra cada conta do banco separada, com o subtotal do grupo');
+
+  if (quebras.length > 0) erro(`agrupamento por banco: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 /* ------------------------------- 3. a conta que "não tem nada" e não apagava */
 
 {
