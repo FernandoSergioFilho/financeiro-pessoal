@@ -106,6 +106,12 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
+- **Importar o CSV do banco** — o extrato ou a fatura que o Nubank (e os outros) exportam.
+  O app descobre sozinho o separador e as colunas de data, descrição e valor, compara com o
+  que você já lançou e mostra linha por linha o que é novo, o que já existe e o que ficou em
+  dúvida — o que parece repetido vem **desmarcado**. A categoria vem sugerida pelo seu
+  próprio histórico: se "Uber" sempre foi Transporte, "UBER *TRIP 8823" chega como
+  Transporte.
 - **Aviso de lançamento repetido** — ao cadastrar um avulso, uma compra parcelada ou uma
   conta recorrente, o app procura o que já existe com o mesmo valor e a mesma descrição e
   pergunta antes de gravar. A busca é conservadora de propósito: alarme falso ensina a

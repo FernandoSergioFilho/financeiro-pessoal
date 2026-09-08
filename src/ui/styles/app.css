@@ -424,6 +424,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .stat-value { font-size: 1.5rem; font-weight: 660; letter-spacing: -0.02em; }
 .stat-value.sm { font-size: 1.2rem; }
+
+/* Select apertado, para caber numa célula de tabela na conferência do extrato. */
+.input.select.sm { padding: 4px 26px 4px 8px; font-size: 0.8rem; min-width: 0; width: 100%; }
+
+/* Conferência do extrato importado.
+   `fixed`: sem isto a descrição do banco ("Compra no débito - ...") estica a
+   tabela e empurra valor e categoria para fora do diálogo. Com largura fixa,
+   quem cede é a descrição, que é a única que pode ser cortada sem perda. */
+.tabela-extrato { table-layout: fixed; width: 100%; }
+.tabela-extrato th:nth-child(1), .tabela-extrato td:nth-child(1) { width: 34px; }
+.tabela-extrato th:nth-child(2), .tabela-extrato td:nth-child(2) { width: 6.4rem; }
+.tabela-extrato th:nth-child(4), .tabela-extrato td:nth-child(4) { width: 7rem; }
+.tabela-extrato th:nth-child(5), .tabela-extrato td:nth-child(5) { width: 9.5rem; }
+.tabela-extrato td { vertical-align: top; }
 .stat-hint { font-size: 0.78rem; color: var(--text-3); }
 
 /* Etiquetas */

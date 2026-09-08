@@ -35,11 +35,31 @@ export function textoComparavel(valor: string): string {
     .trim();
 }
 
-function descricoesBatem(a: string, b: string): boolean {
-  const x = textoComparavel(a);
-  const y = textoComparavel(b);
-  if (!x || !y) return false;
-  return x === y || x.includes(y) || y.includes(x);
+/**
+ * Duas descrições falam da mesma coisa?
+ *
+ * A comparação é por **palavras inteiras**, não por pedaço de texto. Procurar
+ * o pedaço parece equivalente e não é: "Mercado" está dentro de
+ * "PAG*SUPERMERCADOX" e "Uber" está dentro de "Uberlândia", e aí o app
+ * declararia repetido o que não é. Uma descrição casa com a outra quando são
+ * as mesmas palavras, ou quando as palavras de uma aparecem **em sequência**
+ * dentro da outra — "Mercado" dentro de "Mercado do mês", "Aluguel" dentro de
+ * "Pagamento de boleto Aluguel".
+ */
+export function descricoesCasam(a: string, b: string): boolean {
+  const x = textoComparavel(a).split(' ').filter(Boolean);
+  const y = textoComparavel(b).split(' ').filter(Boolean);
+  if (x.length === 0 || y.length === 0) return false;
+  return contemSequencia(x, y) || contemSequencia(y, x);
+}
+
+/** `agulha` aparece inteira e em ordem dentro de `palheiro`? */
+function contemSequencia(palheiro: readonly string[], agulha: readonly string[]): boolean {
+  if (agulha.length > palheiro.length) return false;
+  for (let i = 0; i + agulha.length <= palheiro.length; i += 1) {
+    if (agulha.every((palavra, j) => palheiro[i + j] === palavra)) return true;
+  }
+  return false;
 }
 
 export interface RascunhoLancamento {
@@ -70,7 +90,7 @@ export function procurarSemelhantes(
     if (entry.amount !== rascunho.amount) continue;
     if (entry.kind !== rascunho.kind) continue;
     if (entry.date < de || entry.date > ate) continue;
-    if (!descricoesBatem(entry.description, rascunho.description)) continue;
+    if (!descricoesCasam(entry.description, rascunho.description)) continue;
 
     const mesmoDia = entry.date === rascunho.date;
     const mesmoTexto = textoComparavel(entry.description) === textoComparavel(rascunho.description);
@@ -113,7 +133,7 @@ export function procurarRegrasSemelhantes(
       regra.kind === rascunho.kind &&
       regra.frequency === rascunho.frequency &&
       regra.interval === rascunho.interval &&
-      descricoesBatem(regra.description, rascunho.description),
+      descricoesCasam(regra.description, rascunho.description),
   );
 }
 
@@ -139,7 +159,7 @@ export function procurarComprasSemelhantes(
       compra.installments === rascunho.installments &&
       compra.firstDate >= de &&
       compra.firstDate <= ate &&
-      descricoesBatem(compra.description, rascunho.description),
+      descricoesCasam(compra.description, rascunho.description),
   );
 }
 

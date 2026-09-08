@@ -235,6 +235,81 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* ------------------------------- 6. importar o CSV do banco sem duplicar */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/ajustes`);
+  await page.waitForTimeout(700);
+
+  // Extrato no formato do Nubank. A primeira linha é o aluguel que a carteira
+  // já tem lançado no dia 10; as outras duas são novas.
+  const dia = (d) => `${d}/${HOJE.slice(5, 7)}/${HOJE.slice(0, 4)}`;
+  const csv = [
+    'Data,Valor,Identificador,Descrição',
+    `${dia('10')},-2450.00,abc-0001,Pagamento de boleto - ALUGUEL`,
+    `${dia('11')},-78.90,abc-0002,Compra no débito - POSTO IPIRANGA`,
+    `${dia('12')},-119.90,abc-0003,Compra no débito - DROGARIA SP`,
+  ].join('\n');
+  const arquivo = join(tmp, 'extrato.csv');
+  writeFileSync(arquivo, csv);
+
+  await page.click('button:text-is("🏦 Importar do banco")');
+  await page.waitForTimeout(400);
+  await page.setInputFiles('.dialog input[type=file]', arquivo);
+  await page.waitForTimeout(700);
+
+  const lido = await page.evaluate(() => {
+    const numeros = [...document.querySelectorAll('.dialog .card.stat')].map((c) => ({
+      rotulo: c.querySelector('.stat-label')?.textContent ?? '',
+      valor: Number(c.querySelector('.stat-value')?.textContent ?? '0'),
+    }));
+    return {
+      numeros,
+      formato: [...document.querySelectorAll('.dialog .hint')]
+        .map((h) => h.textContent ?? '')
+        .find((t) => /separado por/.test(t)) ?? '',
+      linhas: document.querySelectorAll('.dialog tbody tr').length,
+      marcadas: [...document.querySelectorAll('.dialog tbody input[type=checkbox]')].filter((c) => c.checked).length,
+      botao: [...document.querySelectorAll('.dialog button')].map((b) => b.textContent).join(' | '),
+    };
+  });
+
+  const de = (rotulo) => lido.numeros.find((n) => n.rotulo === rotulo)?.valor;
+  if (lido.linhas !== 3) erro(`o extrato deveria ter 3 linhas, tem ${lido.linhas}`);
+  else if (de('Novos') !== 2) erro(`deveria achar 2 lançamentos novos, achou ${de('Novos')}`);
+  else if (de('Já existem') !== 1) erro(`deveria reconhecer 1 já lançado, reconheceu ${de('Já existem')}`);
+  else if (lido.marcadas !== 2) erro(`o repetido deveria vir desmarcado — ${lido.marcadas} marcadas de 3`);
+  else ok(`extrato lido: ${de('Novos')} novos, ${de('Já existem')} já existia, só os novos marcados`);
+
+  if (!/separado por/.test(lido.formato)) erro('não mostrou o formato que descobriu');
+  else ok(`formato descoberto: "${lido.formato.trim().slice(0, 90)}"`);
+
+  const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
+  await page.click('.dialog button:has-text("Importar 2")');
+  await page.waitForTimeout(800);
+  const depois = await page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
+  if (depois !== antes + 2) erro(`deveria gravar 2 lançamentos (${antes} → ${depois})`);
+  else ok(`importou 2 lançamentos (${antes} → ${depois})`);
+
+  // Reimportar o mesmo arquivo não pode propor nada.
+  await page.click('.dialog button:text-is("Fechar")');
+  await page.waitForTimeout(300);
+  await page.click('button:text-is("🏦 Importar do banco")');
+  await page.waitForTimeout(400);
+  await page.setInputFiles('.dialog input[type=file]', arquivo);
+  await page.waitForTimeout(700);
+  const segunda = await page.evaluate(() => ({
+    marcadas: [...document.querySelectorAll('.dialog tbody input[type=checkbox]')].filter((c) => c.checked).length,
+    temBotao: [...document.querySelectorAll('.dialog button')].some((b) => /^Importar \d/.test(b.textContent ?? '')),
+  }));
+  if (segunda.marcadas !== 0 || segunda.temBotao) erro(`reimportar o mesmo arquivo ainda propõe ${segunda.marcadas} linhas`);
+  else ok('reimportar o mesmo arquivo não propõe nada');
+
+  if (quebras.length > 0) erro(`importar do banco: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

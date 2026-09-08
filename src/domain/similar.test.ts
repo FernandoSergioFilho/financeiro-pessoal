@@ -66,9 +66,17 @@ describe('procurarSemelhantes', () => {
     expect(procurarSemelhantes([entry({ description: 'Farmácia' })], rascunho)).toEqual([]);
   });
 
-  it('uma descrição contida na outra conta', () => {
+  it('uma descrição contida na outra conta, palavra por palavra', () => {
     expect(procurarSemelhantes([entry({ description: 'Mercado do mês' })], rascunho)).toHaveLength(1);
     expect(procurarSemelhantes([entry({ description: 'MERCADO' })], rascunho)).toHaveLength(1);
+    expect(procurarSemelhantes([entry({ description: 'Pagamento do Mercado' })], rascunho)).toHaveLength(1);
+  });
+
+  // Pedaço de palavra não conta: "Mercado" dentro de "supermercadox", ou
+  // "Uber" dentro de "Uberlândia", declarariam repetido o que não é.
+  it('não casa palavra que é só um pedaço de outra', () => {
+    expect(procurarSemelhantes([entry({ description: 'PAG*SUPERMERCADOX' })], rascunho)).toEqual([]);
+    expect(procurarSemelhantes([entry({ description: 'Uberlândia' })], { ...rascunho, description: 'Uber' })).toEqual([]);
   });
 
   it('descrição vazia não casa com tudo', () => {

@@ -21,6 +21,7 @@ import { useLookups, usePeriodEntries } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '../components/primitives.tsx';
 import { CloudPanel } from '../components/CloudPanel.tsx';
+import { ImportarDoBanco } from '../components/ImportarDoBanco.tsx';
 import type { ThemeChoice } from '../theme.ts';
 
 const ACCOUNT_KINDS: { value: AccountKind; label: string }[] = [
@@ -643,6 +644,7 @@ export function SettingsPage({
   const [removingCategory, setRemovingCategory] = useState<Category | null>(null);
   const [resetting, setResetting] = useState(false);
   const [importando, setImportando] = useState(false);
+  const [importandoBanco, setImportandoBanco] = useState(false);
   const [juntando, setJuntando] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -864,6 +866,9 @@ export function SettingsPage({
             <button type="button" className="btn" onClick={() => setImportando(true)}>
               📥 Importar planilha
             </button>
+            <button type="button" className="btn" onClick={() => setImportandoBanco(true)}>
+              🏦 Importar do banco
+            </button>
             <button
               type="button"
               className="btn"
@@ -927,6 +932,7 @@ export function SettingsPage({
       </div>
 
       {importando && <ImportarPlanilha onClose={() => setImportando(false)} />}
+      {importandoBanco && <ImportarDoBanco onClose={() => setImportandoBanco(false)} />}
       {accountDialog && <AccountDialog account={accountDialog.account} onClose={() => setAccountDialog(null)} />}
       {categoryDialog && <CategoryDialog category={categoryDialog.category} onClose={() => setCategoryDialog(null)} />}
 
