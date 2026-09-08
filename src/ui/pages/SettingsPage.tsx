@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 
+import { contarDuplicados, juntarDuplicados } from '../../domain/duplicates.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { accountBalance } from '../../domain/summary.ts';
 import { SERIES_COLORS, type Account, type AccountKind, type Category, type SeriesColor } from '../../domain/types.ts';
@@ -415,6 +416,59 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
   );
 }
 
+/**
+ * Mostra o que a junção vai fazer antes de fazer. Sem esta lista, o usuário
+ * clicaria num botão que apaga cadastros sem saber quais nem quantos.
+ */
+function JuntarRepetidos({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+  const { data } = useFinance();
+  // Simulação: junta numa cópia só para listar os grupos, sem gravar nada.
+  const previa = useMemo(() => juntarDuplicados(data, new Date().toISOString()).resumo, [data]);
+
+  const grupos = [
+    ...previa.contas.map((g) => ({ ...g, tipo: 'conta' })),
+    ...previa.categorias.map((g) => ({ ...g, tipo: 'categoria' })),
+  ];
+
+  return (
+    <Dialog
+      title="Juntar cadastros repetidos"
+      onClose={onCancel}
+      footer={
+        <>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={onCancel}>
+            Cancelar
+          </button>
+          <button type="button" className="btn primary" onClick={onConfirm}>
+            Juntar
+          </button>
+        </>
+      }
+    >
+      <p className="muted" style={{ marginBottom: 12 }}>
+        Cada nome abaixo fica com um cadastro só.{' '}
+        {previa.registrosRemapeados === 0
+          ? 'Nenhum lançamento muda de lugar.'
+          : previa.registrosRemapeados === 1
+            ? 'O lançamento que apontava para a cópia passa para ele — nada é perdido.'
+            : `Os ${previa.registrosRemapeados} lançamentos que apontavam para as cópias passam para ele — nada é perdido.`}
+      </p>
+      <ul className="lista-repetidos">
+        {grupos.map((grupo) => (
+          <li key={`${grupo.tipo}-${grupo.nome}`}>
+            <strong>{grupo.nome}</strong>
+            <span className="dim">
+              {' '}
+              — {grupo.quantidade} {grupo.tipo === 'conta' ? 'contas' : 'categorias'} viram 1
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Dialog>
+  );
+}
+
 export function SettingsPage({
   month,
   theme,
@@ -435,7 +489,31 @@ export function SettingsPage({
   const [removingCategory, setRemovingCategory] = useState<Category | null>(null);
   const [resetting, setResetting] = useState(false);
   const [importando, setImportando] = useState(false);
+  const [juntando, setJuntando] = useState(false);
   const [message, setMessage] = useState('');
+
+  // Carteiras sincronizadas antes da correção da semeadura ficaram com contas e
+  // categorias padrão repetidas, uma leva por aparelho. O aviso só aparece se
+  // ainda houver o que juntar, e some sozinho depois.
+  const duplicados = useMemo(() => contarDuplicados(data), [data]);
+  const repetidos = duplicados.contas + duplicados.categorias;
+
+  function juntarRepetidos() {
+    const { data: limpo, resumo } = juntarDuplicados(data, new Date().toISOString());
+    api.replaceData(limpo);
+    setJuntando(false);
+    const plural = (quantidade: number, um: string, varios: string) =>
+      `${quantidade} ${quantidade === 1 ? um : varios}`;
+    const partes = [
+      duplicados.contas > 0 ? plural(duplicados.contas, 'conta repetida', 'contas repetidas') : '',
+      duplicados.categorias > 0 ? plural(duplicados.categorias, 'categoria repetida', 'categorias repetidas') : '',
+    ].filter(Boolean);
+    const movidos =
+      resumo.registrosRemapeados === 0
+        ? 'Nenhum lançamento precisou mudar de lugar.'
+        : `${plural(resumo.registrosRemapeados, 'lançamento passou', 'lançamentos passaram')} para o cadastro que ficou.`;
+    setMessage(`Pronto: ${partes.join(' e ')} removidas. ${movidos}`);
+  }
 
   async function importBackup(file: File) {
     try {
@@ -449,6 +527,29 @@ export function SettingsPage({
   return (
     <>
       <CloudPanel />
+
+      {repetidos > 0 && (
+        <div className="banner warn">
+          <span className="emoji" aria-hidden="true">
+            🧹
+          </span>
+          <span>
+            <strong>
+              {repetidos === 1
+                ? 'Há 1 cadastro repetido nesta carteira'
+                : `Há ${repetidos} cadastros repetidos nesta carteira`}
+            </strong>
+            <br />
+            <span className="dim">
+              Dá para juntar tudo de uma vez, sem perder lançamento nenhum: eles passam para o cadastro que ficar.
+            </span>
+            <br />
+            <button type="button" className="btn sm" style={{ marginTop: 8 }} onClick={() => setJuntando(true)}>
+              Juntar repetidos
+            </button>
+          </span>
+        </div>
+      )}
 
       <Card
         title="Contas"
@@ -693,6 +794,8 @@ export function SettingsPage({
           onCancel={() => setRemovingCategory(null)}
         />
       )}
+
+      {juntando && <JuntarRepetidos onConfirm={juntarRepetidos} onCancel={() => setJuntando(false)} />}
 
       {resetting && (
         <ConfirmDialog

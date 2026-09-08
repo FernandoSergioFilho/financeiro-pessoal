@@ -100,6 +100,8 @@ apagar uma delas, clique na linha.
 - **Backup e planilha** — exportar os lançamentos do mês em CSV (abre direto no Excel e no
   LibreOffice em português), **importar de volta** a mesma planilha com linhas acrescentadas,
   baixar um backup completo em JSON e restaurá-lo depois.
+- **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
+  Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
 - Tema claro/escuro (ou o do sistema), navegação lateral no desktop e barra inferior com
   botão flutuante no celular.
 

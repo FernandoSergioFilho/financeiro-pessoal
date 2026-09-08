@@ -2,8 +2,12 @@
 
 import { isValidISO, toISO } from '../domain/date.ts';
 import { formatAmount, parseMoney } from '../domain/money.ts';
+import { chaveDeNome } from '../domain/text.ts';
 import type { DisplayEntry, Entry, EntryKind, EntryStatus, FinanceData } from '../domain/types.ts';
 import { looksLikeFinanceData, migrate } from './schema.ts';
+
+// Reexportado porque as telas de importação já o consomem daqui.
+export { chaveDeNome };
 
 const KIND_LABEL = { income: 'Entrada', expense: 'Saída', transfer: 'Transferência' } as const;
 const STATUS_LABEL = { settled: 'Efetivado', pending: 'Previsto' } as const;
@@ -226,15 +230,6 @@ const SITUACOES: Record<string, EntryStatus> = {
   previsto: 'pending',
   '': 'settled',
 };
-
-/** Sem acento e sem caixa: "Alimentação" e "alimentacao" são o mesmo nome. */
-export function chaveDeNome(valor: string): string {
-  return valor
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
 
 /**
  * Lê a planilha e devolve o que dá para trazer, o que foi ignorado e por quê.

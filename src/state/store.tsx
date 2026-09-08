@@ -25,9 +25,11 @@ import type {
   RecurringRule,
 } from '../domain/types.ts';
 import { LocalStorageRepository, type FinanceRepository } from '../data/repository.ts';
+import { isCloudEnabled } from '../data/supabase.ts';
 import { emptyData } from '../data/schema.ts';
 import { demoData, initialData, newId } from '../data/seed.ts';
 import { accountInUse, reducer } from './reducer.ts';
+import { decidirDepoisDaSync, semearNaCarga } from './seeding.ts';
 import { useCloud, type CloudApi, type CloudState } from './cloud.ts';
 
 export type EntryDraft = Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>;
@@ -97,10 +99,11 @@ export function FinanceProvider({
     let cancelled = false;
     void repository.load().then((loaded) => {
       if (cancelled) return;
-      // Primeira execução: entrega contas e categorias prontas em vez de
-      // uma tela vazia que exige configurar tudo antes do primeiro uso.
-      const isFirstRun = loaded.accounts.length === 0 && loaded.entries.length === 0;
-      dispatch({ type: 'data/replace', data: isFirstRun ? initialData() : loaded });
+      // Contas e categorias prontas na primeira execução, em vez de uma tela
+      // vazia que exige configurar tudo antes do primeiro uso — mas só no app
+      // sem nuvem. A regra e o porquê estão em `seeding.ts`.
+      const semear = semearNaCarga(loaded, isCloudEnabled());
+      dispatch({ type: 'data/replace', data: semear ? initialData() : loaded });
       hydrated.current = true;
       setLoading(false);
     });
@@ -122,6 +125,17 @@ export function FinanceProvider({
     dispatch({ type: 'data/replace', data: next });
   }, []);
   const [cloud, cloudApi] = useCloud(data, aplicarDaNuvem);
+
+  // A semeadura adiada: depois que a primeira sincronização trouxe o que havia
+  // na carteira, se ainda assim não veio nada, então é conta nova de verdade.
+  const semeou = useRef(false);
+  useEffect(() => {
+    if (semeou.current || !hydrated.current) return;
+    const decisao = decidirDepoisDaSync({ status: cloud.status, ultimaSync: cloud.sync.lastSyncedAt }, data);
+    if (decisao === 'esperar') return;
+    semeou.current = true; // decidido uma vez só, para não semear duas vezes
+    if (decisao === 'semear') dispatch({ type: 'data/replace', data: initialData() });
+  }, [cloud.status, cloud.sync.lastSyncedAt, data]);
 
   const now = useCallback(() => new Date().toISOString(), []);
 
