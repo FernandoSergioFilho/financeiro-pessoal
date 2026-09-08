@@ -325,9 +325,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Contadores curtos (só números) lado a lado, inclusive no celular. Não usa
    `cols-3` porque aquela grade carrega valores em reais, que não cabem em um
    terço de uma tela estreita. */
-.grid.contadores { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* `auto-fit` com largura mínima: três colunas onde cabem três, duas onde cabem
+   duas. Fixar em três cortava "R$ 12.972,00" no meio a 390px. */
+.grid.contadores { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); }
 .grid.contadores .stat { padding: 10px 12px; }
-.grid.contadores .stat-value { font-size: 1.15rem; }
+.grid.contadores .stat-value { font-size: clamp(0.9rem, 11cqi, 1.15rem); }
 
 .row { display: flex; align-items: center; gap: 10px; }
 .row.wrap { flex-wrap: wrap; }
@@ -422,8 +424,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: 0.72rem; font-weight: 620; letter-spacing: 0.05em;
   text-transform: uppercase; color: var(--text-3);
 }
+/*
+ * O número é o conteúdo do cartão, então é ele que manda no tamanho da fonte.
+ * "R$ 146.609,00" a 1,5rem não cabe na coluna de 140px que sobra no celular, e
+ * sem isto a última casa decimal era simplesmente cortada — o valor aparecia
+ * **errado** na tela, que é o pior defeito possível num app de dinheiro.
+ * `cqi` mede a caixa de conteúdo do próprio cartão; a declaração fixa antes
+ * dela fica de reserva para quem não entender container queries.
+ */
+.stat { container-type: inline-size; }
 .stat-value { font-size: 1.5rem; font-weight: 660; letter-spacing: -0.02em; }
+.stat-value {
+  font-size: clamp(0.95rem, 12cqi, 1.5rem);
+  /* Última linha de defesa: um valor absurdamente longo quebra em duas linhas
+     em vez de ser cortado. Cortado, o número aparece errado; quebrado, só
+     aparece feio. */
+  overflow-wrap: anywhere;
+}
 .stat-value.sm { font-size: 1.2rem; }
+.stat-value.sm { font-size: clamp(0.9rem, 11cqi, 1.2rem); }
 
 /* Select apertado, para caber numa célula de tabela na conferência do extrato. */
 .input.select.sm { padding: 4px 26px 4px 8px; font-size: 0.8rem; min-width: 0; width: 100%; }
@@ -800,7 +819,9 @@ textarea.input { resize: vertical; min-height: 64px; }
   .entry-amount { font-size: 0.92rem; }
 
   h1 { font-size: 1.2rem; }
-  .stat-value { font-size: 1.3rem; }
+  /* O teto encolhe no celular; o piso e a medida em `cqi` continuam valendo,
+     senão a regra fixa volta a cortar o número. */
+  .stat-value { font-size: clamp(0.95rem, 12cqi, 1.3rem); }
 
   .month-nav .label { min-width: 0; font-size: 0.82rem; }
   .month-nav .label .longo { display: none; }

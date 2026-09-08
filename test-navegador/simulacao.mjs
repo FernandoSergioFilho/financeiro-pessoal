@@ -72,6 +72,12 @@ async function estadoDaTela(page) {
     estoura: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     largura: document.documentElement.scrollWidth,
     limite: document.documentElement.clientWidth,
+    // Valor cortado dentro do próprio cartão não faz a página rolar, então
+    // passava despercebido: "R$ 12.972,00" virava "R$ 12.972," a 390px.
+    cortados: [...document.querySelectorAll('.stat-value, .bar-value, .num')]
+      .filter((el) => el.scrollWidth > el.clientWidth + 1)
+      .slice(0, 3)
+      .map((el) => el.textContent ?? ''),
   }));
 }
 
@@ -87,6 +93,7 @@ for (const tema of ['light', 'dark']) {
       if (estado.vazia) erro(`${pagina} ${width}px ${tema}: a tela sumiu`);
       else if (estado.salvaVidas) erro(`${pagina} ${width}px ${tema}: caiu no salva-vidas`);
       else if (estado.estoura) erro(`${pagina} ${width}px ${tema}: estoura para os lados (${estado.largura} > ${estado.limite})`);
+      else if (estado.cortados.length > 0) erro(`${pagina} ${width}px ${tema}: valor cortado — ${JSON.stringify(estado.cortados)}`);
     }
     if (quebras.length > 0) erro(`${width}px ${tema}: erro no console — ${quebras[0]}`);
     else ok(`todas as telas em ${width}px (${tema})`);
@@ -397,6 +404,41 @@ for (const width of [390, 1280]) {
   else ok(`restaurou os ${restaurado} lançamentos de volta`);
 
   if (quebras.length > 0) erro(`cópia automática: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
+/* ------------------------------------------- 8. a análise do período */
+
+for (const width of [390, 1280]) {
+  const { ctx, page, quebras } = await abrir({ width });
+  await page.goto(`${APP}#/painel`);
+  await page.waitForTimeout(800);
+
+  await page.click('button:has-text("Analisar")');
+  await page.waitForTimeout(700);
+
+  const lido = await page.evaluate(() => ({
+    indicadores: [...document.querySelectorAll('.dialog .card.stat .stat-label')].map((s) => s.textContent),
+    achados: [...document.querySelectorAll('.dialog .banner strong')].map((s) => s.textContent ?? ''),
+    corpos: [...document.querySelectorAll('.dialog .banner .dim')].map((s) => s.textContent ?? ''),
+    estoura: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    cortados: [...document.querySelectorAll('.dialog .stat-value')]
+      .filter((el) => el.scrollWidth > el.clientWidth + 1)
+      .map((el) => el.textContent ?? ''),
+  }));
+
+  if (lido.indicadores.length < 4) erro(`a análise trouxe só ${lido.indicadores.length} indicadores`);
+  else if (lido.achados.length < 3) erro(`a análise trouxe só ${lido.achados.length} achados`);
+  else if (lido.estoura) erro(`a análise estoura para os lados em ${width}px`);
+  else if (lido.cortados.length > 0) erro(`indicador cortado em ${width}px — ${JSON.stringify(lido.cortados)}`);
+  else ok(`análise em ${width}px: ${lido.indicadores.length} indicadores e ${lido.achados.length} achados`);
+
+  // Todo achado precisa carregar um número: sem número é opinião.
+  const semNumero = lido.corpos.filter((t) => !/R\$|\d+%/.test(t));
+  if (semNumero.length > 0) erro(`achado sem número: "${semNumero[0].slice(0, 70)}"`);
+  else ok('todo achado da análise carrega o número que o sustenta');
+
+  if (quebras.length > 0) erro(`análise em ${width}px: erro no console — ${quebras[0]}`);
   await ctx.close();
 }
 

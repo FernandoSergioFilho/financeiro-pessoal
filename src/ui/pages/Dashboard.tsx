@@ -25,6 +25,7 @@ import {
 import type { DisplayEntry } from '../../domain/types.ts';
 import { entriesInRange, useLookups, useOverdue, usePeriodEntries } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
+import { BotaoDeAnalise } from '../components/Analise.tsx';
 import { CategoryBars, ComparativoCategorias, MonthlyBars, SaldoDoMes } from '../components/charts.tsx';
 import { EntryList } from '../components/EntryList.tsx';
 import { Card, Dot, EmptyState } from '../components/primitives.tsx';
@@ -155,6 +156,13 @@ export function Dashboard({
           </span>
         </div>
       )}
+
+      {/* A leitura do período fica ao lado dos números, e não numa tela
+          separada: quem olha o painel é quem quer saber o que fazer com ele. */}
+      <div className="row wrap">
+        <span className="spacer" />
+        <BotaoDeAnalise periodo={periodo} entradas={entradas} />
+      </div>
 
       <div className="grid cols-4 keep">
         <div className="card stat">

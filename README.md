@@ -106,6 +106,10 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
+- **Analisar** — no painel, um botão que lê o período como um relatório de fechamento:
+  resultado e margem, gasto contra a própria média dos meses fechados, custo fixo sobre a
+  renda, parcelas já comprometidas, onde o dinheiro concentra e quais categorias fugiram do
+  padrão. Cada achado carrega o número que o sustenta, e o mais grave vem primeiro.
 - **Contas agrupadas por banco** — um banco tem conta corrente *e* cartão, e agora eles
   aparecem juntos numa linha só, com o subtotal do grupo no painel. Os dois saldos continuam
   separados de propósito: o dinheiro que está na conta e a fatura que se deve são coisas
@@ -291,6 +295,20 @@ pelo mouse não dava, porque o seletor só produz datas completas.
 ```bash
 npm run build:single && npm run test:telas
 ```
+
+### Por que a análise é calculada, e não pedida a uma IA
+
+O app é uma página estática publicada no GitHub Pages: não existe servidor onde guardar uma
+chave de API. Pôr a chave no código do navegador seria entregá-la a qualquer visitante —
+diferente da chave `anon` do Supabase, que é pública por desenho e protegida pelas políticas
+do banco, uma chave de modelo de linguagem é segredo de verdade, com custo por uso.
+
+Então a análise é calculada em `src/domain/analise.ts`, e não gerada: sai na hora, funciona
+sem internet, não custa nada, não manda os gastos de ninguém para lugar nenhum, e dá o mesmo
+resultado toda vez — o que, para número de dinheiro, é qualidade e não limitação. O que ela
+faz é o que um relatório de fechamento faz: compara o período com a própria história, separa
+estrutura (custo fixo, parcelas comprometidas) do que é escolha do mês, e aponta o que fugiu
+do normal com o tamanho de cada coisa.
 
 ### Simulação de uso
 
