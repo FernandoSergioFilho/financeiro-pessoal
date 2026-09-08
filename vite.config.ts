@@ -21,6 +21,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: './',
+    resolve: {
+      // O arquivo único não tem service worker, então o módulo virtual do
+      // plugin não existe nesse build: aponta para um substituto que não faz
+      // nada, em vez de quebrar a compilação.
+      alias: singlefile ? ({ 'virtual:pwa-register': '/src/pwa-ausente.ts' } as Record<string, string>) : ({} as Record<string, string>),
+    },
     plugins: [
       react(),
       // O arquivo único é offline por natureza: não faz sentido registrar um
@@ -29,10 +35,18 @@ export default defineConfig(({ mode }) => {
         ? []
         : [
             VitePWA({
-              // Atualiza sozinho: um service worker que espera o usuário
-              // fechar todas as abas o deixa preso numa versão antiga sem
-              // que ele entenda por quê.
-              registerType: 'autoUpdate',
+              // Avisa em vez de trocar por baixo. Com `autoUpdate` o worker
+              // novo assumia na hora, mas a página aberta continuava rodando
+              // o JavaScript antigo — a mudança só aparecia no SEGUNDO
+              // recarregamento, e quem estava usando não tinha como saber
+              // disso. Agora o app pergunta, e a troca acontece quando a
+              // pessoa manda, sem risco de recarregar por cima de um
+              // formulário pela metade.
+              registerType: 'prompt',
+              // O registro é feito no código do app (src/atualizacao.ts), que
+              // precisa saber a hora de avisar; deixar o plugin injetar o dele
+              // registraria o worker duas vezes.
+              injectRegister: null,
               includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
               manifest: {
                 name: 'Financeiro pessoal',

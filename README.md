@@ -231,6 +231,17 @@ Guardá-la num secret do GitHub não a esconderia de ninguém — só daria uma 
 de segurança, além de exigir configuração manual a cada clone. Quem realmente protege os
 lançamentos são as políticas de acesso em `supabase/schema.sql`.
 
+### Como a atualização chega
+
+O site é um PWA: um service worker guarda os arquivos para o app abrir offline. O preço
+disso é que a versão nova não aparece sozinha na página já aberta — e a configuração
+anterior (`autoUpdate`) tornava isso pior do que parece: o worker novo assumia, mas o
+JavaScript em execução continuava sendo o antigo, então a mudança só aparecia no **segundo**
+recarregamento, sem nada na tela explicando.
+
+Agora o app usa `registerType: 'prompt'` e mostra um aviso com um botão. A troca acontece
+quando a pessoa manda — recarregar sozinho poderia apagar um lançamento digitado pela metade.
+
 ### Testar as telas no navegador
 
 Um defeito de renderização não aparece em teste de unidade: ele derruba a árvore do React e
