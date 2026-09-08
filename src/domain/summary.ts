@@ -1,6 +1,6 @@
-/** Agregações de saldo e resumo do mês. */
+/** Agregações de saldo e resumo do período. */
 
-import { addDays, monthEnd, monthKey, monthStart } from './date.ts';
+import { addDays, formatMonthKey, monthEnd, monthKey, monthStart } from './date.ts';
 import type { Account, Category, DisplayEntry } from './types.ts';
 
 /**
@@ -155,6 +155,8 @@ export interface DayPoint {
   balance: number;
   /** Depois de hoje: ainda não aconteceu, é o que está previsto. */
   projected: boolean;
+  /** Como chamar o ponto na dica; sem isto, a data basta. */
+  rotulo?: string;
 }
 
 /**
@@ -180,15 +182,65 @@ export function dailyBalance(
     porDia.set(entry.date, (porDia.get(entry.date) ?? 0) + delta);
   }
 
-  const fim = monthEnd(month);
+  return balanceWalk(entries, monthStart(month), monthEnd(month), startingBalance, todayIso);
+}
+
+/**
+ * O mesmo percurso, para um intervalo qualquer.
+ *
+ * Um ponto por dia enquanto isso for legível; passando de `MAX_PONTOS`, um
+ * ponto por mês. Um ano inteiro com 365 pontos vira uma mancha de pixels num
+ * gráfico de 100 unidades de largura — e num trimestre a leitura diária ainda
+ * vale a pena, então o corte fica entre os dois.
+ */
+export const MAX_PONTOS = 100;
+
+export function balanceWalk(
+  entries: readonly DisplayEntry[],
+  from: string,
+  to: string,
+  startingBalance: number,
+  todayIso: string,
+): DayPoint[] {
+  const porDia = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.kind === 'transfer') continue;
+    if (entry.date < from || entry.date > to) continue;
+    const delta = entry.kind === 'income' ? entry.amount : -entry.amount;
+    porDia.set(entry.date, (porDia.get(entry.date) ?? 0) + delta);
+  }
+
+  const dias = diasEntre(from, to);
   const pontos: DayPoint[] = [];
   let saldo = startingBalance;
 
-  for (let dia = monthStart(month); dia <= fim; dia = addDays(dia, 1)) {
+  if (dias <= MAX_PONTOS) {
+    for (let dia = from; dia <= to; dia = addDays(dia, 1)) {
+      saldo += porDia.get(dia) ?? 0;
+      pontos.push({ date: dia, balance: saldo, projected: dia > todayIso });
+    }
+    return pontos;
+  }
+
+  // Agrupado por mês: o ponto é o saldo no último dia daquele mês dentro do
+  // intervalo, para que o começo e o fim do gráfico sejam as pontas pedidas.
+  for (let dia = from; dia <= to; dia = addDays(dia, 1)) {
     saldo += porDia.get(dia) ?? 0;
-    pontos.push({ date: dia, balance: saldo, projected: dia > todayIso });
+    const ultimoDoMes = monthEnd(monthKey(dia));
+    if (dia === to || dia === ultimoDoMes) {
+      pontos.push({ date: dia, balance: saldo, projected: dia > todayIso, rotulo: formatMonthKey(monthKey(dia)) });
+    }
   }
   return pontos;
+}
+
+function diasEntre(from: string, to: string): number {
+  let dias = 1;
+  for (let dia = from; dia < to; dia = addDays(dia, 1)) {
+    dias += 1;
+    if (dias > MAX_PONTOS) return dias; // não precisa contar o resto
+  }
+  return dias;
 }
 
 /* --------------------------------------- comparação com o mês anterior */

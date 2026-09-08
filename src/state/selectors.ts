@@ -3,14 +3,22 @@
 import { useMemo } from 'react';
 
 import { addDays, monthEnd, monthStart, today } from '../domain/date.ts';
+import { intervaloDoPeriodo, limiteDaPrevisao, type Periodo } from '../domain/period.ts';
 import { projectAll } from '../domain/recurrence.ts';
 import type { Account, Category, DisplayEntry, FinanceData } from '../domain/types.ts';
 import { useFinance } from './store.tsx';
 
-/** Lançamentos gravados e ocorrências previstas de uma janela, em ordem. */
+/**
+ * Lançamentos gravados e ocorrências previstas de uma janela, em ordem.
+ *
+ * O que está gravado sai inteiro, por mais antigo que seja. Já a projeção das
+ * recorrentes para no horizonte de `limiteDaPrevisao`: com o período "Tudo" a
+ * janela vai até 9999 e uma regra mensal sozinha geraria dezenas de milhares
+ * de linhas inventadas.
+ */
 export function entriesInRange(data: FinanceData, from: string, to: string): DisplayEntry[] {
   const stored: DisplayEntry[] = data.entries.filter((entry) => entry.date >= from && entry.date <= to);
-  const projected = projectAll(data.recurring, data.entries, from, to);
+  const projected = projectAll(data.recurring, data.entries, from, limiteDaPrevisao(to));
   return [...stored, ...projected].sort(
     (a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description),
   );
@@ -23,6 +31,12 @@ export function useEntriesInRange(from: string, to: string): DisplayEntry[] {
 
 export function useMonthEntries(month: string): DisplayEntry[] {
   return useEntriesInRange(monthStart(month), monthEnd(month));
+}
+
+/** Os lançamentos do período aberto na barra do topo. */
+export function usePeriodEntries(periodo: Periodo): DisplayEntry[] {
+  const { de, ate } = intervaloDoPeriodo(periodo);
+  return useEntriesInRange(de, ate);
 }
 
 export interface Lookups {

@@ -69,10 +69,11 @@ Outros comandos:
 
 | Comando | O que faz |
 |---|---|
-| `npm test` | Testes do domínio (81 casos) |
+| `npm test` | Testes do domínio e a simulação de uso |
 | `npm run typecheck` | Checagem de tipos |
 | `npm run build` | Build de produção em `dist/` |
 | `npm run preview` | Serve o build para conferência |
+| `npm run verificar` | **Tudo**: tipos, testes, os dois builds e as simulações no navegador |
 
 Para experimentar sem digitar nada: **Ajustes → Carregar dados de exemplo**.
 
@@ -87,11 +88,14 @@ Para experimentar sem digitar nada: **Ajustes → Carregar dados de exemplo**.
   seguintes.
 - **Compras parceladas** — informe o total e o número de parcelas; cada parcela vira um
   lançamento nos meses seguintes, somando **exatamente** o total.
-- **Painel do mês** — saldo de hoje, entradas, saídas, sobra, **o saldo caminhando dia a
-  dia até o fim do mês** (o já acontecido em linha cheia, o previsto tracejado), **o que
-  mudou em relação ao mês anterior** por categoria, gastos por categoria, entradas × saídas
-  nos últimos seis meses e saldo por conta. Alerta de contas vencidas que continuam como
-  previstas.
+- **Período à escolha** — dia, mês, trimestre, ano, um intervalo de datas ou **Tudo**. As
+  setas andam no grão escolhido, e o painel e a lista de lançamentos acompanham. "Tudo" é o
+  que mostra o lançamento marcado para daqui a oito meses ou o de dois anos atrás — antes
+  eles não apareciam em canto nenhum.
+- **Painel** — saldo de hoje, entradas, saídas, sobra, **o saldo caminhando ao longo do
+  período** (o já acontecido em linha cheia, o previsto tracejado), **o que mudou em relação
+  ao período anterior** por categoria, gastos por categoria, entradas × saídas nos últimos
+  doze meses e saldo por conta. Alerta de contas vencidas que continuam como previstas.
 - **Contas e categorias** editáveis, com cores e ícones.
 
 Cadastrar as três coisas — avulso, parcelado e recorrente — acontece num lugar só, o botão
@@ -102,6 +106,9 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
+- **Apagar conta sem mistério** — em vez de "tem lançamentos" e um arquivamento calado, o
+  app diz *o que* aponta para ela ("2 lançamentos e 1 conta recorrente"), leva você até
+  esses lançamentos e oferece passar tudo para outra conta antes de apagar.
 - Tema claro/escuro (ou o do sistema), navegação lateral no desktop e barra inferior com
   botão flutuante no celular.
 
@@ -263,6 +270,30 @@ pelo mouse não dava, porque o seletor só produz datas completas.
 ```bash
 npm run build:single && npm run test:telas
 ```
+
+### Simulação de uso
+
+`src/data/carteira-exemplo.ts` monta a carteira do caso real — **duas pessoas, três contas
+correntes, quatro cartões, um investimento**, doze meses de histórico, quatro parcelamentos,
+cinco contas recorrentes e transferências. Ela é usada por dois lugares, de propósito o
+mesmo arquivo:
+
+- `src/simulacao.test.ts` percorre o caminho inteiro sem navegador — cadastrar, editar e
+  apagar as três formas de lançamento, conferir os totais por período, sincronizar entre
+  dois aparelhos — e tem uma seção **"não volta a acontecer"** com um caso nomeado para cada
+  defeito já corrigido;
+- `test-navegador/simulacao.mjs` abre o app de verdade num Chromium com essa carteira,
+  em nove larguras e nos dois temas, e confere que nada estoura para os lados, que o seletor
+  de período funciona em todos os grãos e que apagar uma conta faz o que promete.
+
+```bash
+npm run build:single && npm run test:simulacao
+```
+
+Toda alteração passa por `npm run verificar` antes de virar deploy, e o workflow do GitHub
+Actions roda as duas simulações antes de publicar: uma versão que não sobrevive a elas não
+chega ao ar. Cada regressão da lista foi vista **falhando** contra o código de antes da
+correção — um teste que nunca falhou não prova nada.
 
 ### Testar o banco de verdade
 

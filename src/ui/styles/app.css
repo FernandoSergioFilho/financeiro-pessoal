@@ -383,7 +383,38 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .month-nav .label {
   min-width: 9.5rem; text-align: center;
   font-size: 0.86rem; font-weight: 600; color: var(--text);
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 0; background: transparent; cursor: pointer;
+  padding: 5px 9px; border-radius: 6px;
 }
+.month-nav .label:hover { background: var(--surface-2); }
+.month-nav .label .seta { font-size: 0.7em; color: var(--text-3); }
+.month-nav button:disabled { opacity: 0.35; cursor: default; }
+.month-nav button:disabled:hover { background: transparent; color: var(--text-2); }
+
+/* O menu de granularidade fica ancorado no seletor, não no topo da página. */
+.periodo { position: relative; display: flex; align-items: center; gap: 8px; }
+.periodo-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  min-width: 12rem; padding: 5px;
+  display: grid; gap: 1px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-lg, 0 8px 28px rgba(0, 0, 0, 0.18));
+}
+.periodo-menu > button {
+  border: 0; background: transparent; cursor: pointer; text-align: left;
+  padding: 7px 10px; border-radius: 6px;
+  font-size: 0.86rem; color: var(--text);
+}
+.periodo-menu > button:hover { background: var(--surface-2); }
+.periodo-menu > button.ativo { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.periodo-datas {
+  display: grid; gap: 6px; padding: 8px 10px 4px;
+  border-top: 1px solid var(--border); margin-top: 4px;
+}
+.periodo-datas label { display: grid; gap: 3px; font-size: 0.76rem; }
+/* O rótulo curto só entra quando a barra aperta; ver a media query no fim. */
+.month-nav .label .curto { display: none; }
 
 /* Indicadores */
 .stat { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; }
@@ -741,7 +772,9 @@ textarea.input { resize: vertical; min-height: 64px; }
   h1 { font-size: 1.2rem; }
   .stat-value { font-size: 1.3rem; }
 
-  .month-nav .label { min-width: 7.6rem; font-size: 0.82rem; }
+  .month-nav .label { min-width: 0; font-size: 0.82rem; }
+  .month-nav .label .longo { display: none; }
+  .month-nav .label .curto { display: inline; }
 
   .mobile-nav {
     position: fixed;

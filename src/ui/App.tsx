@@ -1,5 +1,5 @@
 /**
- * Casca da aplicação: navegação, mês selecionado e os diálogos globais.
+ * Casca da aplicação: navegação, período selecionado e os diálogos globais.
  *
  * A rota vive no hash da URL em vez de num estado interno para que recarregar
  * a página e o botão "voltar" do navegador funcionem — no celular, voltar é o
@@ -8,11 +8,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { addMonthsToKey, currentMonthKey, formatMonthKey } from '../domain/date.ts';
+import { periodoAtual, trocarGrao, type Periodo } from '../domain/period.ts';
 import type { DisplayEntry } from '../domain/types.ts';
 import { useFinance } from '../state/store.tsx';
 import { EditEntryDialog, NewEntryDialog } from './components/EntryForms.tsx';
 import { SyncBadge } from './components/CloudPanel.tsx';
+import { PeriodPicker } from './components/PeriodPicker.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
 import { EntrarPage, EsperandoPage, NovaSenhaPage } from './pages/EntrarPage.tsx';
 import { EntriesPage } from './pages/EntriesPage.tsx';
@@ -27,12 +28,12 @@ interface Page {
   short: string;
   icon: string;
   subtitle: string;
-  /** O seletor de mês só aparece onde a tela realmente fala de um mês. */
+  /** O seletor de período só aparece onde a tela realmente fala de um período. */
   monthly: boolean;
 }
 
 const PAGES: Page[] = [
-  { id: 'painel', label: 'Painel', short: 'Painel', icon: '◎', subtitle: 'Como está o mês', monthly: true },
+  { id: 'painel', label: 'Painel', short: 'Painel', icon: '◎', subtitle: 'Como está o período', monthly: true },
   { id: 'lancamentos', label: 'Lançamentos', short: 'Lanç.', icon: '≡', subtitle: 'Tudo que entrou e saiu', monthly: true },
   { id: 'recorrentes', label: 'Contas recorrentes', short: 'Fixas', icon: '🔁', subtitle: 'O que se repete todo mês', monthly: false },
   { id: 'parceladas', label: 'Compras parceladas', short: 'Parcelas', icon: '🧾', subtitle: 'O que ainda falta pagar', monthly: false },
@@ -48,9 +49,12 @@ export function App() {
   const { loading, storageBlocked, cloud } = useFinance();
   const [theme, setTheme] = useTheme();
   const [pageId, setPageId] = useState(pageFromHash);
-  const [month, setMonth] = useState(currentMonthKey);
+  const [periodo, setPeriodo] = useState<Periodo>(periodoAtual);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<DisplayEntry | null>(null);
+  // "Ver os lançamentos desta conta", pedido de Ajustes: abre Lançamentos já
+  // filtrado e com o período em "Tudo", que é onde o movimento escondido está.
+  const [foco, setFoco] = useState<{ conta: string; token: number } | null>(null);
 
   useEffect(() => {
     const sync = () => setPageId(pageFromHash());
@@ -144,22 +148,7 @@ export function App() {
             <p>{page.subtitle}</p>
           </div>
 
-          {page.monthly && (
-            <div className="month-nav">
-              <button type="button" onClick={() => setMonth(addMonthsToKey(month, -1))} aria-label="Mês anterior">
-                ‹
-              </button>
-              <span className="label">{formatMonthKey(month)}</span>
-              <button type="button" onClick={() => setMonth(addMonthsToKey(month, 1))} aria-label="Próximo mês">
-                ›
-              </button>
-            </div>
-          )}
-          {page.monthly && month !== currentMonthKey() && (
-            <button type="button" className="btn sm ghost" onClick={() => setMonth(currentMonthKey())}>
-              Hoje
-            </button>
-          )}
+          {page.monthly && <PeriodPicker periodo={periodo} onChange={setPeriodo} />}
           <SyncBadge />
         </header>
 
@@ -180,14 +169,35 @@ export function App() {
             </div>
           )}
           {page.id === 'painel' && (
-            <Dashboard month={month} onOpenEntry={setEditing} onNew={() => setCreating(true)} onNavigate={navigate} />
+            <Dashboard
+              periodo={periodo}
+              onOpenEntry={setEditing}
+              onNew={() => setCreating(true)}
+              onNavigate={navigate}
+            />
           )}
           {page.id === 'lancamentos' && (
-            <EntriesPage month={month} onOpenEntry={setEditing} onNew={() => setCreating(true)} />
+            <EntriesPage
+              periodo={periodo}
+              foco={foco}
+              onOpenEntry={setEditing}
+              onNew={() => setCreating(true)}
+            />
           )}
           {page.id === 'recorrentes' && <RecurringPage onNew={() => setCreating(true)} />}
           {page.id === 'parceladas' && <PurchasesPage onNew={() => setCreating(true)} />}
-          {page.id === 'ajustes' && <SettingsPage month={month} theme={theme} onThemeChange={setTheme} />}
+          {page.id === 'ajustes' && (
+            <SettingsPage
+              periodo={periodo}
+              theme={theme}
+              onThemeChange={setTheme}
+              onVerConta={(conta) => {
+                setPeriodo((atual) => trocarGrao(atual, 'tudo'));
+                setFoco({ conta, token: Date.now() });
+                navigate('lancamentos');
+              }}
+            />
+          )}
         </main>
       </div>
 

@@ -4,6 +4,7 @@
  * prontos nas ações, o que mantém a função determinística e testável.
  */
 
+import { contaEmUso } from '../domain/accounts.ts';
 import type {
   Account,
   Category,
@@ -63,14 +64,13 @@ function skipOccurrence(
   );
 }
 
-/** Uma conta só pode sumir de vez se nada mais apontar para ela. */
-export function accountInUse(data: FinanceData, id: string): boolean {
-  return (
-    data.entries.some((e) => e.accountId === id || e.toAccountId === id) ||
-    data.recurring.some((r) => r.accountId === id || r.toAccountId === id) ||
-    data.purchases.some((p) => p.accountId === id)
-  );
-}
+/**
+ * Uma conta só pode sumir de vez se nada mais apontar para ela.
+ *
+ * A contagem detalhada — e o porquê de a conta parecer vazia sem estar — mora
+ * em `domain/accounts.ts`; aqui fica só o sim ou não que o reducer precisa.
+ */
+export { contaEmUso as accountInUse };
 
 export function reducer(state: FinanceData, action: Action): FinanceData {
   switch (action.type) {
@@ -102,11 +102,26 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
         target?.recurringId && target.occurrenceDate
           ? skipOccurrence(state.recurring, target.recurringId, target.occurrenceDate, action.deletedAt)
           : state.recurring;
+
+      // Apagada a última parcela, a compra não representa mais nada: some
+      // junto. Antes ela ficava para trás, invisível na prática, e continuava
+      // prendendo a conta a que apontava — a conta que "não dá para apagar".
+      const compraVazia =
+        target?.purchaseId && !entries.some((entry) => entry.purchaseId === target.purchaseId)
+          ? target.purchaseId
+          : null;
+
       return {
         ...state,
         entries,
         recurring,
-        tombstones: withTombstones(state, action.deletedAt, ['entries', action.id]),
+        purchases: compraVazia ? state.purchases.filter((p) => p.id !== compraVazia) : state.purchases,
+        tombstones: withTombstones(
+          state,
+          action.deletedAt,
+          ['entries', action.id],
+          ...(compraVazia ? ([['purchases', compraVazia]] as [TableName, string][]) : []),
+        ),
       };
     }
 
@@ -179,7 +194,7 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
 
     case 'account/delete':
       // Com movimento na conta, apagar apagaria histórico junto: arquiva.
-      return accountInUse(state, action.id)
+      return contaEmUso(state, action.id)
         ? reducer(state, {
             type: 'account/update',
             id: action.id,

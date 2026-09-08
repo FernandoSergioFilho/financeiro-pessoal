@@ -14,7 +14,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit",
     "verificar-seguranca": "node scripts/verificar-seguranca.mjs",
-    "test:telas": "node test-navegador/campos-de-data.mjs"
+    "test:telas": "node test-navegador/campos-de-data.mjs",
+    "test:simulacao": "node test-navegador/simulacao.mjs",
+    "verificar": "npm run typecheck && npm test && npm run build && npm run build:single && npm run test:telas && npm run test:simulacao"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

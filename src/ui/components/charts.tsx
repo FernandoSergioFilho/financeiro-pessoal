@@ -219,7 +219,15 @@ export function SaldoDoMes({ data }: { data: DayPoint[] }) {
  * passam com folga nos dois temas. E, de qualquer forma, quem carrega o sentido
  * aqui é o lado do eixo, não a cor.
  */
-export function ComparativoCategorias({ data, limit = 6 }: { data: CategoryChange[]; limit?: number }) {
+export function ComparativoCategorias({
+  data,
+  limit = 6,
+  comparadoCom = 'ao período anterior',
+}: {
+  data: CategoryChange[];
+  limit?: number;
+  comparadoCom?: string;
+}) {
   if (data.length === 0) return null;
 
   const linhas = data.slice(0, limit);
@@ -256,7 +264,7 @@ export function ComparativoCategorias({ data, limit = 6 }: { data: CategoryChang
         );
       })}
       <p className="hint">
-        Comparado ao mês anterior. À direita, em laranja, o que subiu; à esquerda, em azul, o que caiu.
+        Comparado {comparadoCom}. À direita, em laranja, o que subiu; à esquerda, em azul, o que caiu.
       </p>
     </div>
   );

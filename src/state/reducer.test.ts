@@ -141,6 +141,34 @@ describe('contas', () => {
   it('reconhece a conta usada apenas por uma regra recorrente', () => {
     expect(accountInUse(state({ recurring: [rule()] }), 'a1')).toBe(true);
   });
+
+  /*
+   * Regressão. A conta que "não dá para apagar mesmo sem nenhum lançamento":
+   * apagar as parcelas uma a uma deixava a compra para trás, sem parcela
+   * nenhuma, e ela sozinha segurava a conta para sempre.
+   */
+  it('apagada a última parcela, a compra some junto e solta a conta', () => {
+    const { purchase, entries } = buildPurchase(
+      { description: 'Fone', totalAmount: 30000, installments: 3, firstDate: '2026-09-05',
+        accountId: 'a1', categoryId: 'c1' },
+      (() => { let n = 0; return () => `id${(n += 1)}`; })(),
+      STAMP,
+    );
+    let s = reducer(state(), { type: 'purchase/create', purchase, entries });
+
+    for (const parcela of entries.slice(0, -1)) {
+      s = reducer(s, { type: 'entry/delete', id: parcela.id, deletedAt: STAMP });
+      expect(s.purchases).toHaveLength(1); // ainda sobra parcela: a compra fica
+    }
+
+    s = reducer(s, { type: 'entry/delete', id: entries.at(-1)!.id, deletedAt: STAMP });
+    expect(s.purchases).toHaveLength(0);
+    expect(accountInUse(s, 'a1')).toBe(false);
+    expect(s.tombstones).toContainEqual({ table: 'purchases', id: purchase.id, deletedAt: STAMP });
+
+    // E aí apagar de verdade funciona, em vez de arquivar caladamente.
+    expect(reducer(s, { type: 'account/delete', id: 'a1', deletedAt: STAMP }).accounts).toHaveLength(0);
+  });
 });
 
 describe('marcas de exclusão', () => {

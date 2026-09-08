@@ -1,11 +1,12 @@
-/** Lista completa do mês, com busca e filtros. */
+/** Lista do período aberto na barra, com busca e filtros. */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { formatMoney } from '../../domain/money.ts';
+import { rotuloDoPeriodo, type Periodo } from '../../domain/period.ts';
 import { periodTotals } from '../../domain/summary.ts';
 import type { DisplayEntry, EntryKind } from '../../domain/types.ts';
-import { useLookups, useMonthEntries } from '../../state/selectors.ts';
+import { useLookups, usePeriodEntries } from '../../state/selectors.ts';
 import { EntryList } from '../components/EntryList.tsx';
 import { Card } from '../components/primitives.tsx';
 
@@ -20,20 +21,33 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 export function EntriesPage({
-  month,
+  periodo,
+  foco,
   onOpenEntry,
   onNew,
 }: {
-  month: string;
+  periodo: Periodo;
+  /** Conta que outra tela mandou abrir aqui — "ver os lançamentos desta conta". */
+  foco: { conta: string; token: number } | null;
   onOpenEntry: (entry: DisplayEntry) => void;
   onNew: () => void;
 }) {
-  const entries = useMonthEntries(month);
+  const entries = usePeriodEntries(periodo);
   const { accounts, categories } = useLookups();
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
+
+  // O `token` muda a cada pedido, para que clicar de novo no mesmo botão
+  // volte a aplicar o filtro depois de o usuário tê-lo limpado à mão.
+  useEffect(() => {
+    if (!foco) return;
+    setAccountId(foco.conta);
+    setFilter('all');
+    setSearch('');
+    setCategoryId('');
+  }, [foco]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -106,7 +120,7 @@ export function EntriesPage({
         </div>
         <span className="spacer" />
         <span className="dim num" style={{ fontSize: '0.82rem' }}>
-          {filtered.length} {filtered.length === 1 ? 'lançamento' : 'lançamentos'} ·{' '}
+          {filtered.length} {filtered.length === 1 ? 'lançamento' : 'lançamentos'} em {rotuloDoPeriodo(periodo)} ·{' '}
           <span className="good">{formatMoney(totals.income)}</span> ·{' '}
           <span className="bad">{formatMoney(totals.expense)}</span>
         </span>

@@ -1,89 +1,111 @@
-/** Painel do mês: onde o dinheiro está, para onde foi e o que ainda vem. */
+/** Painel do período: onde o dinheiro está, para onde foi e o que ainda vem. */
 
 import { useMemo } from 'react';
 
-import { addDays, addMonthsToKey, formatDate, monthEnd, monthStart, today } from '../../domain/date.ts';
+import { addDays, addMonthsToKey, formatDate, monthEnd, monthKey, today } from '../../domain/date.ts';
 import { formatMoney } from '../../domain/money.ts';
 import {
+  INICIO_DOS_TEMPOS,
+  intervaloVisivel,
+  moverPeriodo,
+  podeMover,
+  rotuloDoPeriodo,
+  type Periodo,
+} from '../../domain/period.ts';
+import {
   accountBalance,
+  balanceWalk,
   categoryChanges,
-  dailyBalance,
   monthlySeries,
   netWorth,
   periodTotals,
   totalsByCategory,
 } from '../../domain/summary.ts';
 import type { DisplayEntry } from '../../domain/types.ts';
-import { entriesInRange, useLookups, useMonthEntries, useOverdue } from '../../state/selectors.ts';
+import { entriesInRange, useLookups, useOverdue, usePeriodEntries } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { CategoryBars, ComparativoCategorias, MonthlyBars, SaldoDoMes } from '../components/charts.tsx';
 import { EntryList } from '../components/EntryList.tsx';
 import { Card, Dot, EmptyState } from '../components/primitives.tsx';
 
-const SERIES_MONTHS = 6;
+/** Quantas barras cabem no gráfico de entradas e saídas por mês. */
+const MAX_BARRAS = 12;
 
 export function Dashboard({
-  month,
+  periodo,
   onOpenEntry,
   onNew,
   onNavigate,
 }: {
-  month: string;
+  periodo: Periodo;
   onOpenEntry: (entry: DisplayEntry) => void;
   onNew: () => void;
   onNavigate: (page: string) => void;
 }) {
   const { data, cloud } = useFinance();
   const { accounts, categories } = useLookups();
-  const monthEntries = useMonthEntries(month);
+  const entradas = usePeriodEntries(periodo);
   const overdue = useOverdue();
 
-  const totals = useMemo(() => periodTotals(monthEntries), [monthEntries]);
+  // O eixo do gráfico não pode ir do ano zero ao ano 9999: com "Tudo", o
+  // intervalo encolhe para o que existe de verdade.
+  const janela = useMemo(
+    () => intervaloVisivel(periodo, data.entries.map((entry) => entry.date)),
+    [periodo, data.entries],
+  );
+
+  const totals = useMemo(() => periodTotals(entradas), [entradas]);
   const byCategory = useMemo(
-    () => totalsByCategory(monthEntries, categories, 'expense'),
-    [monthEntries, categories],
+    () => totalsByCategory(entradas, categories, 'expense'),
+    [entradas, categories],
   );
 
   // O saldo de hoje conta só o que já aconteceu; a projeção soma o que ainda
-  // está previsto até o fim do mês — a diferença é o que dá ou não para gastar.
+  // está previsto até o fim do período — a diferença é o que dá ou não para gastar.
   const balanceNow = useMemo(
     () => netWorth(accounts, data.entries, { onlySettled: true, upTo: today() }),
     [accounts, data.entries],
   );
   const projected = useMemo(() => {
-    const end = monthEnd(month);
-    const upToEnd = entriesInRange(data, '0000-01-01', end);
-    return netWorth(accounts, upToEnd, { upTo: end });
-  }, [accounts, data, month]);
+    const upToEnd = entriesInRange(data, INICIO_DOS_TEMPOS, janela.ate);
+    return netWorth(accounts, upToEnd, { upTo: janela.ate });
+  }, [accounts, data, janela.ate]);
 
-  const series = useMemo(() => {
-    const months = Array.from({ length: SERIES_MONTHS }, (_, i) => addMonthsToKey(month, i - (SERIES_MONTHS - 1)));
-    const range = entriesInRange(data, `${months[0]}-01`, monthEnd(months.at(-1)!));
-    return monthlySeries(range, months);
-  }, [data, month]);
-
-  // O saldo com que o mês começou: tudo que aconteceu antes do dia 1.
+  // O saldo com que o período começou: tudo que aconteceu antes do primeiro dia.
   const saldoDeAbertura = useMemo(() => {
-    const anterior = entriesInRange(data, '0000-01-01', addDays(monthStart(month), -1));
-    return netWorth(accounts, anterior, { upTo: addDays(monthStart(month), -1) });
-  }, [accounts, data, month]);
+    const vespera = addDays(janela.de, -1);
+    const anterior = entriesInRange(data, INICIO_DOS_TEMPOS, vespera);
+    return netWorth(accounts, anterior, { upTo: vespera });
+  }, [accounts, data, janela.de]);
 
   const percurso = useMemo(
-    () => dailyBalance(monthEntries, month, saldoDeAbertura, today()),
-    [monthEntries, month, saldoDeAbertura],
+    () => balanceWalk(entradas, janela.de, janela.ate, saldoDeAbertura, today()),
+    [entradas, janela.de, janela.ate, saldoDeAbertura],
   );
 
-  const mesAnterior = useMemo(() => {
-    const chave = addMonthsToKey(month, -1);
-    return entriesInRange(data, monthStart(chave), monthEnd(chave));
-  }, [data, month]);
+  // Sempre os doze meses que terminam no período aberto: um mês sozinho não
+  // conta história nenhuma, e é a comparação que mostra o que fugiu do normal.
+  const series = useMemo(() => {
+    const ultimo = monthKey(janela.ate);
+    const meses = Array.from({ length: MAX_BARRAS }, (_, i) => addMonthsToKey(ultimo, i - (MAX_BARRAS - 1)));
+    const range = entriesInRange(data, `${meses[0]}-01`, monthEnd(meses.at(-1)!));
+    return monthlySeries(range, meses);
+  }, [data, janela.ate]);
+
+  const comparavel = podeMover(periodo);
+  const anterior = useMemo(() => {
+    if (!comparavel) return [];
+    const passado = moverPeriodo(periodo, -1);
+    const { de, ate } = intervaloVisivel(passado, []);
+    return entriesInRange(data, de, ate);
+  }, [comparavel, data, periodo]);
 
   const mudancas = useMemo(
-    () => categoryChanges(monthEntries, mesAnterior, categories),
-    [monthEntries, mesAnterior, categories],
+    () => (comparavel ? categoryChanges(entradas, anterior, categories) : []),
+    [comparavel, entradas, anterior, categories],
   );
 
-  const recent = useMemo(() => [...monthEntries].reverse().slice(0, 8), [monthEntries]);
+  const recent = useMemo(() => [...entradas].reverse().slice(0, 8), [entradas]);
 
   if (data.entries.length === 0 && data.recurring.length === 0) {
     // Sem o ramo "entre para sincronizar" que existia aqui: com o portão de
@@ -109,6 +131,8 @@ export function Dashboard({
       </Card>
     );
   }
+
+  const nomeDoPeriodo = periodo.grao === 'tudo' ? 'de tudo' : `de ${rotuloDoPeriodo(periodo).toLowerCase()}`;
 
   return (
     <>
@@ -138,21 +162,21 @@ export function Dashboard({
           <span className="stat-hint">Somando o que já entrou e saiu</span>
         </div>
         <div className="card stat">
-          <span className="stat-label">Entradas do mês</span>
+          <span className="stat-label">Entradas</span>
           <span className="stat-value num good">{formatMoney(totals.income)}</span>
           <span className="stat-hint">
             {totals.pendingIncome > 0 ? `${formatMoney(totals.pendingIncome)} ainda previstos` : 'Tudo confirmado'}
           </span>
         </div>
         <div className="card stat">
-          <span className="stat-label">Saídas do mês</span>
+          <span className="stat-label">Saídas</span>
           <span className="stat-value num bad">{formatMoney(totals.expense)}</span>
           <span className="stat-hint">
             {totals.pendingExpense > 0 ? `${formatMoney(totals.pendingExpense)} a pagar` : 'Tudo confirmado'}
           </span>
         </div>
         <div className="card stat">
-          <span className="stat-label">Sobra do mês</span>
+          <span className="stat-label">Sobra</span>
           <span className={`stat-value num ${totals.net < 0 ? 'bad' : 'good'}`}>{formatMoney(totals.net)}</span>
           <span className="stat-hint">Saldo projetado: {formatMoney(projected)}</span>
         </div>
@@ -161,16 +185,27 @@ export function Dashboard({
       {/* `start`: sem isto os dois cartões esticam até a altura do mais alto, e
           o gráfico de linha fica com um vazio enorme embaixo. */}
       <div className="grid split" style={{ alignItems: 'start' }}>
-        <Card title="Saldo ao longo do mês">
-          <SaldoDoMes data={percurso} />
-        </Card>
-
-        <Card title="O que mudou desde o mês passado">
-          {mudancas.length > 0 ? (
-            <ComparativoCategorias data={mudancas} />
+        <Card title={percurso.length > 1 ? `Saldo ao longo ${nomeDoPeriodo}` : 'Saldo no dia'}>
+          {percurso.length > 1 ? (
+            <SaldoDoMes data={percurso} />
           ) : (
             <p className="dim" style={{ fontSize: '0.86rem' }}>
-              Nada mudou em relação ao mês anterior — ou ainda não há com o que comparar.
+              Um dia sozinho não tem percurso. O saldo ao fim de {formatDate(janela.ate)} é{' '}
+              <strong className="num">{formatMoney(percurso[0]?.balance ?? saldoDeAbertura)}</strong>.
+            </p>
+          )}
+        </Card>
+
+        <Card title={comparavel ? 'O que mudou desde o período anterior' : 'O que mudou'}>
+          {!comparavel ? (
+            <p className="dim" style={{ fontSize: '0.86rem' }}>
+              Escolha um dia, mês, trimestre ou ano para comparar com o período anterior.
+            </p>
+          ) : mudancas.length > 0 ? (
+            <ComparativoCategorias data={mudancas} comparadoCom={`com ${rotuloDoPeriodo(moverPeriodo(periodo, -1)).toLowerCase()}`} />
+          ) : (
+            <p className="dim" style={{ fontSize: '0.86rem' }}>
+              Nada mudou em relação ao período anterior — ou ainda não há com o que comparar.
             </p>
           )}
         </Card>
@@ -195,13 +230,13 @@ export function Dashboard({
               <CategoryBars data={byCategory} />
             ) : (
               <p className="dim" style={{ fontSize: '0.86rem' }}>
-                Nenhuma saída registrada neste mês.
+                Nenhuma saída registrada neste período.
               </p>
             )}
           </Card>
 
           <Card title="Entradas e saídas por mês">
-            <MonthlyBars data={series} currentKey={month} />
+            <MonthlyBars data={series} currentKey={monthKey(today())} />
           </Card>
         </div>
       </div>
@@ -212,8 +247,8 @@ export function Dashboard({
             .filter((account) => !account.archived)
             .map((account) => {
               const balance = accountBalance(account, data.entries, { onlySettled: true });
-              const withPending = accountBalance(account, entriesInRange(data, '0000-01-01', monthEnd(month)), {
-                upTo: monthEnd(month),
+              const withPending = accountBalance(account, entriesInRange(data, INICIO_DOS_TEMPOS, janela.ate), {
+                upTo: janela.ate,
               });
               return (
                 <div key={account.id} className="row" style={{ alignItems: 'flex-start', gap: 10 }}>

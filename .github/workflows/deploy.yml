@@ -37,6 +37,18 @@ jobs:
       - name: Checagem de tipos
         run: npm run typecheck
 
+      # As simulações rodam o app de verdade num Chromium, com a carteira de
+      # `carteiraExemplo` — duas pessoas, três contas, quatro cartões. Existem
+      # porque os defeitos que mais doeram (a tela sumindo ao apagar a data, a
+      # conta que não deixava apagar) passavam pelos testes de unidade e só
+      # apareciam na tela. Uma versão que não sobrevive a elas não vai ao ar.
+      - name: Navegador
+        run: |
+          npx playwright install --with-deps chromium
+          npm run build:single
+          npm run test:telas
+          npm run test:simulacao
+
       # A configuração do Supabase vem do .env.production versionado, e não de
       # secrets: a chave `anon` é entregue ao navegador de todo visitante, então
       # escondê-la num secret não protegeria nada — quem protege os dados são as

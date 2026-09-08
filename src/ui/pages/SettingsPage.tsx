@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 
+import { descreverUso, limparComprasOrfas, moverConta, usoDaConta } from '../../domain/accounts.ts';
 import { contarDuplicados, juntarDuplicados } from '../../domain/duplicates.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { accountBalance } from '../../domain/summary.ts';
@@ -15,7 +16,8 @@ import {
   readBackup,
   type ResultadoImportacao,
 } from '../../data/exchange.ts';
-import { useLookups, useMonthEntries } from '../../state/selectors.ts';
+import { rotuloDoPeriodo, type Periodo } from '../../domain/period.ts';
+import { useLookups, usePeriodEntries } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '../components/primitives.tsx';
 import { CloudPanel } from '../components/CloudPanel.tsx';
@@ -469,18 +471,170 @@ function JuntarRepetidos({ onConfirm, onCancel }: { onConfirm: () => void; onCan
   );
 }
 
+/**
+ * Apagar uma conta, dizendo o que a segura.
+ *
+ * O diálogo antigo só sabia dizer "tem lançamentos" e arquivava. Quando o
+ * usuário não achava nenhum, não havia o que fazer — e ele tinha razão: a tela
+ * de Lançamentos só mostrava um mês, e uma compra parcelada sem parcelas
+ * segurava a conta calada. Agora a conta é dita por extenso, dá para ir ver os
+ * tais lançamentos, e existe a saída de mover tudo para outra conta.
+ */
+function ApagarConta({
+  account,
+  onVerConta,
+  onAviso,
+  onClose,
+}: {
+  account: Account;
+  onVerConta: (accountId: string) => void;
+  onAviso: (mensagem: string) => void;
+  onClose: () => void;
+}) {
+  const { data, api } = useFinance();
+  const { accounts } = useLookups();
+  const uso = useMemo(() => usoDaConta(data, account.id), [data, account.id]);
+  const outras = accounts.filter((outra) => outra.id !== account.id && !outra.archived);
+  const [destino, setDestino] = useState(outras[0]?.id ?? '');
+
+  if (uso.total === 0) {
+    return (
+      <ConfirmDialog
+        title="Apagar conta"
+        confirmLabel="Apagar"
+        message={`"${account.name}" não tem nenhum lançamento, conta recorrente nem compra parcelada. Será apagada.`}
+        onConfirm={() => {
+          api.deleteAccount(account.id);
+          onClose();
+        }}
+        onCancel={onClose}
+      />
+    );
+  }
+
+  function moverEApagar() {
+    const agora = new Date().toISOString();
+    const limpo = limparComprasOrfas(data, agora);
+    const { data: movido, movidos, transferenciasDescartadas } = moverConta(limpo.data, account.id, destino, agora);
+    api.replaceData(movido);
+    api.deleteAccount(account.id);
+    onClose();
+
+    const nomeDestino = accounts.find((outra) => outra.id === destino)?.name ?? 'a outra conta';
+    const partes = [`"${account.name}" foi apagada.`];
+    if (movidos > 0) {
+      partes.push(`${movidos} ${movidos === 1 ? 'registro passou' : 'registros passaram'} para ${nomeDestino}.`);
+    }
+    if (limpo.removidas > 0) {
+      partes.push(
+        `${limpo.removidas} ${limpo.removidas === 1 ? 'compra sem parcelas foi removida' : 'compras sem parcelas foram removidas'}.`,
+      );
+    }
+    if (transferenciasDescartadas > 0) {
+      partes.push(
+        `${transferenciasDescartadas} ${transferenciasDescartadas === 1 ? 'transferência entre as duas contas deixou' : 'transferências entre as duas contas deixaram'} de fazer sentido e ${transferenciasDescartadas === 1 ? 'saiu' : 'saíram'}.`,
+      );
+    }
+    onAviso(partes.join(' '));
+  }
+
+  return (
+    <Dialog
+      title={`Apagar "${account.name}"`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Cancelar
+          </button>
+          <span className="spacer" />
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              api.updateAccount(account.id, { archived: true });
+              onClose();
+              onAviso(`"${account.name}" foi arquivada: some dos formulários e o histórico continua correto.`);
+            }}
+          >
+            Só arquivar
+          </button>
+          <button type="button" className="btn primary" onClick={moverEApagar} disabled={!destino}>
+            Mover e apagar
+          </button>
+        </>
+      }
+    >
+      <p style={{ marginTop: 0 }}>
+        Ainda aponta para esta conta: <strong>{descreverUso(uso)}</strong>.
+      </p>
+
+      {uso.lancamentos > 0 && (
+        <p className="dim" style={{ fontSize: '0.86rem' }}>
+          <button
+            type="button"
+            className="btn sm ghost"
+            onClick={() => {
+              onClose();
+              onVerConta(account.id);
+            }}
+          >
+            Ver esses lançamentos
+          </button>{' '}
+          — abre a lista filtrada por esta conta, com o período em &ldquo;Tudo&rdquo;.
+        </p>
+      )}
+
+      {uso.comprasOrfas > 0 && (
+        <p className="hint">
+          {uso.comprasOrfas === 1
+            ? 'Uma compra parcelada ficou sem nenhuma parcela'
+            : `${uso.comprasOrfas} compras parceladas ficaram sem nenhuma parcela`}{' '}
+          — sobra de quando as parcelas foram apagadas uma a uma. Elas somem junto.
+        </p>
+      )}
+
+      {outras.length > 0 ? (
+        <Field label="Passar tudo para">
+          {(id) => (
+            <select
+              id={id}
+              className="input select"
+              value={destino}
+              onChange={(event) => setDestino(event.target.value)}
+            >
+              {outras.map((outra) => (
+                <option key={outra.id} value={outra.id}>
+                  {outra.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      ) : (
+        <p className="hint">
+          Não há outra conta ativa para receber o movimento. Crie uma antes, ou use &ldquo;Só arquivar&rdquo;.
+        </p>
+      )}
+    </Dialog>
+  );
+}
+
 export function SettingsPage({
-  month,
+  periodo,
   theme,
   onThemeChange,
+  onVerConta,
 }: {
-  month: string;
+  periodo: Periodo;
   theme: ThemeChoice;
   onThemeChange: (theme: ThemeChoice) => void;
+  /** Abre Lançamentos filtrado por esta conta, com o período em "Tudo". */
+  onVerConta: (accountId: string) => void;
 }) {
   const { data, api, cloud } = useFinance();
   const { accounts, categories, accountName, categoryName } = useLookups();
-  const monthEntries = useMonthEntries(month);
+  const monthEntries = usePeriodEntries(periodo);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [accountDialog, setAccountDialog] = useState<{ account?: Account } | null>(null);
@@ -527,6 +681,21 @@ export function SettingsPage({
   return (
     <>
       <CloudPanel />
+
+      {/* O recado do que acabou de acontecer fica no topo, perto de onde a ação
+          foi disparada. Enterrado no fim da página ninguém via. */}
+      {message && (
+        <div className="banner" role="status">
+          <span className="emoji" aria-hidden="true">
+            ✅
+          </span>
+          <span>{message}</span>
+          <span className="spacer" />
+          <button type="button" className="btn sm ghost" onClick={() => setMessage('')} aria-label="Fechar aviso">
+            ✕
+          </button>
+        </div>
+      )}
 
       {repetidos > 0 && (
         <div className="banner warn">
@@ -614,7 +783,7 @@ export function SettingsPage({
                       </button>
                       {!account.archived && (
                         <button type="button" className="btn ghost sm" onClick={() => setRemovingAccount(account)}>
-                          {api.isAccountInUse(account.id) ? 'Arquivar' : 'Apagar'}
+                          Apagar
                         </button>
                       )}
                     </div>
@@ -685,7 +854,7 @@ export function SettingsPage({
               className="btn"
               onClick={() =>
                 downloadCsv(
-                  `lancamentos-${month}.csv`,
+                  `lancamentos-${rotuloDoPeriodo(periodo).toLowerCase().replace(/[^0-9a-zà-ú]+/gi, '-')}.csv`,
                   entriesToCsv(monthEntries, { accountName, categoryName }),
                 )
               }
@@ -717,11 +886,6 @@ export function SettingsPage({
               }}
             />
           </div>
-          {message && (
-            <p className="hint" style={{ marginTop: 10 }} role="status">
-              {message}
-            </p>
-          )}
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
           <div className="row wrap">
             <button type="button" className="btn" onClick={() => api.loadDemo()}>
@@ -767,19 +931,11 @@ export function SettingsPage({
       {categoryDialog && <CategoryDialog category={categoryDialog.category} onClose={() => setCategoryDialog(null)} />}
 
       {removingAccount && (
-        <ConfirmDialog
-          title={api.isAccountInUse(removingAccount.id) ? 'Arquivar conta' : 'Apagar conta'}
-          confirmLabel={api.isAccountInUse(removingAccount.id) ? 'Arquivar' : 'Apagar'}
-          message={
-            api.isAccountInUse(removingAccount.id)
-              ? `"${removingAccount.name}" tem lançamentos, então ela é arquivada em vez de apagada: some dos formulários, mas o histórico continua correto.`
-              : `"${removingAccount.name}" nunca foi usada e será apagada.`
-          }
-          onConfirm={() => {
-            api.deleteAccount(removingAccount.id);
-            setRemovingAccount(null);
-          }}
-          onCancel={() => setRemovingAccount(null)}
+        <ApagarConta
+          account={removingAccount}
+          onVerConta={onVerConta}
+          onAviso={setMessage}
+          onClose={() => setRemovingAccount(null)}
         />
       )}
 
