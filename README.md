@@ -106,6 +106,11 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
+- **Cópias automáticas** — o app guarda sozinho o estado anterior de tempos em tempos, e
+  **sempre no instante antes de uma perda grande** (um "apagar tudo" sem querer, uma
+  importação torta, uma sincronização que trouxe a carteira vazia por cima da cheia). São
+  duas cópias com propósitos diferentes: a de rotina, que se sobrescreve, e a de queda, que
+  só outra queda substitui. Em Ajustes dá para ver, baixar e restaurar cada uma.
 - **Importar o CSV do banco** — o extrato ou a fatura que o Nubank (e os outros) exportam.
   O app descobre sozinho o separador e as colunas de data, descrição e valor, compara com o
   que você já lançou e mostra linha por linha o que é novo, o que já existe e o que ficou em

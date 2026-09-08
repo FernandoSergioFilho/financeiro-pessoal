@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { descreverUso, limparComprasOrfas, moverConta, usoDaConta } from '../../domain/accounts.ts';
+import { descreverCopia, type Copia } from '../../domain/backup.ts';
 import { contarDuplicados, juntarDuplicados } from '../../domain/duplicates.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { accountBalance } from '../../domain/summary.ts';
@@ -645,6 +646,8 @@ export function SettingsPage({
   const [resetting, setResetting] = useState(false);
   const [importando, setImportando] = useState(false);
   const [importandoBanco, setImportandoBanco] = useState(false);
+  const [copias, setCopias] = useState<Copia[]>([]);
+  const [restaurando, setRestaurando] = useState<Copia | null>(null);
   const [juntando, setJuntando] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -892,6 +895,49 @@ export function SettingsPage({
             />
           </div>
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
+
+          {/* As cópias que o app guarda sozinho. Ficam aqui e não num aviso
+              porque, no dia em que forem precisas, é aqui que a pessoa vem
+              procurar — junto do backup manual. */}
+          <div className="setting-text">
+            <div className="title">Cópias automáticas</div>
+            <div className="dim">
+              O app guarda sozinho o estado anterior de tempos em tempos, e sempre antes de uma perda grande —
+              um &ldquo;apagar tudo&rdquo; sem querer, uma importação torta. Ficam só neste aparelho.
+            </div>
+          </div>
+          <div className="row wrap" style={{ marginTop: 8 }}>
+            <button type="button" className="btn" onClick={() => void api.copiasAutomaticas().then(setCopias)}>
+              🕑 Ver cópias automáticas
+            </button>
+          </div>
+          {copias.length > 0 && (
+            <ul className="lista-repetidos" style={{ marginTop: 10 }}>
+              {copias.map((copia) => (
+                <li key={copia.motivo} className="row wrap" style={{ gap: 8 }}>
+                  <span>
+                    <strong>{copia.motivo === 'queda' ? 'Antes de uma perda grande' : 'De rotina'}</strong>
+                    <span className="dim"> — {descreverCopia(copia)}</span>
+                  </span>
+                  <span className="spacer" />
+                  <button
+                    type="button"
+                    className="btn sm ghost"
+                    onClick={() =>
+                      downloadJson(`financeiro-copia-${copia.gravadaEm.slice(0, 10)}.json`, copia.data)
+                    }
+                  >
+                    Baixar
+                  </button>
+                  <button type="button" className="btn sm" onClick={() => setRestaurando(copia)}>
+                    Restaurar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
           <div className="row wrap">
             <button type="button" className="btn" onClick={() => api.loadDemo()}>
               🎲 Carregar dados de exemplo
@@ -933,6 +979,24 @@ export function SettingsPage({
 
       {importando && <ImportarPlanilha onClose={() => setImportando(false)} />}
       {importandoBanco && <ImportarDoBanco onClose={() => setImportandoBanco(false)} />}
+
+      {restaurando && (
+        <ConfirmDialog
+          title="Restaurar cópia automática"
+          confirmLabel="Restaurar"
+          message={
+            `Tudo que está aqui agora é substituído pela cópia de ${descreverCopia(restaurando)}. ` +
+            'O que você tiver lançado depois dela se perde — baixe um backup antes se estiver em dúvida.'
+          }
+          onConfirm={() => {
+            api.replaceData(restaurando.data);
+            setMessage(`Cópia restaurada: ${descreverCopia(restaurando)}.`);
+            setRestaurando(null);
+            setCopias([]);
+          }}
+          onCancel={() => setRestaurando(null)}
+        />
+      )}
       {accountDialog && <AccountDialog account={accountDialog.account} onClose={() => setAccountDialog(null)} />}
       {categoryDialog && <CategoryDialog category={categoryDialog.category} onClose={() => setCategoryDialog(null)} />}
 

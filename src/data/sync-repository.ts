@@ -83,6 +83,16 @@ export class SyncingRepository implements FinanceRepository {
     return this.local.clear();
   }
 
+  /**
+   * As cópias automáticas são as do armazenamento local. Isto importa
+   * justamente quando a sincronização é a causa do problema: se uma carteira
+   * vazia veio do servidor por cima da cheia, a cópia daqui é o que sobrou do
+   * estado bom.
+   */
+  copias() {
+    return this.local.copias?.() ?? Promise.resolve([]);
+  }
+
   // ---- Sincronização ----
 
   onStateChange(listener: (state: SyncState) => void): () => void {

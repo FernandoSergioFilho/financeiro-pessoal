@@ -310,6 +310,58 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* --------------------------- 7. a cópia automática salva de um "apagar tudo" */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/ajustes`);
+  await page.waitForTimeout(900);
+
+  // Uma alteração qualquer, para o app gravar de novo e criar a cópia de rotina.
+  await page.click('text=+ Novo lançamento');
+  await page.waitForTimeout(400);
+  await page.fill('.dialog input[inputmode="decimal"], .dialog input[type="text"]', '17,90');
+  await page.fill('.dialog input[placeholder^="Supermercado"]', 'Café da tarde');
+  await page.click('.dialog button:text-is("Adicionar")');
+  await page.waitForTimeout(700);
+
+  const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
+
+  // O desastre: apagar tudo.
+  await page.click('button:text-is("Apagar tudo")');
+  await page.waitForTimeout(400);
+  await page.click('.dialog button.danger:text-is("Apagar")');
+  await page.waitForTimeout(900);
+
+  const depoisDoEstrago = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length,
+  );
+  if (depoisDoEstrago !== 0) erro(`"Apagar tudo" não apagou (${depoisDoEstrago} lançamentos)`);
+
+  await page.click('button:text-is("🕑 Ver cópias automáticas")');
+  await page.waitForTimeout(500);
+  const listadas = await page.evaluate(() =>
+    [...document.querySelectorAll('.lista-repetidos li')].map((li) => li.textContent ?? ''),
+  );
+  const queda = listadas.find((t) => /perda grande/i.test(t));
+  if (!queda) erro(`não guardou cópia antes do "apagar tudo": ${JSON.stringify(listadas)}`);
+  else ok(`cópia guardada antes do estrago: "${queda.replace(/BaixarRestaurar/, '').trim()}"`);
+
+  await page.click('.lista-repetidos li button:text-is("Restaurar")');
+  await page.waitForTimeout(400);
+  await page.click('.dialog button:text-is("Restaurar")');
+  await page.waitForTimeout(900);
+
+  const restaurado = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length,
+  );
+  if (restaurado !== antes) erro(`restaurar não trouxe tudo de volta (${antes} → ${restaurado})`);
+  else ok(`restaurou os ${restaurado} lançamentos de volta`);
+
+  if (quebras.length > 0) erro(`cópia automática: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

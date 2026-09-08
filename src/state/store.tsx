@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import type { Copia } from '../domain/backup.ts';
 import { buildPurchase, type PurchaseDraft } from '../domain/installments.ts';
 import type {
   Account,
@@ -66,6 +67,8 @@ export interface FinanceApi {
   replaceData(data: FinanceData): void;
   loadDemo(): void;
   resetAll(): void;
+  /** As cópias que o app guardou sozinho, para o caso de perda em massa. */
+  copiasAutomaticas(): Promise<Copia[]>;
 }
 
 interface FinanceContextValue {
@@ -223,8 +226,9 @@ export function FinanceProvider({
       resetAll() {
         dispatch({ type: 'data/replace', data: initialData() });
       },
+      copiasAutomaticas: () => repository.copias?.() ?? Promise.resolve([]),
     };
-  }, [now]);
+  }, [now, repository]);
 
   const value = useMemo<FinanceContextValue>(
     () => ({
