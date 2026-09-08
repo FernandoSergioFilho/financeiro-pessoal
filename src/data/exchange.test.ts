@@ -243,3 +243,81 @@ describe('csvToEntries', () => {
     expect(r.problemas).toHaveLength(1);
   });
 });
+
+/* ------------------------------------------------- compras parceladas */
+
+describe('csvToEntries — compras parceladas', () => {
+  it('cria a compra quando a coluna Parcela diz o número de vezes', () => {
+    const csv = `${cabecalho}\n10/09/2026;Notebook;Moradia;Cartão de crédito;;Saída;Efetivado;-4.500,00;10x;;`;
+    const r = csvToEntries(csv, contexto());
+
+    expect(r.problemas).toEqual([]);
+    // Não vira lançamento solto: vira compra, e as parcelas nascem dela.
+    expect(r.novos).toHaveLength(0);
+    expect(r.compras).toHaveLength(1);
+    expect(r.compras[0]).toEqual({
+      description: 'Notebook',
+      // O valor da linha é o TOTAL da compra, não o da parcela.
+      totalAmount: 450000,
+      installments: 10,
+      firstDate: '2026-09-10',
+      accountId: 'acc-2',
+      categoryId: 'cat-2',
+    });
+  });
+
+  it('aceita o número de parcelas sem o "x"', () => {
+    const csv = `${cabecalho}\n10/09/2026;Geladeira;;Conta corrente;;Saída;Efetivado;-3.000,00;6;;`;
+    const r = csvToEntries(csv, contexto());
+    expect(r.compras[0]).toMatchObject({ installments: 6, totalAmount: 300000 });
+  });
+
+  it('ignora a parcela que já existe, escrita como 3/10', () => {
+    const csv = `${cabecalho}\n10/09/2026;Notebook;;Cartão de crédito;;Saída;Efetivado;-450,00;3/10;;`;
+    const r = csvToEntries(csv, contexto());
+
+    expect(r.compras).toHaveLength(0);
+    expect(r.novos).toHaveLength(0);
+    expect(r.parcelasExistentes).toBe(1);
+  });
+
+  it('recusa parcela sem sentido em vez de adivinhar', () => {
+    const csv = [
+      cabecalho,
+      '10/09/2026;Um;;Conta corrente;;Saída;Efetivado;-10,00;1x;;',
+      '10/09/2026;Zero;;Conta corrente;;Saída;Efetivado;-10,00;0x;;',
+      '10/09/2026;Texto;;Conta corrente;;Saída;Efetivado;-10,00;várias;;',
+    ].join('\n');
+    const r = csvToEntries(csv, contexto());
+    expect(r.compras).toHaveLength(0);
+    expect(r.problemas).toHaveLength(3);
+    expect(r.problemas[0]?.motivo).toContain('10x');
+  });
+
+  it('recusa compra parcelada marcada como entrada', () => {
+    const csv = `${cabecalho}\n10/09/2026;Reembolso;;Conta corrente;;Entrada;Efetivado;1.000,00;5x;;`;
+    const r = csvToEntries(csv, contexto());
+    expect(r.compras).toHaveLength(0);
+    expect(r.problemas[0]?.motivo).toContain('saída');
+  });
+
+  it('reenviar a exportação de uma compra não recria nada', () => {
+    // Como o app exporta as parcelas gravadas: com ID e com "n/10".
+    const parcelas = [1, 2, 3].map((n) =>
+      lancamento({
+        id: `p${n}`,
+        description: 'Notebook',
+        purchaseId: 'compra-1',
+        installmentNumber: n,
+        installmentTotal: 10,
+      }),
+    );
+    const csv = entriesToCsv(parcelas, NOMES);
+    const r = csvToEntries(csv, contexto(['p1', 'p2', 'p3']));
+
+    expect(r.problemas).toEqual([]);
+    expect(r.compras).toHaveLength(0);
+    expect(r.novos).toHaveLength(0);
+    expect(r.jaExistiam).toBe(3);
+  });
+});

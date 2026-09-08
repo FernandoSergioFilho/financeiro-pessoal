@@ -136,6 +136,11 @@ da gravação — o resumo mostra quantas linhas são novas, quantas já existia
 problema em qual linha, e só então você confirma. A data é aceita nos dois formatos, porque
 reformatar a coluna é a primeira coisa que o Excel faz ao abrir e salvar o arquivo.
 
+A coluna `Parcela` diz duas coisas, e a forma distingue: **`10x`** cria uma compra parcelada
+(o `Valor` da linha é o total, e as dez parcelas nascem a partir da data), enquanto **`3/10`**
+é como a exportação escreve uma parcela que já existe — na volta ela é ignorada, porque
+recriá-la duplicaria a compra inteira.
+
 **Dinheiro em centavos, datas como texto.** Valores são inteiros em centavos (nada de
 `0.1 + 0.2`), e datas são strings `YYYY-MM-DD` com aritmética própria — usar `Date` traria
 fuso horário para dentro do domínio e faria 31/01 virar 30/01 a oeste de Greenwich. Somar

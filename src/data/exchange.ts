@@ -156,6 +156,40 @@ export function parseDataCsv(valor: string): string | null {
 
 export type EntryDraftCsv = Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>;
 
+/** O mesmo que a compra parcelada precisa para nascer (ver `buildPurchase`). */
+export interface CompraCsv {
+  description: string;
+  totalAmount: number;
+  installments: number;
+  firstDate: string;
+  accountId: string;
+  categoryId: string | null;
+}
+
+/**
+ * A coluna `Parcela` diz duas coisas diferentes, e a forma distingue:
+ *
+ * - `10x` (ou só `10`) — esta linha é uma **compra parcelada** a criar: o
+ *   `Valor` é o total e as N parcelas nascem a partir da `Data`.
+ * - `3/10` — é como a exportação escreve uma parcela que já existe. Na volta
+ *   ela é ignorada: recriá-la geraria uma compra duplicada, parcela por
+ *   parcela.
+ */
+export function parseParcela(
+  valor: string,
+): { tipo: 'compra'; parcelas: number } | { tipo: 'parcela-existente' } | { tipo: 'invalido' } | null {
+  const texto = valor.trim().toLowerCase().replace(/\s+/g, '');
+  if (!texto) return null;
+  if (/^\d+\/\d+$/.test(texto)) return { tipo: 'parcela-existente' };
+
+  const compra = /^(\d+)x?$/.exec(texto);
+  if (compra) {
+    const parcelas = Number(compra[1]);
+    return parcelas >= 2 && parcelas <= 360 ? { tipo: 'compra', parcelas } : { tipo: 'invalido' };
+  }
+  return { tipo: 'invalido' };
+}
+
 export interface ImportContext {
   /** Nome da conta → id. Comparação sem diferenciar maiúsculas nem acentos. */
   contaPorNome: (nome: string) => string | undefined;
@@ -171,10 +205,14 @@ export interface ProblemaImportacao {
 
 export interface ResultadoImportacao {
   novos: EntryDraftCsv[];
+  /** Compras parceladas a criar, cada uma gerando as suas N parcelas. */
+  compras: CompraCsv[];
   /** Linhas com ID que o aplicativo já tem: reenvio do próprio arquivo. */
   jaExistiam: number;
   /** Ocorrências de conta recorrente: quem manda nelas é a regra. */
   recorrentes: number;
+  /** Parcelas de compras que já existem, escritas como `3/10`. */
+  parcelasExistentes: number;
   problemas: ProblemaImportacao[];
 }
 
@@ -207,7 +245,14 @@ export function chaveDeNome(valor: string): string {
  */
 export function csvToEntries(texto: string, ctx: ImportContext): ResultadoImportacao {
   const linhas = parseCsv(texto);
-  const resultado: ResultadoImportacao = { novos: [], jaExistiam: 0, recorrentes: 0, problemas: [] };
+  const resultado: ResultadoImportacao = {
+    novos: [],
+    compras: [],
+    jaExistiam: 0,
+    recorrentes: 0,
+    parcelasExistentes: 0,
+    problemas: [],
+  };
   if (linhas.length === 0) {
     resultado.problemas.push({ linha: 0, motivo: 'O arquivo está vazio.' });
     return resultado;
@@ -235,6 +280,7 @@ export function csvToEntries(texto: string, ctx: ImportContext): ResultadoImport
   const iTipo = onde('Tipo');
   const iSituacao = onde('Situação');
   const iRecorrente = onde('Recorrente');
+  const iParcela = onde('Parcela');
   const iId = onde('ID');
 
   const celula = (linha: string[], indice: number) => (indice === -1 ? '' : (linha[indice] ?? '').trim());
@@ -255,6 +301,20 @@ export function csvToEntries(texto: string, ctx: ImportContext): ResultadoImport
     // cópia ao lado da projeção, e as duas apareceriam na lista.
     if (!id && chaveDeNome(celula(linha, iRecorrente)) === 'sim') {
       resultado.recorrentes += 1;
+      continue;
+    }
+
+    const parcela = parseParcela(celula(linha, iParcela));
+    if (parcela?.tipo === 'invalido') {
+      problema(
+        `Parcela inválida: "${celula(linha, iParcela)}". Para criar uma compra parcelada use o número de vezes, como "10x".`,
+      );
+      continue;
+    }
+    // `3/10` é como a exportação escreve uma parcela que já existe: recriá-la
+    // duplicaria a compra inteira, parcela por parcela.
+    if (parcela?.tipo === 'parcela-existente') {
+      resultado.parcelasExistentes += 1;
       continue;
     }
 
@@ -328,6 +388,24 @@ export function csvToEntries(texto: string, ctx: ImportContext): ResultadoImport
         continue;
       }
       categoryId = achada;
+    }
+
+    // Compra parcelada: o valor da linha é o TOTAL, e as N parcelas nascem
+    // dela — é `buildPurchase` que divide os centavos para somar exatamente.
+    if (parcela?.tipo === 'compra') {
+      if (kind !== 'expense') {
+        problema('Compra parcelada só faz sentido como saída.');
+        continue;
+      }
+      resultado.compras.push({
+        description: descricao,
+        totalAmount: Math.abs(valor),
+        installments: parcela.parcelas,
+        firstDate: data,
+        accountId,
+        categoryId,
+      });
+      continue;
     }
 
     resultado.novos.push({

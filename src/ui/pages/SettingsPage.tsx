@@ -239,7 +239,7 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [erroLeitura, setErroLeitura] = useState('');
-  const [importados, setImportados] = useState<number | null>(null);
+  const [importados, setImportados] = useState<{ lancamentos: number; compras: number } | null>(null);
   const arquivo = useRef<HTMLInputElement>(null);
 
   const contexto = useMemo(() => {
@@ -267,7 +267,11 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
 
   function confirmar() {
     if (!resultado) return;
-    setImportados(api.importEntries(resultado.novos));
+    const lancamentos = api.importEntries(resultado.novos);
+    // Cada compra gera as suas N parcelas, com os centavos divididos para
+    // somar exatamente o total — a mesma conta do cadastro pelo formulário.
+    for (const compra of resultado.compras) api.addPurchase(compra);
+    setImportados({ lancamentos, compras: resultado.compras.length });
   }
 
   return (
@@ -281,10 +285,10 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
           <button type="button" className="btn ghost" onClick={onClose}>
             {importados === null ? 'Cancelar' : 'Fechar'}
           </button>
-          {importados === null && resultado && resultado.novos.length > 0 && (
+          {importados === null && resultado && resultado.novos.length + resultado.compras.length > 0 && (
             <button type="button" className="btn primary" onClick={confirmar}>
-              Importar {resultado.novos.length}{' '}
-              {resultado.novos.length === 1 ? 'lançamento' : 'lançamentos'}
+              Importar {resultado.novos.length + resultado.compras.length}{' '}
+              {resultado.novos.length + resultado.compras.length === 1 ? 'item' : 'itens'}
             </button>
           )}
         </>
@@ -297,10 +301,12 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
           </span>
           <span>
             <strong>
-              {importados} {importados === 1 ? 'lançamento importado' : 'lançamentos importados'}
+              {importados.lancamentos} {importados.lancamentos === 1 ? 'lançamento importado' : 'lançamentos importados'}
+              {importados.compras > 0 &&
+                ` e ${importados.compras} ${importados.compras === 1 ? 'compra parcelada criada' : 'compras parceladas criadas'}`}
             </strong>
             <br />
-            <span className="dim">Eles já aparecem no painel e sobem na próxima sincronização.</span>
+            <span className="dim">Já aparecem no painel e sobem na próxima sincronização.</span>
           </span>
         </div>
       ) : (
@@ -309,6 +315,11 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
             Exporte a planilha do mês, acrescente linhas no Excel e mande de volta aqui. As colunas
             obrigatórias são <strong>Data</strong>, <strong>Descrição</strong> e <strong>Valor</strong>; a conta e
             a categoria são procuradas pelo nome.
+          </p>
+          <p className="hint">
+            Para uma <strong>compra parcelada</strong>, escreva o número de vezes na coluna{' '}
+            <strong>Parcela</strong> — por exemplo <strong>10x</strong> — e ponha o <strong>total</strong> na coluna
+            Valor. As dez parcelas nascem a partir da data.
           </p>
 
           <div className="row wrap">
@@ -336,7 +347,7 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
               <div className="grid contadores">
                 <div className="card stat">
                   <span className="stat-label">Novos</span>
-                  <span className="stat-value sm num">{resultado.novos.length}</span>
+                  <span className="stat-value sm num">{resultado.novos.length + resultado.compras.length}</span>
                 </div>
                 <div className="card stat">
                   <span className="stat-label">Já existiam</span>
@@ -349,6 +360,25 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
                   </span>
                 </div>
               </div>
+
+              {resultado.compras.length > 0 && (
+                <p className="hint">
+                  {resultado.compras.length === 1
+                    ? '1 linha vira uma compra parcelada'
+                    : `${resultado.compras.length} linhas viram compras parceladas`}
+                  : o valor de cada uma é o total, e as parcelas nascem a partir da data.
+                </p>
+              )}
+
+              {resultado.parcelasExistentes > 0 && (
+                <p className="hint">
+                  {resultado.parcelasExistentes}{' '}
+                  {resultado.parcelasExistentes === 1
+                    ? 'linha é parcela de uma compra que já existe e foi ignorada'
+                    : 'linhas são parcelas de compras que já existem e foram ignoradas'}
+                  : para criar uma compra, escreva o número de vezes (como "10x") no lugar de "3/10".
+                </p>
+              )}
 
               {resultado.recorrentes > 0 && (
                 <p className="hint">
@@ -374,7 +404,7 @@ function ImportarPlanilha({ onClose }: { onClose: () => void }) {
                 </div>
               )}
 
-              {resultado.novos.length === 0 && resultado.problemas.length === 0 && (
+              {resultado.novos.length + resultado.compras.length === 0 && resultado.problemas.length === 0 && (
                 <p className="hint">Nada de novo nesta planilha — tudo o que está nela o aplicativo já tem.</p>
               )}
             </>
