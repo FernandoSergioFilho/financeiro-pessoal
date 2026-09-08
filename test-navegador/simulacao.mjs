@@ -193,6 +193,48 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* ------------------------------- 5. o aviso de lançamento repetido */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/painel`);
+  await page.waitForTimeout(700);
+
+  // "Aluguel · R$ 2.450,00" existe todo mês na carteira, no dia 10.
+  const dia10 = `${HOJE.slice(0, 8)}10`;
+  await page.click('text=+ Novo lançamento');
+  await page.waitForTimeout(400);
+  await page.fill('.dialog input[inputmode="decimal"], .dialog input[type="text"]', '2450,00');
+  await page.fill('.dialog input[type=date]', dia10);
+  await page.fill('.dialog input[placeholder^="Supermercado"]', 'Aluguel');
+  await page.click('.dialog button:text-is("Adicionar")');
+  await page.waitForTimeout(500);
+
+  const avisou = await page.locator('.dialog').innerText().catch(() => '');
+  if (!/já não está lançado/i.test(avisou)) erro(`não avisou do lançamento repetido: "${avisou.slice(0, 100)}"`);
+  else ok('avisa antes de gravar um lançamento que já existe');
+
+  // "Voltar e conferir" não pode gravar nada.
+  const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
+  await page.click('.dialog button:text-is("Voltar e conferir")');
+  await page.waitForTimeout(500);
+  const depois = await page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
+  if (depois !== antes) erro(`"Voltar e conferir" gravou assim mesmo (${antes} → ${depois})`);
+  else ok('"Voltar e conferir" não grava nada');
+
+  // E um lançamento que não existe passa direto, sem aviso nenhum.
+  await page.click('.dialog input[placeholder^="Supermercado"]');
+  await page.fill('.dialog input[placeholder^="Supermercado"]', 'Cinema com a Marina');
+  await page.click('.dialog button:text-is("Adicionar")');
+  await page.waitForTimeout(600);
+  const gravou = await page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
+  if (gravou !== antes + 1) erro(`o lançamento novo não foi gravado (${antes} → ${gravou})`);
+  else ok('lançamento que não existia entra sem aviso');
+
+  if (quebras.length > 0) erro(`aviso de repetido: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

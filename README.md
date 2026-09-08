@@ -106,6 +106,10 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
+- **Aviso de lançamento repetido** — ao cadastrar um avulso, uma compra parcelada ou uma
+  conta recorrente, o app procura o que já existe com o mesmo valor e a mesma descrição e
+  pergunta antes de gravar. A busca é conservadora de propósito: alarme falso ensina a
+  ignorar o aviso.
 - **Apagar conta sem mistério** — em vez de "tem lançamentos" e um arquivamento calado, o
   app diz *o que* aponta para ela ("2 lançamentos e 1 conta recorrente"), leva você até
   esses lançamentos e oferece passar tudo para outra conta antes de apagar.

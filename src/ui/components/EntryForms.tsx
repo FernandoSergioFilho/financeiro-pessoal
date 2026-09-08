@@ -11,11 +11,18 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { addMonths, formatDate, isValidISO, today } from '../../domain/date.ts';
 import { formatMoney, splitInstallments } from '../../domain/money.ts';
 import { describeFrequency } from '../../domain/recurrence.ts';
+import {
+  procurarComprasSemelhantes,
+  procurarRegrasSemelhantes,
+  procurarSemelhantes,
+  type Semelhante,
+} from '../../domain/similar.ts';
 import type {
   Category,
   DisplayEntry,
   EntryKind,
   Frequency,
+  InstallmentPurchase,
   RecurringRule,
 } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
@@ -264,8 +271,78 @@ function SingleFields({
 
 /* -------------------------------------------------------------- parcelado */
 
+/**
+ * O aviso de "isto parece já estar lançado".
+ *
+ * Aparece no lugar do formulário, e não como um alerta em cima dele, porque a
+ * decisão é uma só: ou já existe e a pessoa volta, ou não existe e ela grava.
+ * O botão de gravar é o secundário de propósito — o caminho fácil deve ser o
+ * de conferir.
+ */
+function AvisoDeRepetido({
+  linhas,
+  oQue,
+  onGravar,
+  onVoltar,
+}: {
+  linhas: { chave: string; texto: string; detalhe?: string }[];
+  oQue: string;
+  onGravar: () => void;
+  onVoltar: () => void;
+}) {
+  return (
+    <Dialog
+      title="Isto já não está lançado?"
+      onClose={onVoltar}
+      footer={
+        <>
+          <button type="button" className="btn ghost" onClick={onGravar}>
+            Lançar mesmo assim
+          </button>
+          <span className="spacer" />
+          <button type="button" className="btn primary" onClick={onVoltar}>
+            Voltar e conferir
+          </button>
+        </>
+      }
+    >
+      <p style={{ marginTop: 0 }}>
+        {linhas.length === 1
+          ? `Já existe ${oQue} com o mesmo valor e a mesma descrição:`
+          : `Já existem ${linhas.length} ${oQue}s com o mesmo valor e a mesma descrição:`}
+      </p>
+      <ul className="lista-repetidos">
+        {linhas.map((linha) => (
+          <li key={linha.chave}>
+            {linha.texto}
+            {linha.detalhe && (
+              <>
+                {' '}
+                <span className="dim">· {linha.detalhe}</span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="hint">
+        Se for outra compra que por acaso deu o mesmo valor, pode lançar — mudar a descrição ajuda a diferenciar
+        depois.
+      </p>
+    </Dialog>
+  );
+}
+
+/** As linhas do aviso, a partir dos lançamentos encontrados. */
+function linhasDeSemelhantes(achados: readonly Semelhante[]) {
+  return achados.map(({ entry, motivo }) => ({
+    chave: entry.id,
+    texto: `${formatDate(entry.date)} · ${entry.description} · ${formatMoney(entry.amount)}`,
+    detalhe: motivo === 'igual' ? 'mesmo dia' : 'poucos dias de diferença',
+  }));
+}
+
 function InstallmentForm({ onDone }: { onDone: () => void }) {
-  const { api } = useFinance();
+  const { data, api } = useFinance();
   const { accounts, categories } = useLookups();
   const [description, setDescription] = useState('');
   const [total, setTotal] = useState<number | null>(null);
@@ -276,6 +353,7 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
   );
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [repetidas, setRepetidas] = useState<InstallmentPurchase[] | null>(null);
 
   const errors = {
     total: !total || total <= 0 ? 'Informe o valor total da compra.' : undefined,
@@ -302,10 +380,7 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
     };
   }, [total, count, firstDate]);
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    setSubmitted(true);
-    if (!valid) return;
+  function gravar() {
     api.addPurchase({
       description: description.trim(),
       totalAmount: total!,
@@ -317,7 +392,41 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
     onDone();
   }
 
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    setSubmitted(true);
+    if (!valid) return;
+    const parecidas = procurarComprasSemelhantes(data.purchases, {
+      description: description.trim(),
+      totalAmount: total!,
+      installments: count,
+      firstDate,
+    });
+    if (parecidas.length > 0) {
+      setRepetidas(parecidas);
+      return;
+    }
+    gravar();
+  }
+
   const show = (key: keyof typeof errors) => (submitted ? errors[key] : undefined);
+
+  if (repetidas) {
+    return (
+      <AvisoDeRepetido
+        oQue="compra parcelada"
+        linhas={repetidas.map((compra) => ({
+          chave: compra.id,
+          texto: `${formatDate(compra.firstDate)} · ${compra.description} · ${compra.installments}× ${formatMoney(
+            Math.round(compra.totalAmount / compra.installments),
+          )}`,
+          detalhe: `total ${formatMoney(compra.totalAmount)}`,
+        }))}
+        onGravar={gravar}
+        onVoltar={() => setRepetidas(null)}
+      />
+    );
+  }
 
   return (
     <form onSubmit={submit} id="entry-form" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -754,20 +863,41 @@ export function RecurringDialog({ rule, onClose }: { rule?: RecurringRule; onClo
 type NewMode = 'single' | 'installment' | 'recurring';
 
 export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string; onClose: () => void }) {
-  const { api } = useFinance();
+  const { data, api } = useFinance();
   const [mode, setMode] = useState<NewMode>('single');
   const [state, set] = useSingleState(defaultDate ? { date: defaultDate } : {});
   const [submitted, setSubmitted] = useState(false);
 
+  // Lançar duas vezes a mesma conta é o erro mais fácil de cometer aqui, e o
+  // mais silencioso: o saldo fica errado e nada avisa. Ver `domain/similar.ts`.
+  const [repetidos, setRepetidos] = useState<Semelhante[] | null>(null);
+  const [regrasRepetidas, setRegrasRepetidas] = useState<RecurringRule[] | null>(null);
+
   const errors = singleErrors(state);
   const shown = submitted ? errors : {};
+
+  function gravarSingle() {
+    api.addEntry(toDraft(state));
+    onClose();
+  }
 
   function submitSingle(event: FormEvent) {
     event.preventDefault();
     setSubmitted(true);
     if (Object.keys(errors).length > 0) return;
-    api.addEntry(toDraft(state));
-    onClose();
+    const draft = toDraft(state);
+    const achados = procurarSemelhantes(data.entries, {
+      date: draft.date,
+      description: draft.description,
+      amount: draft.amount,
+      kind: draft.kind,
+      accountId: draft.accountId,
+    });
+    if (achados.length > 0) {
+      setRepetidos(achados);
+      return;
+    }
+    gravarSingle();
   }
 
   const [recurringValue, setRecurringValue] = useState<RecurringFormValue>(() => ({
@@ -787,12 +917,53 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
   }));
   const recErrors = recurringErrors(recurringValue);
 
+  function gravarRecurring() {
+    api.addRecurring(valueToDraft(recurringValue));
+    onClose();
+  }
+
   function submitRecurring(event: FormEvent) {
     event.preventDefault();
     setSubmitted(true);
     if (Object.values(recErrors).some(Boolean)) return;
-    api.addRecurring(valueToDraft(recurringValue));
-    onClose();
+    const achadas = procurarRegrasSemelhantes(data.recurring, {
+      description: recurringValue.description.trim(),
+      amount: recurringValue.amount ?? 0,
+      kind: recurringValue.kind,
+      frequency: recurringValue.frequency,
+      interval: recurringValue.interval,
+    });
+    if (achadas.length > 0) {
+      setRegrasRepetidas(achadas);
+      return;
+    }
+    gravarRecurring();
+  }
+
+  if (repetidos) {
+    return (
+      <AvisoDeRepetido
+        oQue="lançamento"
+        linhas={linhasDeSemelhantes(repetidos)}
+        onGravar={gravarSingle}
+        onVoltar={() => setRepetidos(null)}
+      />
+    );
+  }
+
+  if (regrasRepetidas) {
+    return (
+      <AvisoDeRepetido
+        oQue="conta recorrente"
+        linhas={regrasRepetidas.map((regra) => ({
+          chave: regra.id,
+          texto: `${regra.description} · ${formatMoney(regra.amount)}`,
+          detalhe: `${describeFrequency(regra)}${regra.active ? '' : ' · pausada'}`,
+        }))}
+        onGravar={gravarRecurring}
+        onVoltar={() => setRegrasRepetidas(null)}
+      />
+    );
   }
 
   return (
