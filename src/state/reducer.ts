@@ -18,6 +18,7 @@ import type {
 export type Action =
   | { type: 'data/replace'; data: FinanceData }
   | { type: 'entry/create'; entry: Entry }
+  | { type: 'entries/import'; entries: Entry[] }
   | { type: 'entry/update'; id: string; patch: Partial<Entry>; updatedAt: string }
   | { type: 'entry/delete'; id: string; deletedAt: string }
   | { type: 'occurrence/skip'; recurringId: string; date: string; updatedAt: string }
@@ -78,6 +79,11 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
 
     case 'entry/create':
       return { ...state, entries: [...state.entries, action.entry] };
+
+    // Uma ação só para a planilha inteira: despachar uma por linha faria a
+    // tela recalcular centenas de vezes seguidas para nada.
+    case 'entries/import':
+      return { ...state, entries: [...state.entries, ...action.entries] };
 
     case 'entry/update':
       return {

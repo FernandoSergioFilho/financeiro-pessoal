@@ -96,7 +96,8 @@ Cadastrar as três coisas — avulso, parcelado e recorrente — acontece num lu
 **+ Novo lançamento**. As abas *Fixas* e *Parcelas* são de consulta: para corrigir ou
 apagar uma delas, clique na linha.
 - **Backup e planilha** — exportar os lançamentos do mês em CSV (abre direto no Excel e no
-  LibreOffice em português), baixar um backup completo em JSON e restaurá-lo depois.
+  LibreOffice em português), **importar de volta** a mesma planilha com linhas acrescentadas,
+  baixar um backup completo em JSON e restaurá-lo depois.
 - Tema claro/escuro (ou o do sistema), navegação lateral no desktop e barra inferior com
   botão flutuante no celular.
 
@@ -125,6 +126,15 @@ ocorrência isolada grava uma exceção na regra, para ela não reaparecer.
 cadastro, então as N parcelas viram lançamentos reais ligados pela compra — dá para editar
 a parcela de março sozinha. A divisão joga o resto nas primeiras parcelas, como a
 maquininha: R$ 100,00 em 3× = 33,34 + 33,33 + 33,33.
+
+**A planilha vai e volta pela mesma porta.** O CSV exportado pode ser reenviado depois de
+receber linhas novas no Excel, e reenviá-lo **sem mexer não duplica nada** — cada linha leva
+uma coluna `ID`, e a importação pula as que o aplicativo já tem. Ocorrências de contas
+recorrentes saem sem ID e são ignoradas na volta: quem as gera é a regra, todo mês, e
+trazê-las como lançamentos soltos criaria uma cópia ao lado da projeção. A leitura é separada
+da gravação — o resumo mostra quantas linhas são novas, quantas já existiam e o que deu
+problema em qual linha, e só então você confirma. A data é aceita nos dois formatos, porque
+reformatar a coluna é a primeira coisa que o Excel faz ao abrir e salvar o arquivo.
 
 **Dinheiro em centavos, datas como texto.** Valores são inteiros em centavos (nada de
 `0.1 + 0.2`), e datas são strings `YYYY-MM-DD` com aritmética própria — usar `Date` traria
@@ -220,6 +230,16 @@ grep -c "eyJhbGciOi" dist/assets/index-*.js   # a chave está lá
 Guardá-la num secret do GitHub não a esconderia de ninguém — só daria uma falsa sensação
 de segurança, além de exigir configuração manual a cada clone. Quem realmente protege os
 lançamentos são as políticas de acesso em `supabase/schema.sql`.
+
+### Testar as telas no navegador
+
+Um defeito de renderização não aparece em teste de unidade: ele derruba a árvore do React e
+a página fica em branco. O caso que motivou este teste foi apagar a data com o teclado —
+pelo mouse não dava, porque o seletor só produz datas completas.
+
+```bash
+npm run build:single && npm run test:telas
+```
 
 ### Testar o banco de verdade
 

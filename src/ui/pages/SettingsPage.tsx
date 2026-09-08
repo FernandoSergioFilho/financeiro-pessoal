@@ -1,11 +1,19 @@
 /** Contas, categorias, aparência e o que fazer com os dados. */
 
-import { useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { formatMoney } from '../../domain/money.ts';
 import { accountBalance } from '../../domain/summary.ts';
 import { SERIES_COLORS, type Account, type AccountKind, type Category, type SeriesColor } from '../../domain/types.ts';
-import { downloadCsv, downloadJson, entriesToCsv, readBackup } from '../../data/exchange.ts';
+import {
+  chaveDeNome,
+  csvToEntries,
+  downloadCsv,
+  downloadJson,
+  entriesToCsv,
+  readBackup,
+  type ResultadoImportacao,
+} from '../../data/exchange.ts';
 import { useLookups, useMonthEntries } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '../components/primitives.tsx';
@@ -217,6 +225,166 @@ function CategoryDialog({ category, onClose }: { category?: Category; onClose: (
   );
 }
 
+/**
+ * Confere a planilha antes de gravar qualquer coisa.
+ *
+ * A leitura é separada da gravação de propósito: importar metade e reclamar do
+ * resto deixaria o usuário sem saber o que entrou nem como repetir. Aqui ele vê
+ * o resumo — quantas linhas são novas, quantas já existiam, o que deu problema
+ * e em qual linha — e só então confirma.
+ */
+function ImportarPlanilha({ onClose }: { onClose: () => void }) {
+  const { data, api } = useFinance();
+  const { accounts, categories } = useLookups();
+  const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
+  const [nomeArquivo, setNomeArquivo] = useState('');
+  const [erroLeitura, setErroLeitura] = useState('');
+  const [importados, setImportados] = useState<number | null>(null);
+  const arquivo = useRef<HTMLInputElement>(null);
+
+  const contexto = useMemo(() => {
+    const porNome = <T extends { id: string; name: string }>(lista: readonly T[]) => {
+      const mapa = new Map(lista.map((item) => [chaveDeNome(item.name), item.id]));
+      return (nome: string) => mapa.get(chaveDeNome(nome));
+    };
+    return {
+      contaPorNome: porNome(accounts),
+      categoriaPorNome: porNome(categories),
+      idsExistentes: new Set(data.entries.map((entry) => entry.id)),
+    };
+  }, [accounts, categories, data.entries]);
+
+  async function ler(file: File) {
+    setErroLeitura('');
+    setResultado(null);
+    setNomeArquivo(file.name);
+    try {
+      setResultado(csvToEntries(await file.text(), contexto));
+    } catch (erro) {
+      setErroLeitura(erro instanceof Error ? erro.message : 'Não foi possível ler o arquivo.');
+    }
+  }
+
+  function confirmar() {
+    if (!resultado) return;
+    setImportados(api.importEntries(resultado.novos));
+  }
+
+  return (
+    <Dialog
+      title="Importar planilha"
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={onClose}>
+            {importados === null ? 'Cancelar' : 'Fechar'}
+          </button>
+          {importados === null && resultado && resultado.novos.length > 0 && (
+            <button type="button" className="btn primary" onClick={confirmar}>
+              Importar {resultado.novos.length}{' '}
+              {resultado.novos.length === 1 ? 'lançamento' : 'lançamentos'}
+            </button>
+          )}
+        </>
+      }
+    >
+      {importados !== null ? (
+        <div className="banner">
+          <span className="emoji" aria-hidden="true">
+            ✅
+          </span>
+          <span>
+            <strong>
+              {importados} {importados === 1 ? 'lançamento importado' : 'lançamentos importados'}
+            </strong>
+            <br />
+            <span className="dim">Eles já aparecem no painel e sobem na próxima sincronização.</span>
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p className="muted" style={{ fontSize: '0.88rem' }}>
+            Exporte a planilha do mês, acrescente linhas no Excel e mande de volta aqui. As colunas
+            obrigatórias são <strong>Data</strong>, <strong>Descrição</strong> e <strong>Valor</strong>; a conta e
+            a categoria são procuradas pelo nome.
+          </p>
+
+          <div className="row wrap">
+            <button type="button" className="btn" onClick={() => arquivo.current?.click()}>
+              📄 Escolher arquivo
+            </button>
+            {nomeArquivo && <span className="dim trunc">{nomeArquivo}</span>}
+          </div>
+          <input
+            ref={arquivo}
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void ler(file);
+              event.target.value = '';
+            }}
+          />
+
+          {erroLeitura && <p className="error">{erroLeitura}</p>}
+
+          {resultado && (
+            <>
+              <div className="grid contadores">
+                <div className="card stat">
+                  <span className="stat-label">Novos</span>
+                  <span className="stat-value sm num">{resultado.novos.length}</span>
+                </div>
+                <div className="card stat">
+                  <span className="stat-label">Já existiam</span>
+                  <span className="stat-value sm num">{resultado.jaExistiam}</span>
+                </div>
+                <div className="card stat">
+                  <span className="stat-label">Com problema</span>
+                  <span className={`stat-value sm num ${resultado.problemas.length > 0 ? 'bad' : ''}`}>
+                    {resultado.problemas.length}
+                  </span>
+                </div>
+              </div>
+
+              {resultado.recorrentes > 0 && (
+                <p className="hint">
+                  {resultado.recorrentes}{' '}
+                  {resultado.recorrentes === 1 ? 'linha é de conta recorrente e foi ignorada' : 'linhas são de contas recorrentes e foram ignoradas'}
+                  : quem gera essas ocorrências é a regra, todo mês.
+                </p>
+              )}
+
+              {resultado.problemas.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="setting-text">
+                    <div className="title">O que ficou de fora</div>
+                    <div className="dim">Corrija na planilha e mande de novo — o resto já pode entrar agora.</div>
+                  </div>
+                  <div style={{ maxHeight: '11rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {resultado.problemas.map((problema) => (
+                      <div key={`${problema.linha}-${problema.motivo}`} style={{ fontSize: '0.82rem' }}>
+                        <strong>Linha {problema.linha}:</strong> <span className="dim">{problema.motivo}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {resultado.novos.length === 0 && resultado.problemas.length === 0 && (
+                <p className="hint">Nada de novo nesta planilha — tudo o que está nela o aplicativo já tem.</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 export function SettingsPage({
   month,
   theme,
@@ -236,6 +404,7 @@ export function SettingsPage({
   const [removingAccount, setRemovingAccount] = useState<Account | null>(null);
   const [removingCategory, setRemovingCategory] = useState<Category | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [importando, setImportando] = useState(false);
   const [message, setMessage] = useState('');
 
   async function importBackup(file: File) {
@@ -392,6 +561,9 @@ export function SettingsPage({
             >
               📊 Exportar planilha do mês
             </button>
+            <button type="button" className="btn" onClick={() => setImportando(true)}>
+              📥 Importar planilha
+            </button>
             <button
               type="button"
               className="btn"
@@ -459,6 +631,7 @@ export function SettingsPage({
         </Card>
       </div>
 
+      {importando && <ImportarPlanilha onClose={() => setImportando(false)} />}
       {accountDialog && <AccountDialog account={accountDialog.account} onClose={() => setAccountDialog(null)} />}
       {categoryDialog && <CategoryDialog category={categoryDialog.category} onClose={() => setCategoryDialog(null)} />}
 

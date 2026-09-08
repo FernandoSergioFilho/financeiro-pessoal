@@ -286,7 +286,11 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
   const valid = Object.values(errors).every((error) => !error);
 
   const preview = useMemo(() => {
-    if (!total || total <= 0 || count < 1) return null;
+    // A data precisa estar completa antes de qualquer conta com ela: apagar o
+    // campo deixa a string vazia, e as funções de data recusam isso com uma
+    // exceção. Lançada aqui, no meio do desenho da tela, ela derrubava a
+    // árvore inteira do React e o app sumia — bastava apagar a data.
+    if (!total || total <= 0 || count < 1 || !isValidISO(firstDate)) return null;
     const parts = splitInstallments(total, count);
     const first = parts[0]!;
     const rest = parts.at(-1)!;
@@ -835,9 +839,15 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
             set={(patch) => setRecurringValue((v) => ({ ...v, ...patch }))}
             errors={submitted ? recErrors : {}}
           />
+          {/* Só resume depois que a data está completa: com o campo vazio,
+              `formatDate` lança e a tela inteira sumia. */}
           <p className="hint">
-            {describeFrequency(recurringValue)}, a partir de {formatDate(recurringValue.startDate)}. Os próximos vencimentos aparecem como previstos e você
-            confirma cada um quando pagar.
+            {isValidISO(recurringValue.startDate) ? (
+              <>
+                {describeFrequency(recurringValue)}, a partir de {formatDate(recurringValue.startDate)}.{' '}
+              </>
+            ) : null}
+            Os próximos vencimentos aparecem como previstos e você confirma cada um quando pagar.
           </p>
         </form>
       )}

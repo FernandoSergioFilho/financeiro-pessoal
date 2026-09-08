@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit",
-    "verificar-seguranca": "node scripts/verificar-seguranca.mjs"
+    "verificar-seguranca": "node scripts/verificar-seguranca.mjs",
+    "test:telas": "node test-navegador/campos-de-data.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

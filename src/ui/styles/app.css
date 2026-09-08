@@ -322,6 +322,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .grid.split { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+/* Contadores curtos (só números) lado a lado, inclusive no celular. Não usa
+   `cols-3` porque aquela grade carrega valores em reais, que não cabem em um
+   terço de uma tela estreita. */
+.grid.contadores { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid.contadores .stat { padding: 10px 12px; }
+.grid.contadores .stat-value { font-size: 1.15rem; }
 
 .row { display: flex; align-items: center; gap: 10px; }
 .row.wrap { flex-wrap: wrap; }

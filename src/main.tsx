@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './ui/App.tsx';
+import { ErrorBoundary } from './ui/ErrorBoundary.tsx';
 import { FinanceProvider } from './state/store.tsx';
 import './ui/styles/app.css';
 
@@ -10,8 +11,12 @@ if (!container) throw new Error('Elemento #root não encontrado.');
 
 createRoot(container).render(
   <StrictMode>
-    <FinanceProvider>
-      <App />
-    </FinanceProvider>
+    {/* Por fora do provedor: um erro ao carregar os dados também precisa cair
+        numa tela com explicação, e não numa página em branco. */}
+    <ErrorBoundary>
+      <FinanceProvider>
+        <App />
+      </FinanceProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

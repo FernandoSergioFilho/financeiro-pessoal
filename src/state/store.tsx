@@ -37,6 +37,8 @@ export type CategoryDraft = Omit<Category, 'id' | 'updatedAt'>;
 
 export interface FinanceApi {
   addEntry(draft: EntryDraft): Entry;
+  /** Vários de uma vez, vindos da planilha. Devolve quantos entraram. */
+  importEntries(drafts: readonly EntryDraft[]): number;
   updateEntry(id: string, patch: Partial<Entry>): void;
   deleteEntry(id: string): void;
   /** Transforma uma ocorrência prevista em lançamento gravado. */
@@ -134,6 +136,11 @@ export function FinanceProvider({
         const entry = makeEntry(draft);
         dispatch({ type: 'entry/create', entry });
         return entry;
+      },
+      importEntries(drafts) {
+        if (drafts.length === 0) return 0;
+        dispatch({ type: 'entries/import', entries: drafts.map(makeEntry) });
+        return drafts.length;
       },
       updateEntry(id, patch) {
         dispatch({ type: 'entry/update', id, patch, updatedAt: now() });
