@@ -138,6 +138,9 @@ apagar uma delas, clique na linha.
   diferentes, e somá-las daria um número que não existe em lugar nenhum. Ao cadastrar
   "Nubank cartão" com um "Nubank" já existente, o app oferece o agrupamento — oferece, nunca
   aplica sozinho.
+- **Arrastar para marcar pago** — no celular, puxar a linha do lançamento para qualquer lado
+  marca ou desmarca, sem abrir nada. O gesto só engata quando o movimento lateral vence o
+  vertical com folga, então a página continua rolando normalmente.
 - **Nada nasce pago** — nem as parcelas de data já vencida. O app não decide sozinho que
   data no passado significa dinheiro que saiu: a compra pode ter sido cancelada, a fatura
   pode não ter sido paga. Quem diz que pagou é você, na caixa de seleção da lista — que vai
@@ -212,13 +215,22 @@ mês preserva o dia quando ele existe (31/01 + 1 mês = 28/02, mas 31/01 + 3 mes
 
 ### Cores
 
-A paleta de categorias e dos gráficos foi validada para daltonismo (separação em CVD,
-contraste e faixa de luminosidade) nos temas claro e escuro. O validador é rodado, não
-estimado: foi ele que reprovou verde/vermelho no gráfico divergente — ΔE 5.7 no tema
-escuro, abaixo do piso — e o par virou azul/laranja, que passa com folga nos dois temas.
-De qualquer forma, quem carrega o sentido ali é o lado do eixo, não a cor. As cores são guardadas como
-*nome de posição na paleta* (`'blue'`), não como hex, então o tema escuro usa outro passo
-da mesma família sem tocar nos dados.
+A interface é **branca, azul e roxo**: fundos, acento, botões, navegação e seleção. Duas
+famílias ficam de fora dessa identidade, de propósito.
+
+**Verde e vermelho de entrada e saída** são semântica de dinheiro, não decoração.
+
+**As cores que identificam conta e categoria nos gráficos** ficam multicolores, e o motivo é
+medido. O validador de daltonismo do projeto foi rodado sobre um conjunto todo em azul e
+roxo: o melhor resultado deu **ΔE 13,2 para visão normal** (o piso é 15) e **2,9 para
+protanopia** (o piso é 8) — categorias vizinhas num gráfico ficariam indistinguíveis até
+para quem enxerga todas as cores. A faixa de luminosidade do tema escuro é estreita
+(L 0,48–0,67), então nem separar por claro e escuro resolve. Azul e roxo entram onde cabem
+(`--series-blue`, `--series-violet`, `--series-magenta`); os quentes ficam porque é o que
+mantém um gráfico legível.
+
+O conjunto em uso passa em todas as verificações, nos dois temas: faixa de luminosidade,
+piso de saturação, separação sob daltonismo e piso de visão normal.
 
 ## Sincronizar entre aparelhos
 

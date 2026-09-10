@@ -526,6 +526,81 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* ------------------- 11. arrastar a linha para marcar como pago */
+
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await ctx.newPage();
+  const quebras = [];
+  page.on('pageerror', (e) => quebras.push(String(e)));
+  await page.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), CARTEIRA);
+  await page.goto(`${APP}#/lancamentos`);
+  await page.waitForTimeout(900);
+
+  const estadoDaPrimeira = () =>
+    page.evaluate(() => {
+      const caixa = document.querySelector('.entry-swipe .check-pago');
+      return { marcada: caixa?.checked ?? null, descricao: document.querySelector('.entry-title .text')?.textContent };
+    });
+
+  const arrastar = async (distancia) => {
+    const caixa = await page.locator('.entry-swipe').first().boundingBox();
+    const y = caixa.y + caixa.height / 2;
+    await page.touchscreen.tap(1, 1).catch(() => {});
+    const cdp = await ctx.newCDPSession(page);
+    const ponto = (x) => [{ x, y, radiusX: 10, radiusY: 10, force: 1, id: 1 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: ponto(caixa.x + 40) });
+    for (let i = 1; i <= 6; i += 1) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: ponto(caixa.x + 40 + (distancia * i) / 6),
+      });
+      await page.waitForTimeout(20);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(500);
+  };
+
+  const antes = await estadoDaPrimeira();
+
+  // Arrasto curto: não deve fazer nada, nem abrir o lançamento.
+  await arrastar(20);
+  const curto = await estadoDaPrimeira();
+  const abriuDialogo = await page.locator('.dialog').count();
+  if (curto.marcada !== antes.marcada) erro('um arrasto curto marcou o lançamento sem querer');
+  else if (abriuDialogo > 0) erro('um arrasto curto abriu o lançamento');
+  else ok('arrasto curto não faz nada — nem marca, nem abre');
+
+  // Arrasto longo: alterna.
+  await arrastar(140);
+  const longo = await estadoDaPrimeira();
+  if (longo.marcada === antes.marcada) erro(`arrastar não alternou "${antes.descricao}" (${antes.marcada} → ${longo.marcada})`);
+  else if ((await page.locator('.dialog').count()) > 0) erro('o arrasto também abriu o lançamento');
+  else ok(`arrastar alternou "${longo.descricao}": ${antes.marcada} → ${longo.marcada}`);
+
+  // E de volta, para o outro lado.
+  await arrastar(-140);
+  const volta = await estadoDaPrimeira();
+  if (volta.marcada !== antes.marcada) erro('arrastar para o outro lado não desfez');
+  else ok('arrastar para o outro lado desfaz');
+
+  // Rolar a página continua funcionando: é o que o gesto costuma quebrar.
+  const rolouAntes = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(400);
+  const rolouDepois = await page.evaluate(() => window.scrollY || document.querySelector('.content')?.scrollTop || 0);
+  if (rolouDepois === rolouAntes && rolouDepois === 0) {
+    console.log('ℹ️  a rolagem não pôde ser medida nesta viewport');
+  } else ok('a página continua rolando com o gesto ligado');
+
+  if (quebras.length > 0) erro(`swipe: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

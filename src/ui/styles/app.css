@@ -1,42 +1,57 @@
 /* =========================================================================
-   Tokens
-   As cores de série vêm da paleta validada para daltonismo (ver README);
-   cada modo tem seu próprio passo da mesma família de cor.
+   Tokens — branco, azul e roxo.
+
+   A interface (fundos, acento, botões, navegação, seleção) é branca com azul
+   e roxo. Duas famílias de cor ficam **fora** dessa identidade, de propósito:
+
+   - verde e vermelho de entrada e saída (`--good` / `--bad`), que são
+     semântica de dinheiro e não decoração;
+   - as cores de série que identificam conta e categoria nos gráficos.
+
+   O motivo da segunda é medido, não estético. Cinco tons de azul-roxo
+   encadeados foram testados no validador de daltonismo do projeto: o melhor
+   resultado deu ΔE 13,2 para visão normal (o piso é 15) e 2,9 para
+   protanopia (o piso é 8) — ou seja, categorias vizinhas num gráfico ficariam
+   indistinguíveis até para quem enxerga todas as cores. A faixa de
+   luminosidade do tema escuro é estreita (L 0,48–0,67), então nem separar por
+   claro e escuro resolve. Azul e roxo entram onde cabem (`--series-blue`,
+   `--series-violet`, `--series-magenta`); os quentes ficam porque é o que
+   mantém um gráfico legível.
    ========================================================================= */
 
 :root {
   color-scheme: light;
 
-  --bg: #f2f1ee;
-  --surface: #fcfcfb;
-  --surface-2: #f5f4f1;
-  --surface-3: #eceae5;
-  --border: #dedbd4;
-  --border-strong: #c9c5bb;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #fbfcff;
+  --surface-3: #f0f1f7;
+  --border: #e3e4ea;
+  --border-strong: #cbcdd6;
 
-  --text: #0b0b0b;
-  --text-2: #52514e;
-  --text-3: #7c7a74;
+  --text: #1d1f27;
+  --text-2: #53555e;
+  --text-3: #777a83;
 
-  --accent: #2a78d6;
+  --accent: #2e5bda;
   --accent-ink: #ffffff;
-  --accent-soft: #e6effb;
+  --accent-soft: #edf4ff;
 
   --good: #008300;
   --bad: #e34948;
   --good-soft: #e2f0e2;
   --bad-soft: #fbe8e8;
 
-  --series-blue: #2a78d6;
+  --series-blue: #2e5bda;
   --series-orange: #eb6834;
   --series-aqua: #1baf7a;
   --series-yellow: #eda100;
-  --series-magenta: #e87ba4;
+  --series-magenta: #822cc4;
   --series-green: #008300;
-  --series-violet: #4a3aa7;
+  --series-violet: #6e60d2;
   --series-red: #e34948;
 
-  --shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px -16px rgb(0 0 0 / 24%);
+  --shadow: 0 1px 2px rgb(29 31 39 / 5%), 0 8px 24px -16px rgb(29 31 39 / 20%);
   --radius: 12px;
   --radius-sm: 8px;
 
@@ -48,33 +63,36 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --bg: #121211;
-    --surface: #1a1a19;
-    --surface-2: #212120;
-    --surface-3: #2a2a28;
-    --border: #34342f;
-    --border-strong: #4a4a44;
+    --bg: #101119;
+    --surface: #181a24;
+    --surface-2: #1f2130;
+    --surface-3: #282a3b;
+    --border: #303348;
+    --border-strong: #454962;
 
     --text: #ffffff;
-    --text-2: #c3c2b7;
-    --text-3: #93928a;
+    --text-2: #c2c4d2;
+    --text-3: #9093a4;
 
-    --accent: #3987e5;
-    --accent-ink: #ffffff;
-    --accent-soft: #16283f;
+    --accent: #6d9aff;
+    --accent-ink: #101119;
+    --accent-soft: #1a2846;
 
     --good: #2fa32f;
     --bad: #e66767;
     --good-soft: #162a16;
     --bad-soft: #34201f;
 
-    --series-blue: #3987e5;
+    /* Azul e roxo um passo mais escuros que o acento: as cores de série
+       precisam caber na faixa L 0,48–0,67 do tema escuro, e o acento não —
+       ele nunca é uma série entre outras. */
+    --series-blue: #4c85f0;
     --series-orange: #d95926;
     --series-aqua: #199e70;
     --series-yellow: #c98500;
-    --series-magenta: #d55181;
-    --series-green: #008300;
-    --series-violet: #9085e9;
+    --series-magenta: #a75fdd;
+    --series-green: #2fa32f;
+    --series-violet: #7d72e0;
     --series-red: #e66767;
 
     --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -16px rgb(0 0 0 / 60%);
@@ -84,33 +102,35 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #121211;
-  --surface: #1a1a19;
-  --surface-2: #212120;
-  --surface-3: #2a2a28;
-  --border: #34342f;
-  --border-strong: #4a4a44;
+  --bg: #101119;
+  --surface: #181a24;
+  --surface-2: #1f2130;
+  --surface-3: #282a3b;
+  --border: #303348;
+  --border-strong: #454962;
 
   --text: #ffffff;
-  --text-2: #c3c2b7;
-  --text-3: #93928a;
+  --text-2: #c2c4d2;
+  --text-3: #9093a4;
 
-  --accent: #3987e5;
-  --accent-ink: #ffffff;
-  --accent-soft: #16283f;
+  --accent: #6d9aff;
+  --accent-ink: #101119;
+  --accent-soft: #1a2846;
 
   --good: #2fa32f;
   --bad: #e66767;
   --good-soft: #162a16;
   --bad-soft: #34201f;
 
-  --series-blue: #3987e5;
+  /* Mesmos valores do bloco acima: um tema, dois jeitos de chegar nele — o
+     do sistema e o escolhido à mão. */
+  --series-blue: #4c85f0;
   --series-orange: #d95926;
   --series-aqua: #199e70;
   --series-yellow: #c98500;
-  --series-magenta: #d55181;
-  --series-green: #008300;
-  --series-violet: #9085e9;
+  --series-magenta: #a75fdd;
+  --series-green: #2fa32f;
+  --series-violet: #7d72e0;
   --series-red: #e66767;
 
   --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -16px rgb(0 0 0 / 60%);
@@ -544,6 +564,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
   width: 100%;
 }
 .entry:hover { background: var(--surface-2); border-color: var(--border); }
+/* Arrastar a linha para marcar como pago (só no celular; no computador a
+   caixa de seleção já resolve). `pan-y` deixa a página rolar normalmente e
+   entrega ao app só o movimento lateral — sem isso, o gesto disputaria a
+   rolagem com o navegador e perderia as duas coisas. */
+.entry-swipe { position: relative; overflow: hidden; touch-action: pan-y; }
+.entry-swipe .entry { position: relative; background: var(--surface); transition: transform 0.18s ease-out; }
+.entry-swipe-fundo {
+  position: absolute; inset: 0;
+  display: flex; align-items: center;
+  padding: 0 18px;
+  font-size: 0.82rem; font-weight: 620;
+  color: var(--text-2); background: var(--surface-2);
+}
+.entry-swipe-fundo.direita { justify-content: flex-start; }
+.entry-swipe-fundo.esquerda { justify-content: flex-end; }
+/* Passou do ponto: a cor confirma o que a etiqueta já diz. */
+.entry-swipe-fundo.pronto { background: var(--accent); color: var(--accent-ink); }
+
 .entry + .entry { border-top: 1px solid var(--border); border-radius: var(--radius-sm); }
 .entry.no-date {
   grid-template-columns: minmax(0, 1fr) auto auto;

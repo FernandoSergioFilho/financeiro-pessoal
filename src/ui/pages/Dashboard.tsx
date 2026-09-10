@@ -300,7 +300,21 @@ export function Dashboard({
           )}
         </Card>
 
-        <Card title={comparavel ? 'O que mudou desde o período anterior' : 'O que mudou'}>
+        <Card
+          title={comparavel ? 'O que mudou desde o período anterior' : 'O que mudou'}
+          action={
+            comparavel && mudancas.length > 0 ? (
+              <button
+                type="button"
+                className="btn sm ghost"
+                title={`Abrir ${rotuloDoPeriodo(moverPeriodo(periodo, -1))}`}
+                onClick={() => irPara({ pagina: 'painel', periodo: moverPeriodo(periodo, -1) })}
+              >
+                Ver {rotuloDoPeriodo(moverPeriodo(periodo, -1)).toLowerCase()}
+              </button>
+            ) : undefined
+          }
+        >
           {!comparavel ? (
             <p className="dim" style={{ fontSize: '0.86rem' }}>
               Escolha um dia, mês, trimestre ou ano para comparar com o período anterior.

@@ -1,12 +1,13 @@
 /** Lista de lançamentos agrupada por dia, com ações rápidas. */
 
-import { Fragment } from 'react';
+import { Fragment, useRef, useState } from 'react';
 
 import { formatDate, formatDayMonth, today } from '../../domain/date.ts';
 import { formatMoney, formatSigned } from '../../domain/money.ts';
 import type { DisplayEntry, ProjectedEntry } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
+import { deslocamentoVisual, direcaoDoGesto, passouDoLimiar } from '../gestos.ts';
 import { Dot, EmptyState } from './primitives.tsx';
 
 function isProjection(entry: DisplayEntry): entry is ProjectedEntry {
@@ -56,19 +57,88 @@ export function EntryRow({
     api.updateEntry(entry.id, { status: pending ? 'settled' : 'pending' });
   }
 
+  /*
+   * Arrastar a linha para marcar como pago.
+   *
+   * No celular, a caixinha tem 20px e mira-se com um dedo de 10mm; abrir o
+   * lançamento só para dizer "paguei" é caro quando há trinta contas
+   * atrasadas. O gesto vale para os dois lados de propósito — não há
+   * convenção para lembrar, e a etiqueta que aparece atrás diz o que vai
+   * acontecer. As regras do gesto estão em `ui/gestos.ts`.
+   */
+  const [arrasto, setArrasto] = useState(0);
+  const gesto = useRef<{ x: number; y: number; direcao: 'indefinido' | 'horizontal' | 'vertical' } | null>(null);
+  const arrastou = useRef(false);
+
+  function aoTocar(event: React.TouchEvent) {
+    const toque = event.touches[0];
+    if (!toque) return;
+    gesto.current = { x: toque.clientX, y: toque.clientY, direcao: 'indefinido' };
+    arrastou.current = false;
+  }
+
+  function aoMover(event: React.TouchEvent) {
+    const toque = event.touches[0];
+    if (!gesto.current || !toque) return;
+    const dx = toque.clientX - gesto.current.x;
+    const dy = toque.clientY - gesto.current.y;
+
+    if (gesto.current.direcao === 'indefinido') {
+      gesto.current.direcao = direcaoDoGesto(dx, dy);
+    }
+    // Uma vez que o gesto virou rolagem, ele continua rolagem até o dedo
+    // sair: reavaliar no meio faria a linha pular durante a rolagem.
+    if (gesto.current.direcao !== 'horizontal') return;
+
+    arrastou.current = true;
+    setArrasto(deslocamentoVisual(dx));
+  }
+
+  function aoSoltar() {
+    const valeu = gesto.current?.direcao === 'horizontal' && passouDoLimiar(arrasto);
+    gesto.current = null;
+    setArrasto(0);
+    if (valeu) alternarPago();
+  }
+
+  const puxando = Math.abs(arrasto) > 4;
+  const vaiValer = passouDoLimiar(arrasto);
+
   return (
-    <div
-      className={showDate ? 'entry' : 'entry no-date'}
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(entry)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
+    <div className="entry-swipe">
+      {puxando && (
+        <span
+          className={`entry-swipe-fundo ${arrasto > 0 ? 'direita' : 'esquerda'} ${vaiValer ? 'pronto' : ''}`}
+          aria-hidden="true"
+        >
+          {pending ? '✓ Marcar pago' : '↩ Voltar a pagar'}
+        </span>
+      )}
+      <div
+        className={showDate ? 'entry' : 'entry no-date'}
+        role="button"
+        tabIndex={0}
+        style={arrasto === 0 ? undefined : { transform: `translateX(${arrasto}px)`, transition: 'none' }}
+        onTouchStart={aoTocar}
+        onTouchMove={aoMover}
+        onTouchEnd={aoSoltar}
+        onTouchCancel={aoSoltar}
+        onClick={() => {
+          // Depois de um arrasto o navegador ainda dispara o clique; abrir o
+          // lançamento aqui seria o gesto fazendo duas coisas de uma vez.
+          if (arrastou.current) {
+            arrastou.current = false;
+            return;
+          }
           onOpen(entry);
-        }
-      }}
-    >
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpen(entry);
+          }
+        }}
+      >
       {showDate && <span className="entry-date num">{formatDayMonth(entry.date)}</span>}
 
       {/* Título e detalhe são filhos diretos da grade: dentro de um invólucro,
@@ -120,6 +190,7 @@ export function EntryRow({
           onChange={alternarPago}
         />
       </span>
+      </div>
     </div>
   );
 }
