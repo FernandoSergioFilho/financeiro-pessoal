@@ -115,6 +115,19 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
+- **Ainda posso gastar** — o número que o painel não dava. Do que entra no período, o app
+  subtrai o que já saiu **e** o que ainda vai sair (contas fixas, parcelas, boletos
+  marcados). O que sobra é o que é escolha — e vem também dividido pelos dias que faltam,
+  porque "sobram R$ 1.200" e "sobram R$ 60 por dia até o dia 30" pedem comportamentos
+  diferentes de quem lê. Ao lado, o **ritmo do período**: um medidor com uma marca em onde o
+  gasto deveria estar a esta altura do mês.
+- **Faturas em aberto** — por cartão, quanto está na fatura que fecha agora, quando fecha e
+  quando vence. Com quatro cartões, "saldo do cartão" não responde nada.
+- **Atalhos em todo número** — o aviso de atrasados é um botão; os cartões de entradas,
+  saídas e "ainda vai sair" levam à lista daquele recorte; cada barra de categoria abre os
+  lançamentos dela; cada coluna do gráfico mensal passa o painel para aquele mês; cada conta
+  do "saldo por conta" abre o extrato dela. Ver um número sem poder ir até ele transforma
+  informação em cobrança.
 - **Analisar** — no painel, um botão que lê o período como um relatório de fechamento:
   resultado e margem, gasto contra a própria média dos meses fechados, custo fixo sobre a
   renda, parcelas já comprometidas, onde o dinheiro concentra e quais categorias fugiram do
@@ -125,6 +138,11 @@ apagar uma delas, clique na linha.
   diferentes, e somá-las daria um número que não existe em lugar nenhum. Ao cadastrar
   "Nubank cartão" com um "Nubank" já existente, o app oferece o agrupamento — oferece, nunca
   aplica sozinho.
+- **Nada nasce pago** — nem as parcelas de data já vencida. O app não decide sozinho que
+  data no passado significa dinheiro que saiu: a compra pode ter sido cancelada, a fatura
+  pode não ter sido paga. Quem diz que pagou é você, na caixa de seleção da lista — que vai
+  e volta. Em Ajustes há um **desmarcar todos como pagos**, para recomeçar a marcação do
+  zero.
 - **Cópias automáticas** — o app guarda sozinho o estado anterior de tempos em tempos, e
   **sempre no instante antes de uma perda grande** (um "apagar tudo" sem querer, uma
   importação torta, uma sincronização que trouxe a carteira vazia por cima da cheia). São

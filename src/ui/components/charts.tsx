@@ -15,7 +15,16 @@ import type { CategoryChange, CategoryTotal, DayPoint, MonthPoint } from '../../
 import { formatDayMonth, formatMonthKey } from '../../domain/date.ts';
 import { colorVar } from './primitives.tsx';
 
-export function CategoryBars({ data, limit = 7 }: { data: CategoryTotal[]; limit?: number }) {
+export function CategoryBars({
+  data,
+  limit = 7,
+  onAbrir,
+}: {
+  data: CategoryTotal[];
+  limit?: number;
+  /** Clicar na barra leva aos lançamentos daquela categoria. */
+  onAbrir?: (categoryId: string) => void;
+}) {
   if (data.length === 0) return null;
 
   // Além do limite as fatias viram uma linha "Outras": mais barras não
@@ -32,8 +41,28 @@ export function CategoryBars({ data, limit = 7 }: { data: CategoryTotal[]; limit
     <div className="bars">
       {rows.map((row, index) => {
         const name = row.category?.name ?? (index >= limit ? 'Outras' : 'Sem categoria');
+        // Só a barra de uma categoria de verdade leva a algum lugar: "Outras"
+        // é a soma de várias, e "Sem categoria" não tem o que filtrar.
+        const abrivel = Boolean(onAbrir && row.category);
         return (
-          <div className="bar-row" key={row.category?.id ?? `rest-${index}`}>
+          <div
+            className={abrivel ? 'bar-row clicavel' : 'bar-row'}
+            key={row.category?.id ?? `rest-${index}`}
+            role={abrivel ? 'button' : undefined}
+            tabIndex={abrivel ? 0 : undefined}
+            aria-label={abrivel ? `Ver lançamentos de ${name}` : undefined}
+            onClick={abrivel ? () => onAbrir!(row.category!.id) : undefined}
+            onKeyDown={
+              abrivel
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onAbrir!(row.category!.id);
+                    }
+                  }
+                : undefined
+            }
+          >
             <span className="bar-label">
               <span aria-hidden="true">{row.category?.emoji ?? '•'}</span>
               <span className="text">{name}</span>
@@ -57,7 +86,16 @@ export function CategoryBars({ data, limit = 7 }: { data: CategoryTotal[]; limit
   );
 }
 
-export function MonthlyBars({ data, currentKey }: { data: MonthPoint[]; currentKey: string }) {
+export function MonthlyBars({
+  data,
+  currentKey,
+  onAbrir,
+}: {
+  data: MonthPoint[];
+  currentKey: string;
+  /** Clicar numa coluna passa o painel inteiro para aquele mês. */
+  onAbrir?: (mes: string) => void;
+}) {
   const [focus, setFocus] = useState<string | null>(null);
   const max = Math.max(...data.flatMap((point) => [point.income, point.expense]), 1);
   const active = data.find((point) => point.key === focus) ?? data.find((point) => point.key === currentKey);
@@ -86,10 +124,23 @@ export function MonthlyBars({ data, currentKey }: { data: MonthPoint[]; currentK
         {data.map((point) => (
           <div
             key={point.key}
-            className={point.key === currentKey ? 'month-col current' : 'month-col'}
+            className={`${point.key === currentKey ? 'month-col current' : 'month-col'}${onAbrir ? ' clicavel' : ''}`}
             onMouseEnter={() => setFocus(point.key)}
             onFocus={() => setFocus(point.key)}
             tabIndex={0}
+            role={onAbrir ? 'button' : undefined}
+            aria-label={onAbrir ? `Ver ${formatMonthKey(point.key)}` : undefined}
+            onClick={onAbrir ? () => onAbrir(point.key) : undefined}
+            onKeyDown={
+              onAbrir
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onAbrir(point.key);
+                    }
+                  }
+                : undefined
+            }
             title={`${formatMonthKey(point.key)} — entradas ${formatMoney(point.income)}, saídas ${formatMoney(point.expense)}`}
           >
             <div className="month-bars">
@@ -101,7 +152,13 @@ export function MonthlyBars({ data, currentKey }: { data: MonthPoint[]; currentK
                 <div className="month-bar out" style={{ height: `${(point.expense / max) * 100}%` }} />
               </div>
             </div>
-            <span className="month-label">{point.key.slice(5)}/{point.key.slice(2, 4)}</span>
+            {/* Doze colunas com "09/26" em cada uma não cabem: os rótulos se
+                encavalam e nenhum é lido. Só o mês, e o ano apenas quando ele
+                vira — que é a única vez em que o ano informa alguma coisa. */}
+            <span className="month-label">
+              {point.key.slice(5)}
+              {point.key.slice(5) === '01' && <span className="ano">/{point.key.slice(2, 4)}</span>}
+            </span>
           </div>
         ))}
       </div>

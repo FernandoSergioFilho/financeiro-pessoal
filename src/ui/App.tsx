@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { periodoAtual, trocarGrao, type Periodo } from '../domain/period.ts';
+import { periodoAtual, type Periodo } from '../domain/period.ts';
 import type { DisplayEntry } from '../domain/types.ts';
 import { useFinance } from '../state/store.tsx';
 import { EditEntryDialog, NewEntryDialog } from './components/EntryForms.tsx';
@@ -20,6 +20,7 @@ import { EntriesPage } from './pages/EntriesPage.tsx';
 import { PurchasesPage } from './pages/PurchasesPage.tsx';
 import { RecurringPage } from './pages/RecurringPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
+import type { Destino, DestinoAplicado } from './navegacao.ts';
 import { useTheme } from './theme.ts';
 
 interface Page {
@@ -52,14 +53,20 @@ export function App() {
   const [periodo, setPeriodo] = useState<Periodo>(periodoAtual);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<DisplayEntry | null>(null);
-  // "Ver os lançamentos desta conta", pedido de Ajustes: abre Lançamentos já
-  // filtrado e com o período em "Tudo", que é onde o movimento escondido está.
-  const [foco, setFoco] = useState<{ conta: string; token: number } | null>(null);
+  // Um número clicado em qualquer tela vira um destino: a página, o filtro e,
+  // quando faz sentido, o período. Ver `navegacao.ts`.
+  const [destino, setDestino] = useState<DestinoAplicado | null>(null);
 
   useEffect(() => {
     const sync = () => setPageId(pageFromHash());
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  const irPara = useCallback((pedido: Destino) => {
+    if (pedido.periodo) setPeriodo(pedido.periodo);
+    setDestino({ ...pedido, token: Date.now() });
+    window.location.hash = `#/${pedido.pagina}`;
   }, []);
 
   const navigate = useCallback((id: string) => {
@@ -174,28 +181,25 @@ export function App() {
               onOpenEntry={setEditing}
               onNew={() => setCreating(true)}
               onNavigate={navigate}
+              irPara={irPara}
             />
           )}
           {page.id === 'lancamentos' && (
             <EntriesPage
               periodo={periodo}
-              foco={foco}
+              destino={destino}
               onOpenEntry={setEditing}
               onNew={() => setCreating(true)}
             />
           )}
-          {page.id === 'recorrentes' && <RecurringPage onNew={() => setCreating(true)} />}
-          {page.id === 'parceladas' && <PurchasesPage onNew={() => setCreating(true)} />}
+          {page.id === 'recorrentes' && <RecurringPage onNew={() => setCreating(true)} irPara={irPara} />}
+          {page.id === 'parceladas' && <PurchasesPage onNew={() => setCreating(true)} irPara={irPara} />}
           {page.id === 'ajustes' && (
             <SettingsPage
               periodo={periodo}
               theme={theme}
               onThemeChange={setTheme}
-              onVerConta={(conta) => {
-                setPeriodo((atual) => trocarGrao(atual, 'tudo'));
-                setFoco({ conta, token: Date.now() });
-                navigate('lancamentos');
-              }}
+              irPara={irPara}
             />
           )}
         </main>

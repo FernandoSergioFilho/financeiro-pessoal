@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
-import { addMonthsToKey, currentMonthKey, formatDate, formatMonthKey, monthKey } from '../../domain/date.ts';
+import { addMonthsToKey, currentMonthKey, formatDate, formatMonthKey, monthKey, today } from '../../domain/date.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { FILTRO_VAZIO, casaComFiltro, type FiltroBasico } from '../../domain/filtros.ts';
 import { purchaseProgress } from '../../domain/installments.ts';
@@ -11,6 +11,7 @@ import { useLookups } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { BarraDeFiltros, ContagemFiltrada } from '../components/Filtros.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, EmptyState } from '../components/primitives.tsx';
+import type { IrPara } from '../navegacao.ts';
 
 const HORIZON = 6;
 
@@ -22,7 +23,15 @@ const HORIZON = 6;
  * as parcelas já confirmadas. Para corrigir, apague e cadastre de novo — uma
  * parcela isolada continua editável em Lançamentos, como sempre foi.
  */
-function PurchaseDialog({ purchase, onClose }: { purchase: InstallmentPurchase; onClose: () => void }) {
+function PurchaseDialog({
+  purchase,
+  irPara,
+  onClose,
+}: {
+  purchase: InstallmentPurchase;
+  irPara: IrPara;
+  onClose: () => void;
+}) {
   const { data, api } = useFinance();
   const { accountName, categoryById } = useLookups();
   const [confirming, setConfirming] = useState(false);
@@ -64,6 +73,20 @@ function PurchaseDialog({ purchase, onClose }: { purchase: InstallmentPurchase; 
             Apagar
           </button>
           <span className="spacer" />
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              onClose();
+              irPara({
+                pagina: 'lancamentos',
+                filtro: { busca: purchase.description },
+                periodo: { grao: 'tudo', ancora: today() },
+              });
+            }}
+          >
+            Ver as parcelas
+          </button>
           <button type="button" className="btn ghost" onClick={onClose}>
             Fechar
           </button>
@@ -100,7 +123,7 @@ const SITUACOES: { valor: 'todas' | 'abertas' | 'quitadas'; rotulo: string }[] =
   { valor: 'quitadas', rotulo: 'Quitadas' },
 ];
 
-export function PurchasesPage({ onNew }: { onNew: () => void }) {
+export function PurchasesPage({ onNew, irPara }: { onNew: () => void; irPara: IrPara }) {
   const { data } = useFinance();
   const { accountName, categoryById } = useLookups();
   const [aberta, setAberta] = useState<InstallmentPurchase | null>(null);
@@ -281,7 +304,7 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
         )}
       </Card>
 
-      {aberta && <PurchaseDialog purchase={aberta} onClose={() => setAberta(null)} />}
+      {aberta && <PurchaseDialog purchase={aberta} irPara={irPara} onClose={() => setAberta(null)} />}
     </>
   );
 }

@@ -2,57 +2,63 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { today } from '../../domain/date.ts';
 import { FILTRO_VAZIO, casaComFiltro, type FiltroBasico } from '../../domain/filtros.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { rotuloDoPeriodo, type Periodo } from '../../domain/period.ts';
 import { periodTotals } from '../../domain/summary.ts';
-import type { DisplayEntry, EntryKind } from '../../domain/types.ts';
+import type { DisplayEntry } from '../../domain/types.ts';
 import { usePeriodEntries } from '../../state/selectors.ts';
 import { EntryList } from '../components/EntryList.tsx';
 import { BarraDeFiltros, ContagemFiltrada } from '../components/Filtros.tsx';
 import { Card } from '../components/primitives.tsx';
+import type { DestinoAplicado, RecorteDaLista } from '../navegacao.ts';
 
-type Filter = 'all' | EntryKind | 'pending';
-
-const FILTERS: { value: Filter; label: string }[] = [
+const FILTERS: { value: RecorteDaLista; label: string }[] = [
   { value: 'all', label: 'Tudo' },
   { value: 'expense', label: 'Saídas' },
   { value: 'income', label: 'Entradas' },
   { value: 'transfer', label: 'Transferências' },
-  { value: 'pending', label: 'Previstos' },
+  { value: 'pending', label: 'A pagar' },
+  { value: 'atrasados', label: 'Atrasados' },
 ];
+
+/** O recorte aplicado a um lançamento. Atrasado = a pagar com data já passada. */
+function passaNoRecorte(entry: DisplayEntry, recorte: RecorteDaLista, hoje: string): boolean {
+  if (recorte === 'all') return true;
+  if (recorte === 'pending') return entry.status === 'pending';
+  if (recorte === 'atrasados') return entry.status === 'pending' && entry.date < hoje;
+  return entry.kind === recorte;
+}
 
 export function EntriesPage({
   periodo,
-  foco,
+  destino,
   onOpenEntry,
   onNew,
 }: {
   periodo: Periodo;
-  /** Conta que outra tela mandou abrir aqui — "ver os lançamentos desta conta". */
-  foco: { conta: string; token: number } | null;
+  /** O que outra tela mandou abrir aqui — ver `ui/navegacao.ts`. */
+  destino: DestinoAplicado | null;
   onOpenEntry: (entry: DisplayEntry) => void;
   onNew: () => void;
 }) {
   const entries = usePeriodEntries(periodo);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<RecorteDaLista>('all');
   const [busca, setBusca] = useState<FiltroBasico>(FILTRO_VAZIO);
 
-  // O `token` muda a cada pedido, para que clicar de novo no mesmo botão
-  // volte a aplicar o filtro depois de o usuário tê-lo limpado à mão.
+  // O `token` muda a cada pedido, para que clicar de novo no mesmo atalho
+  // volte a aplicar o filtro depois de a pessoa tê-lo limpado à mão.
   useEffect(() => {
-    if (!foco) return;
-    setBusca({ ...FILTRO_VAZIO, accountId: foco.conta });
-    setFilter('all');
-  }, [foco]);
+    if (!destino || destino.pagina !== 'lancamentos') return;
+    setBusca({ ...FILTRO_VAZIO, ...destino.filtro });
+    setFilter(destino.recorte ?? 'all');
+  }, [destino]);
 
+  const hoje = today();
   const filtered = useMemo(
-    () =>
-      entries.filter((entry) => {
-        if (filter === 'pending' ? entry.status !== 'pending' : filter !== 'all' && entry.kind !== filter) return false;
-        return casaComFiltro(entry, busca);
-      }),
-    [entries, filter, busca],
+    () => entries.filter((entry) => passaNoRecorte(entry, filter, hoje) && casaComFiltro(entry, busca)),
+    [entries, filter, busca, hoje],
   );
 
   const totals = periodTotals(filtered);

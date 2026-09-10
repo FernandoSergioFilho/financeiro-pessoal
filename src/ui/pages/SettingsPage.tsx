@@ -3,7 +3,9 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { descreverUso, limparComprasOrfas, moverConta, usoDaConta } from '../../domain/accounts.ts';
+import { today } from '../../domain/date.ts';
 import { descreverCopia, type Copia } from '../../domain/backup.ts';
+import { desmarcarTodosComoPagos, quantosEstaoPagos } from '../../domain/pagamentos.ts';
 import { agruparPorInstituicao, instituicoesConhecidas, sugerirInstituicao } from '../../domain/institutions.ts';
 import { contarDuplicados, juntarDuplicados } from '../../domain/duplicates.ts';
 import { formatMoney } from '../../domain/money.ts';
@@ -25,6 +27,7 @@ import { useFinance } from '../../state/store.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '../components/primitives.tsx';
 import { CloudPanel } from '../components/CloudPanel.tsx';
 import { ImportarDoBanco } from '../components/ImportarDoBanco.tsx';
+import type { IrPara } from '../navegacao.ts';
 import type { ThemeChoice } from '../theme.ts';
 
 const ACCOUNT_KINDS: { value: AccountKind; label: string }[] = [
@@ -530,12 +533,12 @@ function JuntarRepetidos({ onConfirm, onCancel }: { onConfirm: () => void; onCan
  */
 function ApagarConta({
   account,
-  onVerConta,
+  irPara,
   onAviso,
   onClose,
 }: {
   account: Account;
-  onVerConta: (accountId: string) => void;
+  irPara: IrPara;
   onAviso: (mensagem: string) => void;
   onClose: () => void;
 }) {
@@ -624,7 +627,11 @@ function ApagarConta({
             className="btn sm ghost"
             onClick={() => {
               onClose();
-              onVerConta(account.id);
+              irPara({
+                pagina: 'lancamentos',
+                filtro: { accountId: account.id },
+                periodo: { grao: 'tudo', ancora: today() },
+              });
             }}
           >
             Ver esses lançamentos
@@ -672,13 +679,13 @@ export function SettingsPage({
   periodo,
   theme,
   onThemeChange,
-  onVerConta,
+  irPara,
 }: {
   periodo: Periodo;
   theme: ThemeChoice;
   onThemeChange: (theme: ThemeChoice) => void;
-  /** Abre Lançamentos filtrado por esta conta, com o período em "Tudo". */
-  onVerConta: (accountId: string) => void;
+  /** Leva a outra tela já filtrada — ver `ui/navegacao.ts`. */
+  irPara: IrPara;
 }) {
   const { data, api, cloud } = useFinance();
   const { accounts, categories, accountName, categoryName } = useLookups();
@@ -694,6 +701,8 @@ export function SettingsPage({
   const [importandoBanco, setImportandoBanco] = useState(false);
   const [copias, setCopias] = useState<Copia[]>([]);
   const [restaurando, setRestaurando] = useState<Copia | null>(null);
+  const [desmarcando, setDesmarcando] = useState(false);
+  const pagos = useMemo(() => quantosEstaoPagos(data), [data]);
   const [juntando, setJuntando] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -890,6 +899,22 @@ export function SettingsPage({
                       type="button"
                       className="btn ghost"
                       style={{ padding: 0, width: 20, height: 20, fontSize: 11 }}
+                      aria-label={`Ver lançamentos de ${category.name}`}
+                      title={`Ver lançamentos de ${category.name}`}
+                      onClick={() =>
+                        irPara({
+                          pagina: 'lancamentos',
+                          filtro: { categoryId: category.id },
+                          periodo: { grao: 'tudo', ancora: today() },
+                        })
+                      }
+                    >
+                      🔎
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      style={{ padding: 0, width: 20, height: 20, fontSize: 11 }}
                       aria-label={`Editar ${category.name}`}
                       onClick={() => setCategoryDialog({ category })}
                     >
@@ -1029,6 +1054,26 @@ export function SettingsPage({
           )}
 
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
+
+          {/* Existe por causa de uma correção: até certa versão, parcela com
+              data vencida nascia paga. Conferir uma a uma seria trabalho de
+              horas — este botão devolve tudo para "a pagar" de uma vez. */}
+          <div className="setting-text">
+            <div className="title">Marcações de pagamento</div>
+            <div className="dim">
+              {pagos === 0
+                ? 'Nenhum lançamento está marcado como pago.'
+                : `${pagos} ${pagos === 1 ? 'lançamento está marcado' : 'lançamentos estão marcados'} como pagos.`}{' '}
+              Transferências entre suas contas não entram nessa conta.
+            </div>
+          </div>
+          <div className="row wrap" style={{ marginTop: 8 }}>
+            <button type="button" className="btn" disabled={pagos === 0} onClick={() => setDesmarcando(true)}>
+              ↩️ Desmarcar todos como pagos
+            </button>
+          </div>
+
+          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
           <div className="row wrap">
             <button type="button" className="btn" onClick={() => api.loadDemo()}>
               🎲 Carregar dados de exemplo
@@ -1071,6 +1116,28 @@ export function SettingsPage({
       {importando && <ImportarPlanilha onClose={() => setImportando(false)} />}
       {importandoBanco && <ImportarDoBanco onClose={() => setImportandoBanco(false)} />}
 
+      {desmarcando && (
+        <ConfirmDialog
+          title="Desmarcar todos como pagos"
+          confirmLabel="Desmarcar todos"
+          message={
+            `Os ${pagos} lançamentos marcados como pagos voltam a "a pagar", e você remarca só o que de fato ` +
+            'pagou. Nada é apagado e nenhum valor muda — só a marcação. Mas as marcações certas que você já tiver ' +
+            'feito também se perdem, e não há como desfazer em bloco: só remarcando.'
+          }
+          onConfirm={() => {
+            const { data: novo, alterados } = desmarcarTodosComoPagos(data, new Date().toISOString());
+            api.replaceData(novo);
+            setDesmarcando(false);
+            setMessage(
+              `${alterados} ${alterados === 1 ? 'lançamento voltou' : 'lançamentos voltaram'} para "a pagar". ` +
+              'Marque na caixinha da lista o que já foi pago.',
+            );
+          }}
+          onCancel={() => setDesmarcando(false)}
+        />
+      )}
+
       {restaurando && (
         <ConfirmDialog
           title="Restaurar cópia automática"
@@ -1094,7 +1161,7 @@ export function SettingsPage({
       {removingAccount && (
         <ApagarConta
           account={removingAccount}
-          onVerConta={onVerConta}
+          irPara={irPara}
           onAviso={setMessage}
           onClose={() => setRemovingAccount(null)}
         />

@@ -3,12 +3,15 @@
 import { useMemo, useState } from 'react';
 
 import { addDays, addMonthsToKey, formatDate, monthEnd, monthKey, today } from '../../domain/date.ts';
+import { faturasAbertas } from '../../domain/faturas.ts';
 import { agruparPorInstituicao } from '../../domain/institutions.ts';
+import { calcularOrcamento } from '../../domain/orcamento.ts';
 import { RECORTES, filtrarPorSituacao, sufixoDoRecorte, type RecorteDeSituacao } from '../../domain/situacao.ts';
 import { formatMoney } from '../../domain/money.ts';
 import {
   INICIO_DOS_TEMPOS,
   intervaloVisivel,
+  periodoDoMes,
   moverPeriodo,
   podeMover,
   rotuloDoPeriodo,
@@ -24,38 +27,46 @@ import {
   totalsByCategory,
 } from '../../domain/summary.ts';
 import type { DisplayEntry } from '../../domain/types.ts';
-import { entriesInRange, useLookups, useOverdue, usePeriodEntries } from '../../state/selectors.ts';
+import { entriesInRange, useLookups, useOverdue, usePeriodEntries, useUpcoming } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { BotaoDeAnalise } from '../components/Analise.tsx';
+import { ListaDeFaturas } from '../components/Faturas.tsx';
+import { CartaoDisponivel, MedidorDeRitmo } from '../components/Orcamento.tsx';
 import { CategoryBars, ComparativoCategorias, MonthlyBars, SaldoDoMes } from '../components/charts.tsx';
 import { EntryList } from '../components/EntryList.tsx';
 import { Card, Dot, EmptyState } from '../components/primitives.tsx';
+import type { IrPara } from '../navegacao.ts';
 
 /** Quantas barras cabem no gráfico de entradas e saídas por mês. */
 const MAX_BARRAS = 12;
+
+/** A janela de "vence nos próximos dias" — uma semana é o que se planeja. */
+const DIAS_A_FRENTE = 7;
 
 export function Dashboard({
   periodo,
   onOpenEntry,
   onNew,
   onNavigate,
+  irPara,
 }: {
   periodo: Periodo;
   onOpenEntry: (entry: DisplayEntry) => void;
   onNew: () => void;
   onNavigate: (page: string) => void;
+  irPara: IrPara;
 }) {
   const { data, cloud } = useFinance();
   const { accounts, categories } = useLookups();
   const doPeriodo = usePeriodEntries(periodo);
   const overdue = useOverdue();
+  const proximos = useUpcoming(DIAS_A_FRENTE);
 
   // O recorte é aplicado antes de qualquer conta, para que todo indicador da
   // tela fale do mesmo conjunto — e não um do total e outro só do realizado.
   const [recorte, setRecorte] = useState<RecorteDeSituacao>('tudo');
   const entradas = useMemo(() => filtrarPorSituacao(doPeriodo, recorte), [doPeriodo, recorte]);
   const sufixo = sufixoDoRecorte(recorte);
-  const sufixoSingular = sufixoDoRecorte(recorte, 'singular');
 
   // O eixo do gráfico não pode ir do ano zero ao ano 9999: com "Tudo", o
   // intervalo encolhe para o que existe de verdade.
@@ -117,6 +128,18 @@ export function Dashboard({
 
   const recent = useMemo(() => [...entradas].reverse().slice(0, 8), [entradas]);
 
+  // "Quanto ainda posso gastar" mede o período inteiro, e não o recorte: com
+  // "Já pago" selecionado o comprometido some, e a resposta viraria mentira.
+  const orcamento = useMemo(
+    () => calcularOrcamento(doPeriodo, janela, today()),
+    [doPeriodo, janela],
+  );
+
+  const faturas = useMemo(
+    () => faturasAbertas(accounts, data.entries, today()),
+    [accounts, data.entries],
+  );
+
   if (data.entries.length === 0 && data.recurring.length === 0) {
     // Sem o ramo "entre para sincronizar" que existia aqui: com o portão de
     // login, ninguém deslogado chega a esta tela na versão publicada.
@@ -146,23 +169,41 @@ export function Dashboard({
 
   return (
     <>
+      {/* O aviso é um botão: ver que há 12 contas atrasadas sem poder ir até
+          elas transforma a informação em cobrança. Um toque leva à lista já
+          filtrada, no período que enxerga tudo. */}
       {overdue.length > 0 && (
-        <div className="banner warn">
+        <button
+          type="button"
+          className="banner warn clicavel"
+          onClick={() =>
+            irPara({
+              pagina: 'lancamentos',
+              recorte: 'atrasados',
+              periodo: { grao: 'tudo', ancora: today() },
+            })
+          }
+        >
           <span className="emoji" aria-hidden="true">
             ⏰
           </span>
           <span>
             <strong>
               {overdue.length === 1
-                ? '1 conta venceu e continua como prevista'
-                : `${overdue.length} contas venceram e continuam como previstas`}
+                ? '1 conta venceu e continua a pagar'
+                : `${overdue.length} contas venceram e continuam a pagar`}
             </strong>
             <br />
             <span className="dim">
-              A mais antiga é {overdue[0]!.description}, de {formatDate(overdue[0]!.date)}. Confirme no ✓ da lista se já pagou.
+              A mais antiga é {overdue[0]!.description}, de {formatDate(overdue[0]!.date)}. Toque para ver todas e
+              marcar o que já pagou.
             </span>
           </span>
-        </div>
+          <span className="spacer" />
+          <span aria-hidden="true" style={{ fontSize: '1.2rem', color: 'var(--text-3)' }}>
+            ›
+          </span>
+        </button>
       )}
 
       {/* O recorte por situação e a leitura do período ficam juntos, e ao lado
@@ -185,13 +226,23 @@ export function Dashboard({
         <BotaoDeAnalise periodo={periodo} entradas={entradas} />
       </div>
 
+      {/* O que decide o dia vem primeiro e maior; o resto é contexto. */}
+      <div className="grid split" style={{ alignItems: 'stretch' }}>
+        <CartaoDisponivel orcamento={orcamento} />
+        <MedidorDeRitmo orcamento={orcamento} />
+      </div>
+
       <div className="grid cols-4 keep">
         <div className="card stat">
           <span className="stat-label">Saldo hoje</span>
           <span className={`stat-value num ${balanceNow < 0 ? 'bad' : ''}`}>{formatMoney(balanceNow)}</span>
           <span className="stat-hint">Somando o que já entrou e saiu</span>
         </div>
-        <div className="card stat">
+        <button
+          type="button"
+          className="card stat clicavel"
+          onClick={() => irPara({ pagina: 'lancamentos', recorte: 'income' })}
+        >
           <span className="stat-label">Entradas{sufixo}</span>
           <span className="stat-value num good">{formatMoney(totals.income)}</span>
           <span className="stat-hint">
@@ -201,8 +252,12 @@ export function Dashboard({
                 ? `${formatMoney(totals.pendingIncome)} ainda previstos`
                 : 'Tudo confirmado'}
           </span>
-        </div>
-        <div className="card stat">
+        </button>
+        <button
+          type="button"
+          className="card stat clicavel"
+          onClick={() => irPara({ pagina: 'lancamentos', recorte: 'expense' })}
+        >
           <span className="stat-label">Saídas{sufixo}</span>
           <span className="stat-value num bad">{formatMoney(totals.expense)}</span>
           <span className="stat-hint">
@@ -212,12 +267,23 @@ export function Dashboard({
                 ? `${formatMoney(totals.pendingExpense)} a pagar`
                 : 'Tudo confirmado'}
           </span>
-        </div>
-        <div className="card stat">
-          <span className="stat-label">Sobra{sufixoSingular}</span>
-          <span className={`stat-value num ${totals.net < 0 ? 'bad' : 'good'}`}>{formatMoney(totals.net)}</span>
-          <span className="stat-hint">Saldo projetado: {formatMoney(projected)}</span>
-        </div>
+        </button>
+        {/* Este cartão já foi "Sobra", que repetia o número do destaque acima.
+            Comprometido é o que falta acontecer — informação nova, e o caminho
+            direto para a lista do que ainda há para pagar. */}
+        <button
+          type="button"
+          className="card stat clicavel"
+          onClick={() => irPara({ pagina: 'lancamentos', recorte: 'pending' })}
+        >
+          <span className="stat-label">Ainda vai sair</span>
+          <span className="stat-value num">{formatMoney(orcamento.comprometido)}</span>
+          <span className="stat-hint">
+            {orcamento.comprometido === 0
+              ? 'Nada marcado para este período'
+              : `Saldo projetado: ${formatMoney(projected)}`}
+          </span>
+        </button>
       </div>
 
       {/* `start`: sem isto os dois cartões esticam até a altura do mais alto, e
@@ -265,7 +331,10 @@ export function Dashboard({
         <div className="grid" style={{ alignContent: 'start' }}>
           <Card title="Gastos por categoria">
             {byCategory.length > 0 ? (
-              <CategoryBars data={byCategory} />
+              <CategoryBars
+                data={byCategory}
+                onAbrir={(categoryId) => irPara({ pagina: 'lancamentos', filtro: { categoryId } })}
+              />
             ) : (
               <p className="dim" style={{ fontSize: '0.86rem' }}>
                 Nenhuma saída registrada neste período.
@@ -274,9 +343,56 @@ export function Dashboard({
           </Card>
 
           <Card title="Entradas e saídas por mês">
-            <MonthlyBars data={series} currentKey={monthKey(today())} />
+            <MonthlyBars
+              data={series}
+              currentKey={monthKey(today())}
+              onAbrir={(mes) => irPara({ pagina: 'painel', periodo: periodoDoMes(mes) })}
+            />
           </Card>
         </div>
+      </div>
+
+      <div className="grid split" style={{ alignItems: 'start' }}>
+        <Card
+          title="Faturas em aberto"
+          action={
+            <button type="button" className="btn sm ghost" onClick={() => onNavigate('parceladas')}>
+              Ver parcelas
+            </button>
+          }
+        >
+          <ListaDeFaturas
+            faturas={faturas}
+            hoje={today()}
+            onAbrir={(accountId) => irPara({ pagina: 'lancamentos', filtro: { accountId } })}
+          />
+        </Card>
+
+        {/* O que vence nos próximos dias, com a caixa de pago do lado: é a
+            lista que se olha de manhã, e dá para resolver sem sair daqui. */}
+        <Card
+          title="Vence nos próximos dias"
+          action={
+            <button
+              type="button"
+              className="btn sm ghost"
+              onClick={() =>
+                irPara({ pagina: 'lancamentos', recorte: 'pending', periodo: { grao: 'tudo', ancora: today() } })
+              }
+            >
+              Ver tudo a pagar
+            </button>
+          }
+          tight
+        >
+          {proximos.length > 0 ? (
+            <EntryList entries={proximos} onOpen={onOpenEntry} />
+          ) : (
+            <p className="dim" style={{ fontSize: '0.86rem', padding: '4px 14px 12px' }}>
+              Nada a vencer nos próximos {DIAS_A_FRENTE} dias.
+            </p>
+          )}
+        </Card>
       </div>
 
       <Card title="Saldo por conta">
@@ -309,9 +425,15 @@ export function Dashboard({
                 )}
                 <div className="grid" style={{ gap: 8 }}>
                   {saldos.map(({ account, balance, withPending }) => (
-                    <div key={account.id} className="row" style={{ alignItems: 'flex-start', gap: 10 }}>
+                    <button
+                      key={account.id}
+                      type="button"
+                      className="row clicavel linha-conta"
+                      style={{ alignItems: 'flex-start', gap: 10 }}
+                      onClick={() => irPara({ pagina: 'lancamentos', filtro: { accountId: account.id } })}
+                    >
                       <Dot color={account.color} />
-                      <div style={{ minWidth: 0 }}>
+                      <div style={{ minWidth: 0, textAlign: 'left' }}>
                         <div style={{ fontWeight: 560 }}>{account.name}</div>
                         <div className={`num ${balance < 0 ? 'bad' : ''}`} style={{ fontSize: '1.05rem', fontWeight: 620 }}>
                           {formatMoney(balance)}
@@ -322,7 +444,7 @@ export function Dashboard({
                           </div>
                         )}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>

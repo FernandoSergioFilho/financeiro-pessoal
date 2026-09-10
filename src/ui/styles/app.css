@@ -804,6 +804,66 @@ textarea.input { resize: vertical; min-height: 64px; }
 
 .bars { display: flex; flex-direction: column; gap: 11px; }
 .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }
+
+/* Barras e colunas que levam a algum lugar. O alvo do toque é a linha inteira,
+   e não só a barra — no celular acertar 6px de altura é impossível. */
+.bar-row.clicavel, .month-col.clicavel { cursor: pointer; border-radius: 6px; }
+.bar-row.clicavel { margin: 0 -6px; padding: 0 6px; }
+.bar-row.clicavel:hover, .month-col.clicavel:hover { background: var(--surface-2); }
+.bar-row.clicavel:focus-visible, .month-col.clicavel:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
+/* Cartão de indicador que leva a algum lugar: continua um cartão, mas é
+   botão de verdade — teclado, foco e alvo de toque inteiros. */
+.card.stat.clicavel {
+  cursor: pointer; text-align: left; font: inherit; width: 100%;
+  border-color: var(--border);
+}
+.card.stat.clicavel:hover { background: var(--surface-2); }
+.card.stat.clicavel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Linha de conta no "Saldo por conta". */
+.linha-conta {
+  cursor: pointer; text-align: left; font: inherit; width: 100%;
+  background: none; border: 0; padding: 4px 6px; margin: -4px -6px; border-radius: 8px;
+}
+.linha-conta:hover { background: var(--surface-2); }
+.linha-conta:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Aviso que é botão: mesma cara do banner, mas responde ao toque. */
+.banner.clicavel {
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  border-color: var(--border-strong);
+}
+.banner.clicavel:hover { filter: brightness(0.98); }
+.banner.clicavel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* O número que lidera o painel. Grande porque é a decisão, não mais um dado. */
+.destaque { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; container-type: inline-size; }
+.destaque .rotulo {
+  font-size: 0.74rem; font-weight: 640; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.destaque .valor {
+  font-size: 2.6rem; font-size: clamp(1.6rem, 15cqi, 2.6rem);
+  font-weight: 680; letter-spacing: -0.03em; line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.destaque .apoio { font-size: 0.86rem; color: var(--text-2); }
+
+/* Medidor: uma razão contra um limite. O traço marca onde deveríamos estar. */
+.medidor { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+.medidor-trilho {
+  position: relative; height: 10px; border-radius: 999px;
+  background: var(--surface-3); overflow: hidden;
+}
+.medidor-preenchido { position: absolute; inset: 0 auto 0 0; border-radius: 999px; }
+.medidor-marca {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--text); border-radius: 1px;
+}
+.medidor-legenda { display: flex; gap: 10px; font-size: 0.76rem; color: var(--text-3); }
 .bar-label { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 0.85rem; }
 .bar-label .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-value { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
@@ -825,6 +885,7 @@ textarea.input { resize: vertical; min-height: 64px; }
 .month-bar.out { border-radius: 0 0 4px 4px; background: var(--bad); }
 .month-axis { width: 100%; height: 1px; background: var(--border-strong); }
 .month-label { font-size: 0.72rem; color: var(--text-3); white-space: nowrap; }
+.month-label .ano { color: var(--text-3); }
 .month-col.current .month-label { color: var(--text); font-weight: 620; }
 
 /* =========================================================================

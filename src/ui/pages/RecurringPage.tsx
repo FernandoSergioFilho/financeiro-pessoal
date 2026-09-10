@@ -12,6 +12,7 @@ import { useFinance } from '../../state/store.tsx';
 import { RecurringDialog } from '../components/EntryForms.tsx';
 import { BarraDeFiltros, ContagemFiltrada } from '../components/Filtros.tsx';
 import { Card, Dot, EmptyState } from '../components/primitives.tsx';
+import type { IrPara } from '../navegacao.ts';
 
 function nextDate(rule: RecurringRule): string | null {
   const from = today();
@@ -43,7 +44,7 @@ const TIPOS: { valor: 'todos' | 'expense' | 'income'; rotulo: string }[] = [
   { valor: 'income', rotulo: 'Entradas' },
 ];
 
-export function RecurringPage({ onNew }: { onNew: () => void }) {
+export function RecurringPage({ onNew, irPara }: { onNew: () => void; irPara: IrPara }) {
   const { data } = useFinance();
   const { accountName, categoryById } = useLookups();
   const [editing, setEditing] = useState<RecurringRule | null>(null);
@@ -216,6 +217,25 @@ export function RecurringPage({ onNew }: { onNew: () => void }) {
                       <td className={`right num ${rule.kind === 'income' ? 'good' : ''}`} style={{ fontWeight: 600 }}>
                         {rule.kind === 'income' ? '+' : '−'}
                         {formatMoney(rule.amount)}
+                        <div>
+                          <button
+                            type="button"
+                            className="btn sm ghost"
+                            title={`Ver os lançamentos de ${rule.description}`}
+                            onClick={(event) => {
+                              // A linha inteira abre a edição; este botão faz
+                              // outra coisa, então precisa segurar o clique.
+                              event.stopPropagation();
+                              irPara({
+                                pagina: 'lancamentos',
+                                filtro: { busca: rule.description },
+                                periodo: { grao: 'tudo', ancora: today() },
+                              });
+                            }}
+                          >
+                            🔎 lançamentos
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

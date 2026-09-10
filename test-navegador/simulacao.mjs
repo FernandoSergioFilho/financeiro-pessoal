@@ -442,6 +442,90 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* ------------------------- 9. os atalhos: do número até os lançamentos */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/painel`);
+  await page.waitForTimeout(900);
+
+  // O aviso de atrasados é um botão e leva à lista já filtrada.
+  await page.click('.banner.warn.clicavel');
+  await page.waitForTimeout(800);
+  const depoisDoAviso = await page.evaluate(() => ({
+    rota: location.hash,
+    recorte: document.querySelector('.segmented button[aria-pressed="true"]')?.textContent ?? '',
+    periodo: document.querySelector('.month-nav .label')?.textContent ?? '',
+    quantos: document.querySelectorAll('.entry').length,
+  }));
+  if (!depoisDoAviso.rota.includes('lancamentos')) erro(`o aviso de atrasados não navegou (${depoisDoAviso.rota})`);
+  else if (!/Atrasados/.test(depoisDoAviso.recorte)) erro(`não abriu no recorte Atrasados (${depoisDoAviso.recorte})`);
+  else if (depoisDoAviso.quantos === 0) erro('abriu a lista de atrasados vazia');
+  else ok(`o aviso leva a ${depoisDoAviso.quantos} atrasados, período ${depoisDoAviso.periodo.trim()}`);
+
+  // Uma barra de categoria leva aos lançamentos daquela categoria.
+  await page.goto(`${APP}#/painel`);
+  await page.waitForTimeout(800);
+  const categoria = await page.locator('.bar-row.clicavel .bar-label .text').first().innerText();
+  await page.locator('.bar-row.clicavel').first().click();
+  await page.waitForTimeout(800);
+  const depoisDaBarra = await page.evaluate(() => ({
+    rota: location.hash,
+    categoria: document.querySelector('select[aria-label="Filtrar por categoria"]')?.value ?? '',
+    quantos: document.querySelectorAll('.entry').length,
+  }));
+  if (!depoisDaBarra.rota.includes('lancamentos') || !depoisDaBarra.categoria) {
+    erro(`a barra de "${categoria}" não filtrou por categoria`);
+  } else ok(`a barra de "${categoria}" leva a ${depoisDaBarra.quantos} lançamentos daquela categoria`);
+
+  // Um cartão de indicador leva ao recorte dele.
+  await page.goto(`${APP}#/painel`);
+  await page.waitForTimeout(800);
+  await page.click('.card.stat.clicavel:has-text("Saídas")');
+  await page.waitForTimeout(800);
+  const depoisDoCartao = await page.evaluate(
+    () => document.querySelector('.segmented button[aria-pressed="true"]')?.textContent ?? '',
+  );
+  if (!/Saídas/.test(depoisDoCartao)) erro(`o cartão de saídas não abriu o recorte certo (${depoisDoCartao})`);
+  else ok('o cartão de saídas leva à lista de saídas');
+
+  if (quebras.length > 0) erro(`atalhos: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
+/* --------------------------- 10. desmarcar todos como pagos */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/ajustes`);
+  await page.waitForTimeout(900);
+
+  const antes = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.filter((e) => e.status === 'settled').length,
+  );
+  if (antes === 0) erro('a carteira de exemplo deveria ter lançamentos pagos para o teste valer');
+
+  await page.click('button:has-text("Desmarcar todos como pagos")');
+  await page.waitForTimeout(400);
+  await page.click('.dialog button:text-is("Desmarcar todos")');
+  await page.waitForTimeout(900);
+
+  const depois = await page.evaluate(() => {
+    const dados = JSON.parse(localStorage.getItem('financeiro-pessoal'));
+    return {
+      pagos: dados.entries.filter((e) => e.status === 'settled' && e.kind !== 'transfer').length,
+      transferencias: dados.entries.filter((e) => e.kind === 'transfer' && e.status === 'settled').length,
+      total: dados.entries.length,
+    };
+  });
+  if (depois.pagos !== 0) erro(`sobraram ${depois.pagos} marcados como pagos`);
+  else if (depois.transferencias === 0) erro('as transferências não deveriam ter sido desmarcadas');
+  else ok(`${antes} pagos viraram 0; ${depois.transferencias} transferências intactas, ${depois.total} lançamentos preservados`);
+
+  if (quebras.length > 0) erro(`desmarcar todos: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);
