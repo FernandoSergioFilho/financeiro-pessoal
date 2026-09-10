@@ -4,10 +4,12 @@ import { useMemo, useState } from 'react';
 
 import { addMonthsToKey, currentMonthKey, formatDate, formatMonthKey, monthKey } from '../../domain/date.ts';
 import { formatMoney } from '../../domain/money.ts';
+import { FILTRO_VAZIO, casaComFiltro, type FiltroBasico } from '../../domain/filtros.ts';
 import { purchaseProgress } from '../../domain/installments.ts';
 import type { InstallmentPurchase } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
+import { BarraDeFiltros, ContagemFiltrada } from '../components/Filtros.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, EmptyState } from '../components/primitives.tsx';
 
 const HORIZON = 6;
@@ -92,18 +94,38 @@ function PurchaseDialog({ purchase, onClose }: { purchase: InstallmentPurchase; 
  * Consulta das compras parceladas. Cadastrar mora no "+ Novo lançamento";
  * aqui a linha abre os detalhes.
  */
+const SITUACOES: { valor: 'todas' | 'abertas' | 'quitadas'; rotulo: string }[] = [
+  { valor: 'todas', rotulo: 'Todas' },
+  { valor: 'abertas', rotulo: 'Em aberto' },
+  { valor: 'quitadas', rotulo: 'Quitadas' },
+];
+
 export function PurchasesPage({ onNew }: { onNew: () => void }) {
   const { data } = useFinance();
   const { accountName, categoryById } = useLookups();
   const [aberta, setAberta] = useState<InstallmentPurchase | null>(null);
+  const [busca, setBusca] = useState<FiltroBasico>(FILTRO_VAZIO);
+  const [situacao, setSituacao] = useState<(typeof SITUACOES)[number]['valor']>('todas');
 
-  const rows = useMemo(
+  const todas = useMemo(
     () =>
       data.purchases
         .map((purchase) => ({ purchase, progress: purchaseProgress(purchase, data.entries) }))
         .sort((a, b) => Number(Boolean(b.progress.nextDate)) - Number(Boolean(a.progress.nextDate))
           || (a.progress.nextDate ?? '').localeCompare(b.progress.nextDate ?? '')),
     [data.purchases, data.entries],
+  );
+
+  const rows = useMemo(
+    () =>
+      todas.filter(({ purchase, progress }) => {
+        // "Quitada" é não ter mais parcela pela frente — e não a data ter
+        // passado. Parcela vencida sem pagamento continua devendo.
+        if (situacao === 'abertas' && !progress.nextDate) return false;
+        if (situacao === 'quitadas' && progress.nextDate) return false;
+        return casaComFiltro(purchase, busca);
+      }),
+    [todas, busca, situacao],
   );
 
   /** Quanto de parcela cai em cada um dos próximos meses. */
@@ -154,8 +176,27 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
         </Card>
       </div>
 
-      <Card title="Compras parceladas" tight>
-        {rows.length === 0 ? (
+      <BarraDeFiltros valor={busca} onChange={setBusca} placeholder="Buscar compra…">
+        <div className="segmented scroll-x">
+          {SITUACOES.map((opcao) => (
+            <button
+              key={opcao.valor}
+              type="button"
+              aria-pressed={situacao === opcao.valor}
+              onClick={() => setSituacao(opcao.valor)}
+            >
+              {opcao.rotulo}
+            </button>
+          ))}
+        </div>
+      </BarraDeFiltros>
+
+      <Card
+        title="Compras parceladas"
+        action={<ContagemFiltrada mostrando={rows.length} total={todas.length} singular="compra" plural="compras" />}
+        tight
+      >
+        {todas.length === 0 ? (
           <EmptyState
             emoji="🧾"
             title="Nenhuma compra parcelada"
@@ -167,6 +208,10 @@ export function PurchasesPage({ onNew }: { onNew: () => void }) {
           >
             Informe o valor total e o número de parcelas: cada parcela vira um lançamento nos meses seguintes,
             somando exatamente o total. Use o botão de novo lançamento e escolha "Parcelado".
+          </EmptyState>
+        ) : rows.length === 0 ? (
+          <EmptyState emoji="🔍" title="Nada com esses filtros">
+            Nenhuma das {todas.length} compras casa com o que você procurou. Limpe os filtros para ver todas de novo.
           </EmptyState>
         ) : (
           <div className="table-wrap">

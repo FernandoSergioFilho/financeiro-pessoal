@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { conciliar, resumirConciliacao, sugerirCategoria, type LinhaDeExtrato } from './conciliacao.ts';
+import { conciliar, lerMarcaDeParcela, resumirConciliacao, sugerirCategoria, type LinhaDeExtrato } from './conciliacao.ts';
 import type { Entry } from './types.ts';
 
 const STAMP = '2026-09-01T00:00:00.000Z';
@@ -122,5 +122,37 @@ describe('sugerirCategoria', () => {
 
   it('palavra curta demais não decide nada — "de", "da", "com"', () => {
     expect(sugerirCategoria([entry({ description: 'de', categoryId: 'x' })], 'de tudo', 'expense')).toBeNull();
+  });
+});
+
+describe('lerMarcaDeParcela', () => {
+  it('lê o jeito do Nubank', () => {
+    expect(lerMarcaDeParcela('Netshoes - Parcela 1/6')).toEqual({ numero: 1, total: 6 });
+  });
+
+  it('lê a barra solta no fim da descrição', () => {
+    expect(lerMarcaDeParcela('MAGAZINE LUIZA 2/10')).toEqual({ numero: 2, total: 10 });
+  });
+
+  it('lê "3 de 12" e o formato entre parênteses', () => {
+    expect(lerMarcaDeParcela('Compra parcelada 3 de 12')).toEqual({ numero: 3, total: 12 });
+    expect(lerMarcaDeParcela('Loja X (4/8)')).toEqual({ numero: 4, total: 8 });
+  });
+
+  it('não confunde com o que não é parcela', () => {
+    expect(lerMarcaDeParcela('Mercado')).toBeNull();
+    expect(lerMarcaDeParcela('Assinatura 2026')).toBeNull();
+  });
+
+  it('recusa parcela maior que o total, que seria data disfarçada', () => {
+    expect(lerMarcaDeParcela('Compra 12/09')).toBeNull();
+  });
+
+  it('recusa parcelamento absurdo — acima de 120 é outra coisa no meio do texto', () => {
+    expect(lerMarcaDeParcela('Pedido 1/500')).toBeNull();
+  });
+
+  it('uma parcela só não é parcelamento', () => {
+    expect(lerMarcaDeParcela('Loja 1/1')).toBeNull();
   });
 });

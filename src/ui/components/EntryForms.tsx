@@ -112,7 +112,9 @@ function useSingleState(initial: Partial<SingleState>): [SingleState, (patch: Pa
     accountId: accounts[0]?.id ?? '',
     toAccountId: accounts[1]?.id ?? '',
     categoryId: null,
-    settled: true,
+    // Nasce como "a pagar". O app não decide sozinho que algo já foi pago —
+    // quem diz é quem pagou, marcando a caixa (aqui, ou no ✓ da lista).
+    settled: false,
     notes: '',
     ...initial,
   }));
@@ -259,9 +261,9 @@ function SingleFields({
       <label className="switch">
         <input type="checkbox" checked={state.settled} onChange={(e) => set({ settled: e.target.checked })} />
         <span>
-          Já efetivado
+          Já paguei
           <span className="hint" style={{ display: 'block' }}>
-            Desmarque para deixar como previsto e conferir depois.
+            Deixe desmarcado se ainda vai pagar — o lançamento fica como previsto e você confirma no ✓ da lista.
           </span>
         </span>
       </label>

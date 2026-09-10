@@ -9,6 +9,7 @@ import { contarDuplicados, juntarDuplicados } from '../../domain/duplicates.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { accountBalance } from '../../domain/summary.ts';
 import { SERIES_COLORS, type Account, type AccountKind, type Category, type SeriesColor } from '../../domain/types.ts';
+import { categoriasPadraoQueFaltam } from '../../data/seed.ts';
 import {
   chaveDeNome,
   csvToEntries,
@@ -700,6 +701,7 @@ export function SettingsPage({
   // categorias padrão repetidas, uma leva por aparelho. O aviso só aparece se
   // ainda houver o que juntar, e some sozinho depois.
   const duplicados = useMemo(() => contarDuplicados(data), [data]);
+  const faltando = useMemo(() => categoriasPadraoQueFaltam(data.categories), [data.categories]);
   const repetidos = duplicados.contas + duplicados.categorias;
 
   function juntarRepetidos() {
@@ -907,6 +909,32 @@ export function SettingsPage({
             </div>
           </div>
         ))}
+
+        {/* Quem começou a usar o app antes de uma categoria existir não a
+            recebe sozinho. É oferta, não aviso: quem apagou uma de propósito
+            continua vendo o atalho e simplesmente não clica. */}
+        {faltando.length > 0 && (
+          <p className="hint" style={{ marginTop: 4 }}>
+            Categorias padrão que esta carteira ainda não tem:{' '}
+            <strong>{faltando.map((c) => c.name).join(', ')}</strong>.{' '}
+            <button
+              type="button"
+              className="link"
+              onClick={() => {
+                for (const nova of faltando) {
+                  api.addCategory({ name: nova.name, kind: nova.kind, emoji: nova.emoji, color: nova.color });
+                }
+                setMessage(
+                  faltando.length === 1
+                    ? `Categoria "${faltando[0]!.name}" criada.`
+                    : `${faltando.length} categorias criadas: ${faltando.map((c) => c.name).join(', ')}.`,
+                );
+              }}
+            >
+              {faltando.length === 1 ? 'Adicionar' : 'Adicionar todas'}
+            </button>
+          </p>
+        )}
       </Card>
 
       <div className="grid split">

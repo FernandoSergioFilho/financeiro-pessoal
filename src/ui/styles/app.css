@@ -455,8 +455,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tabela-extrato th:nth-child(1), .tabela-extrato td:nth-child(1) { width: 34px; }
 .tabela-extrato th:nth-child(2), .tabela-extrato td:nth-child(2) { width: 6.4rem; }
 .tabela-extrato th:nth-child(4), .tabela-extrato td:nth-child(4) { width: 7rem; }
-.tabela-extrato th:nth-child(5), .tabela-extrato td:nth-child(5) { width: 9.5rem; }
+.tabela-extrato th:nth-child(5), .tabela-extrato td:nth-child(5) { width: 4.6rem; }
+.tabela-extrato th:nth-child(6), .tabela-extrato td:nth-child(6) { width: 9.5rem; }
 .tabela-extrato td { vertical-align: top; }
+
+/* Campo curto dentro de célula de tabela. */
+.input.sm { padding: 4px 8px; font-size: 0.82rem; }
+
+/* Barra de busca das listas.
+   No desktop os controles cabem numa linha só. No celular, empilhados um por
+   linha, eles empurravam a lista para 400px abaixo da dobra — mais espaço para
+   procurar do que para o que foi encontrado. Em grade, a busca ocupa a linha
+   inteira e os dois seletores dividem a seguinte. */
+.filtros .busca { max-width: 260px; }
+.filtros .select { max-width: 190px; }
+
+@media (max-width: 720px) {
+  .filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+  .filtros .busca { grid-column: 1 / -1; max-width: none; }
+  .filtros .select { max-width: none; }
+  .filtros .segmented { grid-column: 1 / -1; }
+  .filtros .btn { grid-column: 1 / -1; justify-self: start; }
+}
 
 /* Botão que se lê como link, para ações dentro de uma frase de ajuda. */
 .link {
@@ -558,11 +578,31 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .entry-amount.projected { opacity: 0.75; }
 /* No celular não existe passar o mouse: se as ações só aparecessem no hover, o
    ✓ de "já paguei" — que o aviso do painel manda usar — não existiria lá. */
-.entry-actions { grid-area: actions; display: flex; gap: 2px; }
-@media (hover: hover) {
-  .entry-actions { opacity: 0; }
-  .entry:hover .entry-actions, .entry:focus-within .entry-actions { opacity: 1; }
+/* A caixa de "pago" fica sempre visível: ela não é só um atalho, é o estado do
+   lançamento. Escondê-la até o mouse passar por cima — como era quando ali só
+   havia um botão de confirmar — esconderia a informação junto. */
+.entry-actions { grid-area: actions; display: flex; gap: 2px; align-items: center; }
+
+.check-pago {
+  appearance: none;
+  width: 20px; height: 20px; margin: 0;
+  border: 1.5px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  display: grid; place-content: center;
+  transition: background 0.12s, border-color 0.12s;
 }
+.check-pago::after {
+  content: '✓';
+  font-size: 12px; line-height: 1; font-weight: 700;
+  color: var(--accent-ink);
+  transform: scale(0);
+  transition: transform 0.12s;
+}
+.check-pago:checked { background: var(--accent); border-color: var(--accent); }
+.check-pago:checked::after { transform: scale(1); }
+.check-pago:hover { border-color: var(--accent); }
+.check-pago:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Cartão de celular: a coluna da data e os espaços entre colunas encolhem para
    sobrar largura à descrição. */

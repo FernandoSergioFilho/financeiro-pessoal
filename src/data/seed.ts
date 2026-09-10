@@ -2,6 +2,7 @@
 
 import { addMonths, currentMonthKey, monthStart, today } from '../domain/date.ts';
 import { buildPurchase } from '../domain/installments.ts';
+import { chaveDeNome } from '../domain/text.ts';
 import type { Account, Category, FinanceData, RecurringRule, SeriesColor } from '../domain/types.ts';
 import { SCHEMA_VERSION } from './schema.ts';
 
@@ -23,7 +24,9 @@ export function defaultAccounts(): Account[] {
 
 /**
  * A ordem das cores segue a paleta validada para daltonismo: cada categoria
- * recebe o próximo slot, sem repetir enquanto houver slot livre.
+ * recebe o próximo slot. São oito slots para mais de oito categorias, então
+ * alguma cor repete; quando repete, as duas ficam longe uma da outra na lista,
+ * e quem separa de verdade é o nome ao lado da barra, não a cor.
  */
 const EXPENSE_CATEGORIES: [string, string, SeriesColor][] = [
   ['Moradia', '🏠', 'blue'],
@@ -32,6 +35,7 @@ const EXPENSE_CATEGORIES: [string, string, SeriesColor][] = [
   ['Saúde', '💊', 'yellow'],
   ['Educação', '📚', 'magenta'],
   ['Lazer', '🎬', 'green'],
+  ['Caridade', '🤝', 'orange'],
   ['Compras', '🛍️', 'violet'],
   ['Serviços', '🔌', 'red'],
   ['Outros', '📦', 'blue'],
@@ -230,4 +234,17 @@ export function demoData(): FinanceData {
     recurring,
     purchases: [notebook.purchase, geladeira.purchase],
   };
+}
+
+/**
+ * Categorias padrão que esta carteira ainda não tem.
+ *
+ * Serve para quem começou a usar o app antes de uma categoria existir: sem
+ * isto, uma categoria nova só apareceria para quem instalasse do zero. É uma
+ * oferta, não um aviso — quem apagou uma categoria de propósito continua vendo
+ * o atalho, e simplesmente não clica.
+ */
+export function categoriasPadraoQueFaltam(existentes: readonly Category[]): Category[] {
+  const tem = new Set(existentes.map((c) => `${c.kind}:${chaveDeNome(c.name)}`));
+  return defaultCategories().filter((padrao) => !tem.has(`${padrao.kind}:${chaveDeNome(padrao.name)}`));
 }

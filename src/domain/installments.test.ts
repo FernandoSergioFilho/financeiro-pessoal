@@ -41,12 +41,19 @@ describe('buildPurchase', () => {
     expect(entries.map((e) => e.date)).toEqual(['2026-01-31', '2026-02-28', '2026-03-31']);
   });
 
-  it('marca como pagas as parcelas já vencidas e prevê as futuras', () => {
-    const { entries } = buildPurchase({ ...draft, firstDate: '2020-01-10', installments: 3 }, ids());
-    expect(entries.every((e) => e.status === 'settled')).toBe(true);
+  /*
+   * Regressão. Antes, parcela com data no passado nascia "paga": o app
+   * concluía sozinho que data vencida significa dinheiro que saiu. Não
+   * significa — a compra pode ter sido cancelada, a fatura pode não ter sido
+   * paga — e a pessoa via como quitado o que ainda devia. Quem diz que pagou
+   * é quem pagou.
+   */
+  it('nenhuma parcela nasce paga, nem as de data já vencida', () => {
+    const vencidas = buildPurchase({ ...draft, firstDate: '2020-01-10', installments: 3 }, ids());
+    expect(vencidas.entries.every((e) => e.status === 'pending')).toBe(true);
 
-    const future = buildPurchase({ ...draft, firstDate: '2099-01-10', installments: 3 }, ids());
-    expect(future.entries.every((e) => e.status === 'pending')).toBe(true);
+    const futuras = buildPurchase({ ...draft, firstDate: '2099-01-10', installments: 3 }, ids());
+    expect(futuras.entries.every((e) => e.status === 'pending')).toBe(true);
   });
 
   it('lança toda parcela como despesa na conta escolhida', () => {

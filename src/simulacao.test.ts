@@ -15,15 +15,18 @@
 import { describe, expect, it } from 'vitest';
 
 import { carteiraExemplo } from './data/carteira-exemplo.ts';
+import { categoriasPadraoQueFaltam, defaultCategories } from './data/seed.ts';
 import { migrate } from './data/schema.ts';
 import { contaEmUso, moverConta, usoDaConta } from './domain/accounts.ts';
 import { addMonths, monthKey, today } from './domain/date.ts';
 import { contarDuplicados, juntarDuplicados } from './domain/duplicates.ts';
+import { FILTRO_VAZIO, casaComFiltro } from './domain/filtros.ts';
 import { agruparPorInstituicao } from './domain/institutions.ts';
 import { buildPurchase } from './domain/installments.ts';
 import { intervaloDoPeriodo, intervaloVisivel, limiteDaPrevisao, moverPeriodo, type Periodo } from './domain/period.ts';
 import { projectAll } from './domain/recurrence.ts';
 import { accountBalance, netWorth, periodTotals, totalsByCategory } from './domain/summary.ts';
+import { filtrarPorSituacao } from './domain/situacao.ts';
 import { mergeData } from './domain/sync.ts';
 import type { Entry, FinanceData } from './domain/types.ts';
 import { entriesInRange } from './state/selectors.ts';
@@ -356,6 +359,70 @@ describe('não volta a acontecer', () => {
     // O saldo inicial da conta apagada vai embora com ela; o movimento, não.
     expect(netWorth(data.accounts, data.entries)).toBe(patrimonioAntes - bb.openingBalance);
     expect(saldoBB).not.toBe(0); // a conta realmente tinha vida, senão o teste não prova nada
+  });
+
+  /*
+   * "Não quero que fique marcando que parceladas com data vencida sejam
+   * consideradas pagas." O app concluía sozinho que data no passado significa
+   * dinheiro que saiu — e não significa: a compra pode ter sido cancelada, a
+   * fatura pode não ter sido paga, e a pessoa via como quitado o que devia.
+   */
+  it('nenhuma parcela vencida nasce paga na carteira inteira', () => {
+    const data = carteira();
+    const parcelas = data.entries.filter((e) => e.purchaseId);
+    expect(parcelas.length).toBeGreaterThan(20);
+    expect(parcelas.every((e) => e.status === 'pending')).toBe(true);
+    // Inclusive as de meses atrás, que é onde o defeito aparecia.
+    expect(parcelas.some((e) => e.date < HOJE)).toBe(true);
+  });
+
+  it('marcar e desmarcar como pago vai e volta, sem perder o lançamento', () => {
+    const inicial = carteira();
+    const alvo = inicial.entries.find((e) => e.purchaseId && e.date < HOJE)!;
+
+    const pago = usar(inicial, { type: 'entry/update', id: alvo.id, patch: { status: 'settled' }, updatedAt: AGORA });
+    expect(pago.entries.find((e) => e.id === alvo.id)!.status).toBe('settled');
+
+    const devolta = usar(pago, { type: 'entry/update', id: alvo.id, patch: { status: 'pending' }, updatedAt: AGORA });
+    expect(devolta.entries.find((e) => e.id === alvo.id)!.status).toBe('pending');
+    expect(devolta.entries).toHaveLength(inicial.entries.length);
+  });
+
+  it('os dois recortes de situação somam exatamente o total do período', () => {
+    const data = carteira();
+    const { de, ate } = intervaloDoPeriodo({ grao: 'mes', ancora: HOJE });
+    const doMes = entriesInRange(data, de, ate);
+
+    const tudo = periodTotals(filtrarPorSituacao(doMes, 'tudo'));
+    const pago = periodTotals(filtrarPorSituacao(doMes, 'pago'));
+    const aPagar = periodTotals(filtrarPorSituacao(doMes, 'a-pagar'));
+
+    expect(pago.expense + aPagar.expense).toBe(tudo.expense);
+    expect(pago.income + aPagar.income).toBe(tudo.income);
+  });
+
+  it('a busca das listas acha por palavra solta, fora de ordem', () => {
+    const data = carteira();
+    const achados = data.recurring.filter((regra) =>
+      casaComFiltro(regra, { ...FILTRO_VAZIO, busca: 'saude plano' }),
+    );
+    expect(achados.map((r) => r.description)).toEqual(['Plano de saúde']);
+  });
+
+  it('filtrar por conta acha as recorrentes daquele cartão', () => {
+    const data = carteira();
+    const cartao = conta(data, 'Itaú / Cartão');
+    const achados = data.recurring.filter((regra) =>
+      casaComFiltro(regra, { ...FILTRO_VAZIO, accountId: cartao.id }),
+    );
+    expect(achados.map((r) => r.description).sort()).toEqual(['Academia']);
+  });
+
+  it('a categoria Caridade existe para quem instala o app hoje', () => {
+    expect(defaultCategories().some((c) => c.name === 'Caridade' && c.kind === 'expense')).toBe(true);
+    // E é oferecida a quem já usava o app antes de ela existir.
+    const antiga = defaultCategories().filter((c) => c.name !== 'Caridade');
+    expect(categoriasPadraoQueFaltam(antiga).map((c) => c.name)).toEqual(['Caridade']);
   });
 
   it('a data de hoje do sistema continua sendo uma data válida do domínio', () => {

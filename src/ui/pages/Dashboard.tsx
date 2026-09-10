@@ -1,9 +1,10 @@
 /** Painel do período: onde o dinheiro está, para onde foi e o que ainda vem. */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { addDays, addMonthsToKey, formatDate, monthEnd, monthKey, today } from '../../domain/date.ts';
 import { agruparPorInstituicao } from '../../domain/institutions.ts';
+import { RECORTES, filtrarPorSituacao, sufixoDoRecorte, type RecorteDeSituacao } from '../../domain/situacao.ts';
 import { formatMoney } from '../../domain/money.ts';
 import {
   INICIO_DOS_TEMPOS,
@@ -46,8 +47,15 @@ export function Dashboard({
 }) {
   const { data, cloud } = useFinance();
   const { accounts, categories } = useLookups();
-  const entradas = usePeriodEntries(periodo);
+  const doPeriodo = usePeriodEntries(periodo);
   const overdue = useOverdue();
+
+  // O recorte é aplicado antes de qualquer conta, para que todo indicador da
+  // tela fale do mesmo conjunto — e não um do total e outro só do realizado.
+  const [recorte, setRecorte] = useState<RecorteDeSituacao>('tudo');
+  const entradas = useMemo(() => filtrarPorSituacao(doPeriodo, recorte), [doPeriodo, recorte]);
+  const sufixo = sufixoDoRecorte(recorte);
+  const sufixoSingular = sufixoDoRecorte(recorte, 'singular');
 
   // O eixo do gráfico não pode ir do ano zero ao ano 9999: com "Tudo", o
   // intervalo encolhe para o que existe de verdade.
@@ -90,17 +98,17 @@ export function Dashboard({
   const series = useMemo(() => {
     const ultimo = monthKey(janela.ate);
     const meses = Array.from({ length: MAX_BARRAS }, (_, i) => addMonthsToKey(ultimo, i - (MAX_BARRAS - 1)));
-    const range = entriesInRange(data, `${meses[0]}-01`, monthEnd(meses.at(-1)!));
+    const range = filtrarPorSituacao(entriesInRange(data, `${meses[0]}-01`, monthEnd(meses.at(-1)!)), recorte);
     return monthlySeries(range, meses);
-  }, [data, janela.ate]);
+  }, [data, janela.ate, recorte]);
 
   const comparavel = podeMover(periodo);
   const anterior = useMemo(() => {
     if (!comparavel) return [];
     const passado = moverPeriodo(periodo, -1);
     const { de, ate } = intervaloVisivel(passado, []);
-    return entriesInRange(data, de, ate);
-  }, [comparavel, data, periodo]);
+    return filtrarPorSituacao(entriesInRange(data, de, ate), recorte);
+  }, [comparavel, data, periodo, recorte]);
 
   const mudancas = useMemo(
     () => (comparavel ? categoryChanges(entradas, anterior, categories) : []),
@@ -157,9 +165,22 @@ export function Dashboard({
         </div>
       )}
 
-      {/* A leitura do período fica ao lado dos números, e não numa tela
-          separada: quem olha o painel é quem quer saber o que fazer com ele. */}
+      {/* O recorte por situação e a leitura do período ficam juntos, e ao lado
+          dos números: quem olha o painel é quem quer saber o que fazer com ele. */}
       <div className="row wrap">
+        <div className="segmented scroll-x">
+          {RECORTES.map((opcao) => (
+            <button
+              key={opcao.valor}
+              type="button"
+              aria-pressed={recorte === opcao.valor}
+              title={opcao.explicacao}
+              onClick={() => setRecorte(opcao.valor)}
+            >
+              {opcao.rotulo}
+            </button>
+          ))}
+        </div>
         <span className="spacer" />
         <BotaoDeAnalise periodo={periodo} entradas={entradas} />
       </div>
@@ -171,21 +192,29 @@ export function Dashboard({
           <span className="stat-hint">Somando o que já entrou e saiu</span>
         </div>
         <div className="card stat">
-          <span className="stat-label">Entradas</span>
+          <span className="stat-label">Entradas{sufixo}</span>
           <span className="stat-value num good">{formatMoney(totals.income)}</span>
           <span className="stat-hint">
-            {totals.pendingIncome > 0 ? `${formatMoney(totals.pendingIncome)} ainda previstos` : 'Tudo confirmado'}
+            {recorte !== 'tudo'
+              ? `${entradas.filter((e) => e.kind === 'income').length} lançamentos`
+              : totals.pendingIncome > 0
+                ? `${formatMoney(totals.pendingIncome)} ainda previstos`
+                : 'Tudo confirmado'}
           </span>
         </div>
         <div className="card stat">
-          <span className="stat-label">Saídas</span>
+          <span className="stat-label">Saídas{sufixo}</span>
           <span className="stat-value num bad">{formatMoney(totals.expense)}</span>
           <span className="stat-hint">
-            {totals.pendingExpense > 0 ? `${formatMoney(totals.pendingExpense)} a pagar` : 'Tudo confirmado'}
+            {recorte !== 'tudo'
+              ? `${entradas.filter((e) => e.kind === 'expense').length} lançamentos`
+              : totals.pendingExpense > 0
+                ? `${formatMoney(totals.pendingExpense)} a pagar`
+                : 'Tudo confirmado'}
           </span>
         </div>
         <div className="card stat">
-          <span className="stat-label">Sobra</span>
+          <span className="stat-label">Sobra{sufixoSingular}</span>
           <span className={`stat-value num ${totals.net < 0 ? 'bad' : 'good'}`}>{formatMoney(totals.net)}</span>
           <span className="stat-hint">Saldo projetado: {formatMoney(projected)}</span>
         </div>

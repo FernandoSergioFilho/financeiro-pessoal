@@ -7,7 +7,7 @@
  * futura já nasce completa.
  */
 
-import { addMonths, today } from './date.ts';
+import { addMonths } from './date.ts';
 import { splitInstallments } from './money.ts';
 import type { Entry, InstallmentPurchase } from './types.ts';
 
@@ -42,7 +42,6 @@ export function buildPurchase(
   };
 
   const amounts = splitInstallments(draft.totalAmount, draft.installments);
-  const currentDay = today();
 
   const entries: Entry[] = amounts.map((amount, i) => {
     const date = addMonths(draft.firstDate, i);
@@ -55,8 +54,13 @@ export function buildPurchase(
       accountId: draft.accountId,
       toAccountId: null,
       categoryId: draft.categoryId ?? null,
-      // Parcelas que já venceram entram como pagas; as futuras, previstas.
-      status: date <= currentDay ? 'settled' : 'pending',
+      // Toda parcela nasce prevista, inclusive as de data já vencida.
+      // Antes, as vencidas entravam como pagas — o app decidia por conta
+      // própria que uma data no passado significa dinheiro que saiu, e não
+      // significa: a compra pode ter sido cancelada, a fatura pode não ter
+      // sido paga, e a pessoa via como quitado o que ainda devia. Quem diz
+      // que pagou é quem pagou, no ✓ da lista.
+      status: 'pending',
       recurringId: null,
       occurrenceDate: null,
       purchaseId: purchase.id,

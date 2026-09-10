@@ -80,18 +80,27 @@ Para experimentar sem digitar nada: **Ajustes → Carregar dados de exemplo**.
 ## O que dá para fazer
 
 - **Lançamentos** — criar, editar e apagar entradas, saídas e transferências entre contas
-  próprias. Cada um é *efetivado* (já aconteceu) ou *previsto* (ainda vai acontecer), e o
-  ✓ da lista confirma um previsto.
+  próprias. Todo lançamento nasce **a pagar**; a caixa de seleção da lista marca e desmarca
+  como pago, nos dois sentidos. Nada no app decide sozinho que algo foi pago — nem parcela
+  com data vencida, que antes nascia quitada e escondia dívida.
 - **Contas recorrentes** — aluguel, salário, assinaturas e mensalidades. Frequência
   semanal, mensal ou anual, com intervalo (a cada 2 meses, por exemplo) e término opcional
   por data ou por número de cobranças. Os vencimentos aparecem sozinhos nos meses
   seguintes.
 - **Compras parceladas** — informe o total e o número de parcelas; cada parcela vira um
-  lançamento nos meses seguintes, somando **exatamente** o total.
+  lançamento nos meses seguintes, somando **exatamente** o total. Nenhuma nasce paga,
+  inclusive as de data já vencida.
+- **Filtros nas listas** — Lançamentos, Fixas e Parcelas usam a mesma busca: texto (por
+  palavra solta, fora de ordem, sem acento), conta, categoria, mais o recorte próprio de
+  cada tela (ativas/pausadas, em aberto/quitadas). Os indicadores do topo acompanham o
+  filtro: o número lá em cima fala da mesma coisa que a lista embaixo.
 - **Período à escolha** — dia, mês, trimestre, ano, um intervalo de datas ou **Tudo**. As
   setas andam no grão escolhido, e o painel e a lista de lançamentos acompanham. "Tudo" é o
   que mostra o lançamento marcado para daqui a oito meses ou o de dois anos atrás — antes
   eles não apareciam em canto nenhum.
+- **Painel com recorte por situação** — **Tudo**, **Já pago** ou **A pagar**, aplicado antes
+  de qualquer conta, para que todo indicador da tela fale do mesmo conjunto. Responde
+  separadamente a "quanto eu já gastei de verdade?" e "quanto ainda tenho de pagar?".
 - **Painel** — saldo de hoje, entradas, saídas, sobra, **o saldo caminhando ao longo do
   período** (o já acontecido em linha cheia, o previsto tracejado), **o que mudou em relação
   ao período anterior** por categoria, gastos por categoria, entradas × saídas nos últimos
@@ -126,7 +135,8 @@ apagar uma delas, clique na linha.
   que você já lançou e mostra linha por linha o que é novo, o que já existe e o que ficou em
   dúvida — o que parece repetido vem **desmarcado**. A categoria vem sugerida pelo seu
   próprio histórico: se "Uber" sempre foi Transporte, "UBER *TRIP 8823" chega como
-  Transporte.
+  Transporte. E a coluna **Vezes** transforma a linha numa compra parcelada: quando o banco
+  escreve "Parcela 1/6" ou "MAGAZINE LUIZA 2/10" na descrição, o número já vem preenchido.
 - **Aviso de lançamento repetido** — ao cadastrar um avulso, uma compra parcelada ou uma
   conta recorrente, o app procura o que já existe com o mesmo valor e a mesma descrição e
   pergunta antes de gravar. A busca é conservadora de propósito: alarme falso ensina a

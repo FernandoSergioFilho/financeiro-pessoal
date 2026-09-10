@@ -38,10 +38,22 @@ export function EntryRow({
   const pending = entry.status === 'pending';
   const overdue = pending && entry.date < today();
 
-  /** Confirmar um previsto: a projeção vira lançamento, o real muda de estado. */
-  function settle() {
-    if (isProjection(entry)) api.materialize(entry, { status: 'settled' });
-    else api.updateEntry(entry.id, { status: 'settled' });
+  /**
+   * Marcar e desmarcar como pago.
+   *
+   * Vai e volta de propósito: antes só dava para confirmar, e um ✓ dado por
+   * engano não tinha desfazer nenhum a não ser abrir o lançamento e mexer no
+   * formulário. Nada no app decide sozinho que algo foi pago — quem diz é
+   * quem pagou, aqui.
+   */
+  function alternarPago() {
+    if (isProjection(entry)) {
+      // A ocorrência prevista de uma recorrente só existe como projeção;
+      // confirmar é o que a transforma em lançamento gravado.
+      api.materialize(entry, { status: 'settled' });
+      return;
+    }
+    api.updateEntry(entry.id, { status: pending ? 'settled' : 'pending' });
   }
 
   return (
@@ -98,20 +110,15 @@ export function EntryRow({
       </span>
 
       <span className="entry-actions">
-        {pending && (
-          <button
-            type="button"
-            className="btn ghost icon"
-            title="Marcar como efetivado"
-            aria-label={`Marcar ${entry.description} como efetivado`}
-            onClick={(event) => {
-              event.stopPropagation();
-              settle();
-            }}
-          >
-            ✓
-          </button>
-        )}
+        <input
+          type="checkbox"
+          className="check-pago"
+          checked={!pending}
+          title={pending ? 'Marcar como pago' : 'Desmarcar: voltar a "a pagar"'}
+          aria-label={`${entry.description}: ${pending ? 'marcar como pago' : 'desmarcar, voltar a a pagar'}`}
+          onClick={(event) => event.stopPropagation()}
+          onChange={alternarPago}
+        />
       </span>
     </div>
   );
