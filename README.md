@@ -138,6 +138,10 @@ apagar uma delas, clique na linha.
   diferentes, e somá-las daria um número que não existe em lugar nenhum. Ao cadastrar
   "Nubank cartão" com um "Nubank" já existente, o app oferece o agrupamento — oferece, nunca
   aplica sozinho.
+- **Cada parcela leva o próprio número** — "Nina Saude Floripa 3/10", e não dez linhas com o
+  mesmo texto. Quando a descrição vem do banco já numerada ("… - Parcela 1/10"), a marca sai
+  do nome da compra e volta certa em cada parcela; sem isso, a segunda dizia 1/10 no nome e
+  2/10 na etiqueta. Em Ajustes há o atalho para acertar as compras importadas antes disso.
 - **Arrastar para marcar pago** — no celular, puxar a linha do lançamento para qualquer lado
   marca ou desmarca, sem abrir nada. O gesto só engata quando o movimento lateral vence o
   vertical com folga, então a página continua rolando normalmente.

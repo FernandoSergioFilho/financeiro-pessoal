@@ -601,6 +601,54 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* --------- 12. parcela importada leva o próprio número no nome */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/ajustes`);
+  await page.waitForTimeout(700);
+
+  const dia = (d) => `${d}/${HOJE.slice(5, 7)}/${HOJE.slice(0, 4)}`;
+  const arquivo = join(tmp, 'parcelada.csv');
+  writeFileSync(
+    arquivo,
+    ['Data,Valor,Identificador,Descrição', `${dia('06')},-100.00,zz-1,Nina Saude Floripa - Parcela 1/10`].join('\n'),
+  );
+
+  await page.click('button:text-is("🏦 Importar do banco")');
+  await page.waitForTimeout(400);
+  await page.setInputFiles('.dialog input[type=file]', arquivo);
+  await page.waitForTimeout(700);
+
+  const vezes = await page.locator('.dialog tbody input[type=number]').first().inputValue();
+  if (vezes !== '10') erro(`o "1/10" da descrição não virou 10 vezes (veio ${vezes})`);
+
+  await page.click('.dialog button:has-text("Importar 1")');
+  await page.waitForTimeout(900);
+
+  const criadas = await page.evaluate(() => {
+    const dados = JSON.parse(localStorage.getItem('financeiro-pessoal'));
+    const compra = dados.purchases.find((p) => p.description.includes('Nina'));
+    const parcelas = dados.entries
+      .filter((e) => e.purchaseId === compra?.id)
+      .sort((a, b) => a.installmentNumber - b.installmentNumber);
+    return { compra: compra?.description, nomes: parcelas.map((e) => e.description) };
+  });
+
+  if (criadas.compra !== 'Nina Saude Floripa') {
+    erro(`a compra ficou com o número no nome: "${criadas.compra}"`);
+  } else if (new Set(criadas.nomes).size !== 10) {
+    erro(`as parcelas repetem nome: ${JSON.stringify(criadas.nomes.slice(0, 3))}`);
+  } else if (criadas.nomes[2] !== 'Nina Saude Floripa 3/10') {
+    erro(`a terceira parcela se chama "${criadas.nomes[2]}"`);
+  } else {
+    ok(`cada parcela leva o próprio número: "${criadas.nomes[0]}" … "${criadas.nomes[9]}"`);
+  }
+
+  if (quebras.length > 0) erro(`nome das parcelas: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

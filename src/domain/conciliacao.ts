@@ -19,49 +19,18 @@
  */
 
 import { addDays } from './date.ts';
+import { lerMarcaDeParcela, type MarcaDeParcela } from './installments.ts';
 import { descricoesCasam, textoComparavel } from './similar.ts';
+
+// Reexportados porque a tela de importação já os consome daqui.
+export { lerMarcaDeParcela };
+export type { MarcaDeParcela };
 import type { Category, Entry, EntryKind } from './types.ts';
 
 /** Dias de folga ao procurar o mesmo lançamento — banco e pessoa datam diferente. */
 export const FOLGA_DE_DIAS = 3;
 
 export type Veredito = 'nova' | 'repetida' | 'talvez';
-
-/**
- * A marca de parcela que o banco escreve na descrição.
- *
- * O Nubank escreve "Netshoes - Parcela 1/6"; outros escrevem "LOJA X 2/10" ou
- * "Compra parcelada 3 de 12". Reconhecer isso é o que permite propor sozinho
- * "esta linha é uma compra em 6 vezes" — a pessoa confirma ou corrige, mas não
- * precisa contar as parcelas na mão.
- *
- * O denominador é limitado a 120 porque acima disso é quase certo que o número
- * casado veio de outra coisa (uma data, um código de estabelecimento), e um
- * parcelamento inventado em 500 vezes seria pior que nenhum.
- */
-export interface MarcaDeParcela {
-  numero: number;
-  total: number;
-}
-
-const PADROES_DE_PARCELA: RegExp[] = [
-  // "Parcela 1/6", "parcelada 3 de 12" — a palavra antes remove a dúvida.
-  /parcela\w*\s+(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})\b/i,
-  /\((\d{1,3})\s*(?:\/|de)\s*(\d{1,3})\)/,
-  /\b(\d{1,3})\s+de\s+(\d{1,3})\b/i,
-  /\b(\d{1,3})\s*\/\s*(\d{1,3})\b/,
-];
-
-export function lerMarcaDeParcela(descricao: string): MarcaDeParcela | null {
-  for (const padrao of PADROES_DE_PARCELA) {
-    const achado = padrao.exec(descricao);
-    if (!achado) continue;
-    const numero = Number(achado[1]);
-    const total = Number(achado[2]);
-    if (numero >= 1 && total >= 2 && total <= 120 && numero <= total) return { numero, total };
-  }
-  return null;
-}
 
 export interface LinhaDeExtrato {
   data: string;

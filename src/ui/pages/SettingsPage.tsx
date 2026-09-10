@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { descreverUso, limparComprasOrfas, moverConta, usoDaConta } from '../../domain/accounts.ts';
 import { today } from '../../domain/date.ts';
 import { descreverCopia, type Copia } from '../../domain/backup.ts';
+import { corrigirNomesDeParcelas, parcelasComNomeErrado } from '../../domain/installments.ts';
 import { desmarcarTodosComoPagos, quantosEstaoPagos } from '../../domain/pagamentos.ts';
 import { agruparPorInstituicao, instituicoesConhecidas, sugerirInstituicao } from '../../domain/institutions.ts';
 import { contarDuplicados, juntarDuplicados } from '../../domain/duplicates.ts';
@@ -703,6 +704,7 @@ export function SettingsPage({
   const [restaurando, setRestaurando] = useState<Copia | null>(null);
   const [desmarcando, setDesmarcando] = useState(false);
   const pagos = useMemo(() => quantosEstaoPagos(data), [data]);
+  const parcelasTortas = useMemo(() => parcelasComNomeErrado(data), [data]);
   const [juntando, setJuntando] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -1072,6 +1074,44 @@ export function SettingsPage({
               ↩️ Desmarcar todos como pagos
             </button>
           </div>
+
+          {/* Compras importadas antes da correção ficaram com todas as parcelas
+              chamadas "Parcela 1/10". O atalho some quando não há mais o que
+              corrigir. */}
+          {parcelasTortas > 0 && (
+            <>
+              <div className="setting-text" style={{ marginTop: 14 }}>
+                <div className="title">Nomes das parcelas</div>
+                <div className="dim">
+                  {parcelasTortas === 1
+                    ? '1 parcela tem no nome um número diferente do próprio'
+                    : `${parcelasTortas} parcelas têm no nome um número diferente do próprio`}{' '}
+                  — sobra de compras importadas do banco, cujo texto já vinha numerado.
+                </div>
+              </div>
+              <div className="row wrap" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    const { data: novo, parcelas, compras } = corrigirNomesDeParcelas(
+                      data,
+                      new Date().toISOString(),
+                    );
+                    api.replaceData(novo);
+                    setMessage(
+                      `${parcelas} ${parcelas === 1 ? 'parcela renomeada' : 'parcelas renomeadas'}` +
+                        (compras > 0
+                          ? ` e ${compras} ${compras === 1 ? 'compra' : 'compras'} sem o número no nome.`
+                          : '.'),
+                    );
+                  }}
+                >
+                  🏷️ Corrigir nomes das parcelas
+                </button>
+              </div>
+            </>
+          )}
 
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
           <div className="row wrap">
