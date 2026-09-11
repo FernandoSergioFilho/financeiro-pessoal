@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { addMonths, formatDate, today } from '../../domain/date.ts';
+import { descreverImpacto, impactoDeApagarRecorrentes } from '../../domain/exclusao.ts';
 import { FILTRO_VAZIO, casaComFiltro, type FiltroBasico } from '../../domain/filtros.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { describeFrequency, occurrenceDates } from '../../domain/recurrence.ts';
@@ -11,7 +12,8 @@ import { useLookups } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { RecurringDialog } from '../components/EntryForms.tsx';
 import { BarraDeFiltros, ContagemFiltrada } from '../components/Filtros.tsx';
-import { Card, Dot, EmptyState } from '../components/primitives.tsx';
+import { BarraDeSelecao, CaixaDeCabecalho, CaixaDeSelecao, useSelecaoVisivel } from '../components/Selecao.tsx';
+import { Card, ConfirmDialog, Dot, EmptyState } from '../components/primitives.tsx';
 import type { IrPara } from '../navegacao.ts';
 
 function nextDate(rule: RecurringRule): string | null {
@@ -45,12 +47,14 @@ const TIPOS: { valor: 'todos' | 'expense' | 'income'; rotulo: string }[] = [
 ];
 
 export function RecurringPage({ onNew, irPara }: { onNew: () => void; irPara: IrPara }) {
-  const { data } = useFinance();
+  const { data, api } = useFinance();
   const { accountName, categoryById } = useLookups();
   const [editing, setEditing] = useState<RecurringRule | null>(null);
   const [busca, setBusca] = useState<FiltroBasico>(FILTRO_VAZIO);
   const [situacao, setSituacao] = useState<(typeof SITUACOES)[number]['valor']>('todas');
   const [tipo, setTipo] = useState<(typeof TIPOS)[number]['valor']>('todos');
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [apagando, setApagando] = useState(false);
 
   const todas = useMemo(
     () => [...data.recurring].sort((a, b) => Number(b.active) - Number(a.active) || a.description.localeCompare(b.description)),
@@ -67,6 +71,37 @@ export function RecurringPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
       }),
     [todas, busca, situacao, tipo],
   );
+
+  const visiveis = rules.map((rule) => rule.id);
+  const selecao = useSelecaoVisivel(selecionados, visiveis);
+
+  function alternar(id: string) {
+    setSelecionados((atual) => {
+      const proxima = new Set(atual);
+      if (proxima.has(id)) proxima.delete(id);
+      else proxima.add(id);
+      return proxima;
+    });
+  }
+
+  function alternarTodos() {
+    // "Todos" é o que está na tela. Com filtros ligados, pegar também o
+    // escondido seria armadilha: vê três linhas, apaga trinta.
+    setSelecionados((atual) => {
+      const proxima = new Set(atual);
+      if (selecao.todosMarcados) for (const id of visiveis) proxima.delete(id);
+      else for (const id of visiveis) proxima.add(id);
+      return proxima;
+    });
+  }
+
+  const impacto = impactoDeApagarRecorrentes(data, selecionados);
+
+  function apagarSelecionadas() {
+    for (const id of selecionados) api.deleteRecurring(id);
+    setSelecionados(new Set());
+    setApagando(false);
+  }
 
   // Os indicadores acompanham o filtro: o número no alto tem de falar da
   // mesma coisa que a lista embaixo, senão um dos dois está mentindo.
@@ -131,6 +166,14 @@ export function RecurringPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
         </div>
       </BarraDeFiltros>
 
+      <BarraDeSelecao
+        quantos={selecionados.size}
+        singular="conta"
+        plural="contas"
+        onLimpar={() => setSelecionados(new Set())}
+        onApagar={() => setApagando(true)}
+      />
+
       <Card
         title="Contas recorrentes"
         action={
@@ -166,6 +209,13 @@ export function RecurringPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
             <table className="table">
               <thead>
                 <tr>
+                  <th style={{ width: 34 }}>
+                    <CaixaDeCabecalho
+                      todosMarcados={selecao.todosMarcados}
+                      algunsMarcados={selecao.algunsMarcados}
+                      onChange={alternarTodos}
+                    />
+                  </th>
                   <th>Descrição</th>
                   <th>Repetição</th>
                   <th>Próximo</th>
@@ -192,6 +242,13 @@ export function RecurringPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
                       }}
                       style={rule.active ? undefined : { opacity: 0.55 }}
                     >
+                      <td>
+                        <CaixaDeSelecao
+                          marcada={selecionados.has(rule.id)}
+                          rotulo={`Selecionar ${rule.description}`}
+                          onChange={() => alternar(rule.id)}
+                        />
+                      </td>
                       <td>
                         <div className="row" style={{ gap: 8 }}>
                           <Dot color={category?.color} />
@@ -247,6 +304,16 @@ export function RecurringPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
       </Card>
 
       {editing && <RecurringDialog rule={editing} onClose={() => setEditing(null)} />}
+
+      {apagando && (
+        <ConfirmDialog
+          title={selecionados.size === 1 ? 'Apagar conta recorrente' : 'Apagar contas recorrentes'}
+          confirmLabel={`Apagar ${selecionados.size}`}
+          message={`Serão apagadas ${descreverImpacto(impacto, 'conta recorrente', 'contas recorrentes')}`}
+          onConfirm={apagarSelecionadas}
+          onCancel={() => setApagando(false)}
+        />
+      )}
     </>
   );
 }

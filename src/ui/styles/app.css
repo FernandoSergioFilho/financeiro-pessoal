@@ -852,6 +852,37 @@ textarea.input { resize: vertical; min-height: 64px; }
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 
+/* Seleção em lote nas listas de cadastro. A caixa fica sempre visível: ela é
+   o que diz o que vai ser apagado. */
+.check-selecao {
+  appearance: none;
+  width: 18px; height: 18px; margin: 0;
+  border: 1.5px solid var(--border-strong); border-radius: 5px;
+  background: var(--surface); cursor: pointer;
+  display: grid; place-content: center; flex: none;
+}
+.check-selecao::after {
+  content: '✓'; font-size: 11px; line-height: 1; font-weight: 700;
+  color: var(--accent-ink); transform: scale(0); transition: transform 0.12s;
+}
+.check-selecao:checked { background: var(--accent); border-color: var(--accent); }
+.check-selecao:checked::after { transform: scale(1); }
+.check-selecao:indeterminate { background: var(--accent); border-color: var(--accent); }
+.check-selecao:indeterminate::after { content: '–'; transform: scale(1); }
+.check-selecao:hover { border-color: var(--accent); }
+.check-selecao:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A barra só existe enquanto há seleção, e gruda no topo do conteúdo para não
+   sumir ao rolar uma lista longa — é ela que carrega o número. */
+.barra-selecao {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 10px 14px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
 /* Cartão de indicador que leva a algum lugar: continua um cartão, mas é
    botão de verdade — teclado, foco e alvo de toque inteiros. */
 .card.stat.clicavel {

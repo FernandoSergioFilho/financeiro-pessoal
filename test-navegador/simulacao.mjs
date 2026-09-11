@@ -649,6 +649,67 @@ for (const width of [390, 1280]) {
   await ctx.close();
 }
 
+/* ------------------- 13. apagar em lote em Fixas e Parcelas */
+
+for (const [rota, nome, singular] of [
+  ['parceladas', 'compras parceladas', 'compra'],
+  ['recorrentes', 'contas recorrentes', 'conta'],
+]) {
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/${rota}`);
+  await page.waitForTimeout(900);
+
+  const contar = () =>
+    page.evaluate(() => {
+      const dados = JSON.parse(localStorage.getItem('financeiro-pessoal'));
+      return { compras: dados.purchases.length, regras: dados.recurring.length, lancamentos: dados.entries.length };
+    });
+
+  const antes = await contar();
+  const linhas = await page.locator('tbody tr').count();
+
+  // Selecionar tudo pelo cabeçalho, depois soltar a primeira: o lote precisa
+  // ser exatamente o que está marcado, e não "tudo ou nada".
+  await page.locator('thead .check-selecao').click();
+  await page.waitForTimeout(300);
+  await page.locator('tbody .check-selecao').first().click();
+  await page.waitForTimeout(300);
+
+  const barra = await page.locator('.barra-selecao').innerText();
+  if (!barra.includes(String(linhas - 1))) erro(`${nome}: a barra não diz quantos estão selecionados — "${barra.trim()}"`);
+  else ok(`${nome}: barra diz "${barra.split('\n')[0].trim()}"`);
+
+  await page.click('.barra-selecao button.danger');
+  await page.waitForTimeout(400);
+  const aviso = await page.locator('.dialog').innerText();
+  await page.click(`.dialog button:has-text("Apagar ${linhas - 1}")`);
+  await page.waitForTimeout(900);
+
+  const depois = await contar();
+  if (rota === 'parceladas') {
+    if (depois.compras !== 1) erro(`sobraram ${depois.compras} compras, esperava 1`);
+    else if (depois.lancamentos >= antes.lancamentos) erro('as parcelas não sumiram junto com as compras');
+    else ok(`${antes.compras} → ${depois.compras} compras, e ${antes.lancamentos - depois.lancamentos} parcelas junto`);
+    if (!/somem junto/.test(aviso)) erro('a confirmação não avisou que as parcelas somem junto');
+  } else {
+    if (depois.regras !== 1) erro(`sobraram ${depois.regras} regras, esperava 1`);
+    // O histórico das fixas fica: é dinheiro que de fato saiu.
+    else if (depois.lancamentos !== antes.lancamentos) {
+      erro(`apagar regras mexeu no histórico (${antes.lancamentos} → ${depois.lancamentos})`);
+    } else ok(`${antes.regras} → ${depois.regras} regras, e os ${depois.lancamentos} lançamentos ficaram`);
+    if (!/continuam no histórico|continua no histórico|Nenhum lançamento/.test(aviso)) {
+      erro(`a confirmação não explicou o que acontece com o histórico — "${aviso.slice(0, 120)}"`);
+    }
+  }
+
+  // A seleção some depois de apagar: deixá-la apontando para o que não existe
+  // mais faria o próximo clique apagar sem querer.
+  if ((await page.locator('.barra-selecao').count()) > 0) erro(`${nome}: a barra de seleção ficou depois de apagar`);
+
+  if (quebras.length > 0) erro(`lote em ${nome}: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

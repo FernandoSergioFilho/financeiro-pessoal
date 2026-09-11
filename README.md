@@ -138,6 +138,12 @@ apagar uma delas, clique na linha.
   diferentes, e somá-las daria um número que não existe em lugar nenhum. Ao cadastrar
   "Nubank cartão" com um "Nubank" já existente, o app oferece o agrupamento — oferece, nunca
   aplica sozinho.
+- **Apagar em lote** — Fixas e Parcelas têm caixa de seleção por linha e uma no cabeçalho
+  que marca **o que está na tela**, e não o que existe no banco: com filtros ligados, um
+  "selecionar tudo" que pegasse o escondido seria armadilha. A barra que aparece carrega o
+  número o tempo todo, e a confirmação distingue as duas ações, que só parecem a mesma:
+  apagar uma compra leva as parcelas junto, apagar uma conta fixa deixa o histórico já
+  gerado intacto — ele é dinheiro que de fato saiu.
 - **Cada parcela leva o próprio número** — "Nina Saude Floripa 3/10", e não dez linhas com o
   mesmo texto. Quando a descrição vem do banco já numerada ("… - Parcela 1/10"), a marca sai
   do nome da compra e volta certa em cada parcela; sem isso, a segunda dizia 1/10 no nome e

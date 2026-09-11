@@ -4,12 +4,14 @@ import { useMemo, useState } from 'react';
 
 import { addMonthsToKey, currentMonthKey, formatDate, formatMonthKey, monthKey, today } from '../../domain/date.ts';
 import { formatMoney } from '../../domain/money.ts';
+import { descreverImpacto, impactoDeApagarCompras } from '../../domain/exclusao.ts';
 import { FILTRO_VAZIO, casaComFiltro, type FiltroBasico } from '../../domain/filtros.ts';
 import { purchaseProgress } from '../../domain/installments.ts';
 import type { InstallmentPurchase } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { BarraDeFiltros, ContagemFiltrada } from '../components/Filtros.tsx';
+import { BarraDeSelecao, CaixaDeCabecalho, CaixaDeSelecao, useSelecaoVisivel } from '../components/Selecao.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, EmptyState } from '../components/primitives.tsx';
 import type { IrPara } from '../navegacao.ts';
 
@@ -124,11 +126,13 @@ const SITUACOES: { valor: 'todas' | 'abertas' | 'quitadas'; rotulo: string }[] =
 ];
 
 export function PurchasesPage({ onNew, irPara }: { onNew: () => void; irPara: IrPara }) {
-  const { data } = useFinance();
+  const { data, api } = useFinance();
   const { accountName, categoryById } = useLookups();
   const [aberta, setAberta] = useState<InstallmentPurchase | null>(null);
   const [busca, setBusca] = useState<FiltroBasico>(FILTRO_VAZIO);
   const [situacao, setSituacao] = useState<(typeof SITUACOES)[number]['valor']>('todas');
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [apagando, setApagando] = useState(false);
 
   const todas = useMemo(
     () =>
@@ -163,6 +167,36 @@ export function PurchasesPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
     }
     return months.map((key) => ({ key, amount: totals.get(key)! }));
   }, [data.entries]);
+
+  const visiveis = rows.map(({ purchase }) => purchase.id);
+  const selecao = useSelecaoVisivel(selecionadas, visiveis);
+
+  function alternar(id: string) {
+    setSelecionadas((atual) => {
+      const proxima = new Set(atual);
+      if (proxima.has(id)) proxima.delete(id);
+      else proxima.add(id);
+      return proxima;
+    });
+  }
+
+  function alternarTodas() {
+    // "Todas" é o que está na tela, e não o que existe no banco.
+    setSelecionadas((atual) => {
+      const proxima = new Set(atual);
+      if (selecao.todosMarcados) for (const id of visiveis) proxima.delete(id);
+      else for (const id of visiveis) proxima.add(id);
+      return proxima;
+    });
+  }
+
+  const impacto = impactoDeApagarCompras(data, selecionadas);
+
+  function apagarSelecionadas() {
+    for (const id of selecionadas) api.deletePurchase(id);
+    setSelecionadas(new Set());
+    setApagando(false);
+  }
 
   const remaining = rows.reduce((sum, row) => sum + row.progress.remainingAmount, 0);
   const maxUpcoming = Math.max(...upcoming.map((item) => item.amount), 1);
@@ -214,6 +248,21 @@ export function PurchasesPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
         </div>
       </BarraDeFiltros>
 
+      <BarraDeSelecao
+        quantos={selecionadas.size}
+        singular="compra"
+        plural="compras"
+        onLimpar={() => setSelecionadas(new Set())}
+        onApagar={() => setApagando(true)}
+      >
+        {impacto.lancamentosApagados > 0 && (
+          <span className="dim" style={{ fontSize: '0.82rem' }}>
+            · {impacto.lancamentosApagados}{' '}
+            {impacto.lancamentosApagados === 1 ? 'parcela some junto' : 'parcelas somem junto'}
+          </span>
+        )}
+      </BarraDeSelecao>
+
       <Card
         title="Compras parceladas"
         action={<ContagemFiltrada mostrando={rows.length} total={todas.length} singular="compra" plural="compras" />}
@@ -241,6 +290,13 @@ export function PurchasesPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
             <table className="table">
               <thead>
                 <tr>
+                  <th style={{ width: 34 }}>
+                    <CaixaDeCabecalho
+                      todosMarcados={selecao.todosMarcados}
+                      algunsMarcados={selecao.algunsMarcados}
+                      onChange={alternarTodas}
+                    />
+                  </th>
                   <th>Compra</th>
                   <th>Andamento</th>
                   <th>Próxima</th>
@@ -268,6 +324,13 @@ export function PurchasesPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
                       }}
                       style={progress.nextDate ? undefined : { opacity: 0.6 }}
                     >
+                      <td>
+                        <CaixaDeSelecao
+                          marcada={selecionadas.has(purchase.id)}
+                          rotulo={`Selecionar ${purchase.description}`}
+                          onChange={() => alternar(purchase.id)}
+                        />
+                      </td>
                       <td>
                         <div className="row" style={{ gap: 8 }}>
                           <Dot color={category?.color} />
@@ -305,6 +368,16 @@ export function PurchasesPage({ onNew, irPara }: { onNew: () => void; irPara: Ir
       </Card>
 
       {aberta && <PurchaseDialog purchase={aberta} irPara={irPara} onClose={() => setAberta(null)} />}
+
+      {apagando && (
+        <ConfirmDialog
+          title={selecionadas.size === 1 ? 'Apagar compra parcelada' : 'Apagar compras parceladas'}
+          confirmLabel={`Apagar ${selecionadas.size}`}
+          message={`Serão apagadas ${descreverImpacto(impacto, 'compra parcelada', 'compras parceladas')}`}
+          onConfirm={apagarSelecionadas}
+          onCancel={() => setApagando(false)}
+        />
+      )}
     </>
   );
 }
