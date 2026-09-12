@@ -146,7 +146,24 @@ export function lerCsvDeBanco(texto: string): LeituraBanco {
   }
 
   const separador = descobrirSeparador(limpo);
-  const cabecalho = dividirLinha(cruas[0]!, separador).map((c) => c.trim());
+  const tabela = cruas.map((linha) => dividirLinha(linha, separador));
+  return lerTabelaDeBanco(tabela, separador === '\t' ? 'tabulação' : separador);
+}
+
+/**
+ * A leitura de verdade, sobre uma tabela já dividida em células.
+ *
+ * O CSV é só um dos jeitos de chegar aqui: a planilha do Excel, a tabela
+ * extraída de um PDF e o texto colado produzem a mesma coisa, e passam pela
+ * mesma descoberta de colunas. Uma lógica só, testada uma vez — sem isto cada
+ * formato teria a sua ideia do que é a coluna de valor.
+ */
+export function lerTabelaDeBanco(tabela: readonly (readonly string[])[], separador = '—'): LeituraBanco {
+  if (tabela.length === 0) {
+    return { linhas: [], problemas: [{ linha: 0, motivo: 'Não achei nenhuma linha.' }], formato: null };
+  }
+
+  const cabecalho = (tabela[0] ?? []).map((c) => c.trim());
 
   const iData = acharColuna(cabecalho, NOMES.data);
   const iDescricao = acharColuna(cabecalho, NOMES.descricao);
@@ -175,9 +192,9 @@ export function lerCsvDeBanco(texto: string): LeituraBanco {
   const linhas: LinhaBanco[] = [];
   const problemas: ProblemaLeitura[] = [];
 
-  for (let i = 1; i < cruas.length; i += 1) {
+  for (let i = 1; i < tabela.length; i += 1) {
     const numero = i + 1;
-    const celulas = dividirLinha(cruas[i]!, separador);
+    const celulas = tabela[i] ?? [];
     const data = lerDataDeBanco(celulas[iData] ?? '');
     const descricao = (celulas[iDescricao] ?? '').trim();
     const valor = parseMoney(celulas[iValor] ?? '');
@@ -208,7 +225,7 @@ export function lerCsvDeBanco(texto: string): LeituraBanco {
     linhas,
     problemas,
     formato: {
-      separador: separador === '\t' ? 'tabulação' : separador,
+      separador,
       colunaData: cabecalho[iData]!,
       colunaDescricao: cabecalho[iDescricao]!,
       colunaValor: cabecalho[iValor]!,

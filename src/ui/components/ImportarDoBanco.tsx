@@ -17,7 +17,9 @@ import { formatDate } from '../../domain/date.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { conciliar, resumirConciliacao, type Proposta } from '../../domain/conciliacao.ts';
 import { procurarComprasSemelhantes } from '../../domain/similar.ts';
-import { lerCsvDeBanco, type LeituraBanco } from '../../data/banco-csv.ts';
+import {
+  FORMATOS_ACEITOS, formatoDoArquivo, lerArquivoDeBanco, lerTextoColado, type LeituraDeArquivo,
+} from '../../data/banco.ts';
 import { useLookups } from '../../state/selectors.ts';
 import { useFinance, type EntryDraft } from '../../state/store.tsx';
 import { Dialog, Field } from './primitives.tsx';
@@ -34,7 +36,11 @@ export function ImportarDoBanco({ onClose }: { onClose: () => void }) {
 
   const ativas = accounts.filter((conta) => !conta.archived);
   const [accountId, setAccountId] = useState(ativas[0]?.id ?? '');
-  const [leitura, setLeitura] = useState<LeituraBanco | null>(null);
+  const [leitura, setLeitura] = useState<LeituraDeArquivo | null>(null);
+  const [lendo, setLendo] = useState<'arquivo' | 'pdf' | 'imagem' | null>(null);
+  const [progresso, setProgresso] = useState(0);
+  const [colando, setColando] = useState(false);
+  const [colado, setColado] = useState('');
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [erro, setErro] = useState('');
   const [marcadas, setMarcadas] = useState<Set<number>>(new Set());
@@ -60,13 +66,14 @@ export function ImportarDoBanco({ onClose }: { onClose: () => void }) {
 
   const resumo = resumirConciliacao(propostas);
 
-  function aoLer(file: File) {
-    setErro('');
-    setNomeArquivo(file.name);
-    void file
-      .text()
-      .then((texto) => {
-        const lido = lerCsvDeBanco(texto);
+  /**
+   * O miolo, comum a todos os formatos.
+   *
+   * Convergir aqui é o que faz a conferência, a detecção de repetidos e o
+   * reconhecimento de parcelas valerem para CSV, planilha, PDF, print e texto
+   * colado sem uma linha a mais.
+   */
+  function aoLerLeitura(lido: LeituraDeArquivo) {
         setLeitura(lido);
         // Só o que é novo entra marcado; repetido e em dúvida ficam de fora
         // até a pessoa olhar. Uma linha que o banco marcou como parcela de uma
@@ -90,8 +97,43 @@ export function ImportarDoBanco({ onClose }: { onClose: () => void }) {
         setMarcadas(new Set(novas));
         setCategoriaPorLinha({});
         setParcelasPorLinha({});
-      })
-      .catch((e: unknown) => setErro(e instanceof Error ? e.message : 'Não foi possível ler o arquivo.'));
+  }
+
+  async function aoLer(file: File) {
+    setErro('');
+    setNomeArquivo(file.name);
+    setLeitura(null);
+    const formato = formatoDoArquivo(file.name, file.type);
+    // O PDF baixa o leitor e o print baixa o modelo de idioma: sem dizer o que
+    // está acontecendo, a tela parece travada por até um minuto no celular.
+    setLendo(formato === 'imagem' ? 'imagem' : formato === 'pdf' ? 'pdf' : 'arquivo');
+    setProgresso(0);
+    try {
+      aoLerLeitura(await lerArquivoDeBanco(file, setProgresso));
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível ler o arquivo.');
+    } finally {
+      setLendo(null);
+    }
+  }
+
+  function aoColar() {
+    setErro('');
+    setNomeArquivo('texto colado');
+    try {
+      const lido = lerTextoColado(colado);
+      if (lido.linhas.length === 0) {
+        setErro(
+          'Não achei nenhum lançamento nesse texto. Cada linha precisa ter uma data e um valor '
+          + 'com centavos — por exemplo: 07/09/2026 MERCADO 145,30',
+        );
+        return;
+      }
+      aoLerLeitura(lido);
+      setColando(false);
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível ler o texto.');
+    }
   }
 
   function alternar(numero: number) {
@@ -250,30 +292,103 @@ export function ImportarDoBanco({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="row wrap">
-            <button type="button" className="btn" onClick={() => arquivo.current?.click()}>
+            <button type="button" className="btn" disabled={lendo !== null} onClick={() => arquivo.current?.click()}>
               📄 Escolher arquivo
             </button>
-            {nomeArquivo && <span className="dim trunc">{nomeArquivo}</span>}
+            <button type="button" className="btn" disabled={lendo !== null} onClick={() => setColando((c) => !c)}>
+              📋 Colar texto
+            </button>
+            {nomeArquivo && !colando && <span className="dim trunc">{nomeArquivo}</span>}
           </div>
+          <p className="hint">Aceita {FORMATOS_ACEITOS}.</p>
           <input
             ref={arquivo}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.txt,.xlsx,.xlsm,.pdf,image/*,text/csv,application/pdf"
             className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];
-              if (file) aoLer(file);
+              if (file) void aoLer(file);
               event.target.value = '';
             }}
           />
 
+          {/* Colar resolve o que nenhum arquivo resolve: o aplicativo do banco
+              que não exporta nada, mas de onde dá para copiar a lista. */}
+          {colando && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <textarea
+                className="input"
+                style={{ minHeight: '9rem', fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem' }}
+                placeholder={'07/09/2026 MERCADO BOM PRECO 145,30\n08/09/2026 UBER 21,40'}
+                value={colado}
+                onChange={(e) => setColado(e.target.value)}
+                spellCheck={false}
+              />
+              <div className="row wrap" style={{ gap: 8 }}>
+                <button type="button" className="btn primary sm" disabled={!colado.trim()} onClick={aoColar}>
+                  Ler o texto
+                </button>
+                <span className="hint">Uma linha por lançamento, com data e valor. O resto vira a descrição.</span>
+              </div>
+            </div>
+          )}
+
+          {lendo && (
+            <div className="banner">
+              <span className="emoji" aria-hidden="true">⏳</span>
+              <span>
+                <strong>
+                  {lendo === 'imagem'
+                    ? `Lendo o texto da imagem${progresso > 0 ? ` — ${Math.round(progresso * 100)}%` : ''}`
+                    : lendo === 'pdf'
+                      ? 'Abrindo o PDF'
+                      : 'Lendo o arquivo'}
+                </strong>
+                {lendo === 'imagem' && (
+                  <>
+                    <br />
+                    <span className="dim">
+                      Na primeira vez o app baixa o reconhecedor de texto em português, o que pede
+                      internet e leva um pouco. Depois disso fica no aparelho.
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
           {erro && <p className="error">{erro}</p>}
+
+          {/* Reconhecimento de texto erra, e erra em dígito — que é o pior
+              lugar para errar. A conferência linha a linha já existe logo
+              abaixo; o aviso é para ninguém confiar no automático. */}
+          {leitura?.formatoDeEntrada === 'imagem' && leitura.linhas.length > 0 && (
+            <div className="banner warn">
+              <span className="emoji" aria-hidden="true">👀</span>
+              <span>
+                <strong>Confira valor por valor antes de importar</strong>
+                <br />
+                <span className="dim">
+                  Isto veio de leitura de imagem, que troca dígito de vez em quando. O que estiver
+                  errado, desmarque e lance à mão.
+                </span>
+              </span>
+            </div>
+          )}
+
+          {leitura && leitura.ignoradas > 0 && (
+            <p className="hint">
+              {leitura.ignoradas === 1 ? '1 linha não parecia lançamento' : `${leitura.ignoradas} linhas não pareciam lançamento`}{' '}
+              (cabeçalho, rodapé, saldo) e {leitura.ignoradas === 1 ? 'foi ignorada' : 'foram ignoradas'}.
+            </p>
+          )}
 
           {leitura?.formato && (
             <p className="hint">
-              Li o arquivo separado por <strong>{leitura.formato.separador}</strong>, usando as colunas{' '}
-              <strong>{leitura.formato.colunaData}</strong>, <strong>{leitura.formato.colunaDescricao}</strong> e{' '}
-              <strong>{leitura.formato.colunaValor}</strong>.
+              Li usando <strong>{leitura.formato.colunaData}</strong> como data,{' '}
+              <strong>{leitura.formato.colunaDescricao}</strong> como descrição e{' '}
+              <strong>{leitura.formato.colunaValor}</strong> como valor.
             </p>
           )}
 

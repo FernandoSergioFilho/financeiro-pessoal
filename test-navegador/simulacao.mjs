@@ -313,7 +313,7 @@ for (const width of [390, 1280]) {
       numeros,
       formato: [...document.querySelectorAll('.dialog .hint')]
         .map((h) => h.textContent ?? '')
-        .find((t) => /separado por/.test(t)) ?? '',
+        .find((t) => /^Li usando/.test(t.trim())) ?? '',
       linhas: document.querySelectorAll('.dialog tbody tr').length,
       marcadas: [...document.querySelectorAll('.dialog tbody input[type=checkbox]')].filter((c) => c.checked).length,
       botao: [...document.querySelectorAll('.dialog button')].map((b) => b.textContent).join(' | '),
@@ -327,7 +327,10 @@ for (const width of [390, 1280]) {
   else if (lido.marcadas !== 2) erro(`o repetido deveria vir desmarcado — ${lido.marcadas} marcadas de 3`);
   else ok(`extrato lido: ${de('Novos')} novos, ${de('Já existem')} já existia, só os novos marcados`);
 
-  if (!/separado por/.test(lido.formato)) erro('não mostrou o formato que descobriu');
+  // A frase mudou quando a importação passou a aceitar PDF, planilha e texto
+  // colado: não há mais "separador" em todo formato, mas continua tendo de
+  // dizer qual coluna virou o quê.
+  if (!/Li usando .* como data/.test(lido.formato)) erro(`não mostrou o formato que descobriu — "${lido.formato}"`);
   else ok(`formato descoberto: "${lido.formato.trim().slice(0, 90)}"`);
 
   const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);

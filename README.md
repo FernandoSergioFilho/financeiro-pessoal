@@ -189,7 +189,34 @@ apagar uma delas, clique na linha.
   semana seguinte jogaria fora justamente a cópia que ninguém sabia ainda que ia precisar.
   Quando falta espaço no navegador, o app sacrifica as menos preciosas primeiro, nessa
   ordem. Em Ajustes dá para ver, baixar e restaurar cada uma.
-- **Importar o CSV do banco** — o extrato ou a fatura que o Nubank (e os outros) exportam.
+- **Importar do banco, em cinco formatos** — CSV, planilha `.xlsx`, **PDF**, **print da tela**
+  e **texto colado**. Os cinco convergem cedo para a mesma tabela, e por isso a conferência, a
+  detecção de repetidos e o reconhecimento de parcelas valem para todos sem uma linha a mais:
+
+  | Entra | Como é lido |
+  | --- | --- |
+  | `.csv` / `.txt` | separador descoberto pelo conteúdo, colunas pelo cabeçalho |
+  | `.xlsx` | leitor próprio (zip + XML), 10 kB em vez dos 7 MB da biblioteca usual |
+  | `.pdf` | pdf.js, carregado só no clique; os pedaços de texto reagrupados em linhas pela posição |
+  | print / foto | reconhecimento de texto em português, baixado na primeira vez |
+  | colar | a lista copiada do aplicativo do banco, que não exporta nada |
+
+  Os três últimos não têm cabeçalho, então a descoberta é **por conteúdo**: numa linha, o que
+  parece data é a data, o que parece dinheiro é dinheiro, e o que sobra é a descrição. Dois
+  cuidados que fazem a diferença entre funcionar e importar lixo: o **último número de cada
+  linha do extrato é o saldo**, não o valor (decidido pelo formato do arquivo inteiro, não
+  linha a linha), e o **sinal sai do saldo subindo ou descendo** — a leitura mais confiável
+  que existe aí, porque não depende de o banco escrever menos, "D", ou pintar de vermelho.
+  Linhas de resumo ("SALDO EM 09/09: 2.210,12") são reconhecidas e não viram lançamento.
+
+  **O que isso custa, dito sem enfeite.** O leitor de PDF (1,7 MB) e o de imagem (alguns
+  megabytes de modelo de idioma) são carregados **só quando usados**, não entram no pré-cache
+  e não pesam na abertura. No `financeiro.html` de arquivo único eles **não existem** —
+  inliná-los levaria o arquivo de 640 kB a dezenas de megabytes, e a tela diz isso em vez de
+  simplesmente não funcionar. E o reconhecimento de imagem **erra, em dígito**: o resultado
+  cai na mesma conferência linha a linha, com um aviso para conferir valor por valor.
+
+- **O CSV do banco em detalhe** — o extrato ou a fatura que o Nubank (e os outros) exportam.
   O app descobre sozinho o separador e as colunas de data, descrição e valor, compara com o
   que você já lançou e mostra linha por linha o que é novo, o que já existe e o que ficou em
   dúvida — o que parece repetido vem **desmarcado**. A categoria vem sugerida pelo seu

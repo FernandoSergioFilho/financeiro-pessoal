@@ -134,6 +134,22 @@ const DIALOGOS = [
   { nome: 'Importar planilha', rota: 'ajustes', abrir: async (p) => p.click('button:has-text("Importar planilha")') },
   { nome: 'Importar do banco', rota: 'ajustes', abrir: async (p) => p.click('button:has-text("Importar do banco")') },
   {
+    // O caminho que não depende de arquivo nenhum: colar o que se copiou do
+    // aplicativo do banco. É o único dos formatos novos que funciona também no
+    // arquivo único, então é o que dá para varrer aqui.
+    nome: 'Importar do banco — texto colado',
+    rota: 'ajustes',
+    abrir: async (p) => {
+      await p.click('button:has-text("Importar do banco")');
+      await p.click('.dialog button:has-text("Colar texto")');
+      await p.fill('.dialog textarea', '08/09/2026 PIX RECEBIDO MARIA SILVA 1.250,00\n07/09/2026 SUPERMERCADO BOM PRECO -70,00');
+      await p.click('.dialog button:has-text("Ler o texto")');
+      await p.waitForTimeout(600);
+      const quantas = await p.locator('.tabela-extrato tbody tr').count();
+      if (quantas !== 2) throw new Error(`colar texto achou ${quantas} lançamentos, e não 2`);
+    },
+  },
+  {
     // O caso que deu o defeito: o diálogo só mostra a tabela depois do arquivo.
     nome: 'Importar do banco — com o extrato lido',
     rota: 'ajustes',

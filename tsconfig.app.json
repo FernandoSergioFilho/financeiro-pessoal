@@ -4,6 +4,10 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // O mesmo apelido do vite.config: no build de arquivo único ele aponta
+    // para o substituto, que explica por que PDF e imagem não existem ali.
+    "paths": { "#pesados": ["./src/data/banco-pesados.ts"] },
+    "baseUrl": ".",
     "jsx": "react-jsx",
     "types": ["vite/client", "vitest/globals", "vite-plugin-pwa/client"],
     "strict": true,
