@@ -156,6 +156,13 @@ export function App() {
           </div>
 
           {page.monthly && <PeriodPicker periodo={periodo} onChange={setPeriodo} />}
+          {/* O botão redondo do canto só existe até 720px. Acima disso, sem
+              este aqui, a única porta para cadastrar era o botão da tela vazia
+              — que some assim que a carteira tem o primeiro lançamento: no
+              notebook e no tablet não havia como lançar nada. */}
+          <button type="button" className="btn primary novo-lancamento" onClick={() => setCreating(true)}>
+            + Novo lançamento
+          </button>
           <SyncBadge />
         </header>
 

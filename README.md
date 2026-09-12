@@ -390,8 +390,30 @@ mesmo arquivo:
   em nove larguras e nos dois temas, e confere que nada estoura para os lados, que o seletor
   de período funciona em todos os grãos e que apagar uma conta faz o que promete.
 
+`test-navegador/dialogos.mjs` é a varredura de CSS dos **diálogos**, que a de cima não
+alcança: um diálogo só existe depois de um clique. Cada um dos catorze é aberto em **celular
+(390px), tablet (834px) e notebook (1280px), nos dois temas** — 84 conferências — e o
+princípio é um só: *o CSS tem de refletir o tamanho das caixas em qualquer aparelho*. Dele
+saem cinco cobranças:
+
+| Cobrança | O que ela pega |
+| --- | --- |
+| A página não passa a rolar de lado | o diálogo empurrando a tela |
+| O diálogo cabe na tela | `max-width` que ignora a largura do aparelho |
+| **Nenhuma caixa rola de lado por dentro** | conteúdo maior que o recipiente, escondido por um `overflow-x: auto` |
+| Nenhum texto fica cortado | `R$ 146.609,00` virando `R$ 146.609,` |
+| **Nenhuma célula de tabela é espremida** abaixo de 40px com conteúdo | a coluna que some |
+
+As duas em negrito nasceram do mesmo defeito, e as duas foram vistas **falhando** contra o
+código de antes: na conferência do extrato importado as larguras fixas das colunas somavam
+474px numa tela de 390, e a descrição — única coluna elástica — encolhia para **6 pixels**.
+Com o defeito de volta, a varredura acusa `table-wrap (480 numa caixa de 352)` e
+`Descrição (36px)`; sem ele, passa. Essa mesma varredura encontrou um segundo defeito de
+graça: acima de 720px o botão redondo de cadastrar some, e como não havia nenhum outro,
+**no tablet e no notebook não dava para lançar nada** depois do primeiro lançamento.
+
 ```bash
-npm run build:single && npm run test:simulacao
+npm run build:single && npm run test:simulacao && npm run test:dialogos
 ```
 
 Toda alteração passa por `npm run verificar` antes de virar deploy, e o workflow do GitHub

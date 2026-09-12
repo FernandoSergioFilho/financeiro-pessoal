@@ -146,12 +146,16 @@ export function Dialog({
   children,
   footer,
   wide,
+  larga,
 }: {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /** Para o diálogo que mostra uma tabela: `wide` (640px) deixa a descrição
+      do extrato com 128px e ela sai cortada logo no primeiro nome de loja. */
+  larga?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -177,7 +181,7 @@ export function Dialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className={wide ? 'dialog wide' : 'dialog'} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} ref={ref}>
+      <div className={larga ? 'dialog larga' : wide ? 'dialog wide' : 'dialog'} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} ref={ref}>
         <header className="dialog-head">
           <h2>{title}</h2>
           <button type="button" className="btn ghost icon" onClick={onClose} aria-label="Fechar">

@@ -284,6 +284,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
    barra, ele fique alinhado à direita, embaixo do seletor de mês, em vez de
    solto no canto esquerdo. Na tela larga não muda nada: ele já é o último. */
 .sync-badge { margin-left: auto; font-size: 0.78rem; }
+
+/* Abaixo de 720px quem cadastra é o botão redondo fixo no canto; os dois ao
+   mesmo tempo seriam a mesma porta duas vezes, e na barra estreita a segunda
+   empurraria o seletor de período para fora. */
+/* A 768px a barra tem 524px úteis (o menu lateral fica com o resto), e os três
+   não cabem numa linha só: o botão desce. O `margin-left: auto` é para que,
+   ao descer, ele fique alinhado à direita — embaixo do seletor de período, e
+   não solto no canto esquerdo. Na tela larga não muda nada. */
+.novo-lancamento { margin-left: auto; white-space: nowrap; }
+/* `.topbar` no seletor por especificidade, não por enfeite: o `display` do
+   `.btn` é declarado mais abaixo neste arquivo e, empatado em especificidade,
+   venceria pela ordem — o botão aparecia no celular junto com o redondo. */
+@media (max-width: 720px) { .topbar .novo-lancamento { display: none; } }
 .sync-badge .so-estreito { display: none; }
 @media (max-width: 620px) {
   .sync-badge .so-estreito { display: inline; }
@@ -473,11 +486,75 @@ button, input, select, textarea { font: inherit; color: inherit; }
    quem cede é a descrição, que é a única que pode ser cortada sem perda. */
 .tabela-extrato { table-layout: fixed; width: 100%; }
 .tabela-extrato th:nth-child(1), .tabela-extrato td:nth-child(1) { width: 34px; }
-.tabela-extrato th:nth-child(2), .tabela-extrato td:nth-child(2) { width: 6.4rem; }
+.tabela-extrato th:nth-child(2), .tabela-extrato td:nth-child(2) { width: 5.9rem; }
 .tabela-extrato th:nth-child(4), .tabela-extrato td:nth-child(4) { width: 7rem; }
-.tabela-extrato th:nth-child(5), .tabela-extrato td:nth-child(5) { width: 4.6rem; }
-.tabela-extrato th:nth-child(6), .tabela-extrato td:nth-child(6) { width: 9.5rem; }
+.tabela-extrato th:nth-child(5), .tabela-extrato td:nth-child(5) { width: 4.2rem; }
+.tabela-extrato th:nth-child(6), .tabela-extrato td:nth-child(6) { width: 8.5rem; }
 .tabela-extrato td { vertical-align: top; }
+
+/*
+ * No celular a tabela do extrato vira uma ficha por linha.
+ *
+ * Com `table-layout: fixed`, as larguras das colunas somavam 474px numa tela
+ * de 390: a descrição — a única coluna elástica — encolhia para **6 pixels** e
+ * sumia, e os títulos "DESCRIÇÃO" e "VALOR" se sobrepunham. Rolar a tabela de
+ * lado resolveria o corte e criaria outro problema: conferir um extrato exige
+ * ler descrição e valor ao mesmo tempo, e lado a lado eles não cabem. Então a
+ * linha se empilha: data e valor em cima, a descrição inteira no meio, os dois
+ * controles embaixo.
+ */
+@media (max-width: 700px) {
+  .tabela-extrato, .tabela-extrato tbody, .tabela-extrato tr, .tabela-extrato td { display: block; }
+  /* A tabela genérica tem `min-width: 30rem` e não quebra linha, para rolar de
+     lado em vez de espremer as colunas. Empilhada, as duas coisas trabalham
+     contra: a linha ficava 480px de largura numa tela de 390.
+     As duas classes no mesmo seletor não são enfeite: `.table-wrap .table`
+     está mais abaixo neste arquivo e, com a mesma especificidade, venceria
+     pela ordem — foi o que fez a correção não pegar da primeira vez. */
+  .table-wrap .table.tabela-extrato { min-width: 0; width: 100%; }
+  .table-wrap .table.tabela-extrato td { white-space: normal; }
+  /* Sem cabeçalho não há como saber o que é cada campo: os dois que não se
+     explicam sozinhos passam a trazer o próprio rótulo. */
+  .tabela-extrato thead { display: none; }
+
+  .tabela-extrato tr {
+    display: grid;
+    /* A coluna do meio é `auto` porque as duas coisas que caem nela — a data e
+       o par "Vezes + campo" — têm largura própria e não podem encolher; quem
+       fica com o resto é a coluna da direita, onde estão o valor e a categoria. */
+    grid-template-columns: 28px auto minmax(0, 1fr);
+    grid-template-areas:
+      'sel data  valor'
+      'sel desc  desc'
+      'sel vezes cat';
+    gap: 6px 10px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  /* O `width: auto` precisa vir em cada `nth-child`: as larguras fixas de
+     cima têm a mesma especificidade, e uma regra genérica não as venceria. */
+  .tabela-extrato td { padding: 0; border: 0; }
+  .tabela-extrato td:nth-child(1) { grid-area: sel; width: auto; align-self: start; }
+  .tabela-extrato td:nth-child(2) { grid-area: data; width: auto; font-size: 0.82rem; color: var(--text-3); }
+  .tabela-extrato td:nth-child(3) { grid-area: desc; width: auto; }
+  .tabela-extrato td:nth-child(4) { grid-area: valor; width: auto; text-align: right; font-weight: 620; }
+  .tabela-extrato td:nth-child(5) { grid-area: vezes; width: auto; }
+  .tabela-extrato td:nth-child(6) { grid-area: cat; width: auto; }
+
+  .tabela-extrato td[data-rotulo] { display: flex; align-items: center; gap: 6px; }
+  .tabela-extrato td[data-rotulo]::before {
+    content: attr(data-rotulo);
+    font-size: 0.72rem; font-weight: 620; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--text-3);
+    flex: none;
+  }
+  /* `flex: none`: dentro do flex do rótulo o campo cedia até virar um risco. */
+  .tabela-extrato td:nth-child(5) input { width: 3.4rem; flex: none; }
+  .tabela-extrato td:nth-child(6) select { min-width: 0; }
+  /* A descrição agora tem a linha inteira: cortar deixou de ser necessário. */
+  .tabela-extrato td:nth-child(3) .trunc { overflow: visible; white-space: normal; text-overflow: clip; }
+}
 
 /* Campo curto dentro de célula de tabela. */
 .input.sm { padding: 4px 8px; font-size: 0.82rem; }
@@ -795,6 +872,8 @@ textarea.input { resize: vertical; min-height: 64px; }
   animation: pop 140ms ease-out;
 }
 .dialog.wide { max-width: 640px; }
+/* Para o diálogo que carrega uma tabela larga (a conferência do extrato). */
+.dialog.larga { max-width: 860px; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.99); } }
 @media (prefers-reduced-motion: reduce) { .dialog { animation: none; } }
 

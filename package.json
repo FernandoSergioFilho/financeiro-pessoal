@@ -16,7 +16,8 @@
     "verificar-seguranca": "node scripts/verificar-seguranca.mjs",
     "test:telas": "node test-navegador/campos-de-data.mjs",
     "test:simulacao": "node test-navegador/simulacao.mjs",
-    "verificar": "npm run typecheck && npm test && npm run build && npm run build:single && npm run test:telas && npm run test:simulacao"
+    "test:dialogos": "node test-navegador/dialogos.mjs",
+    "verificar": "npm run typecheck && npm test && npm run build && npm run build:single && npm run test:telas && npm run test:simulacao && npm run test:dialogos"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

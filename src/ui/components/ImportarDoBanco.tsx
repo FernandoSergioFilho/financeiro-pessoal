@@ -157,7 +157,7 @@ export function ImportarDoBanco({ onClose }: { onClose: () => void }) {
     <Dialog
       title="Importar do banco"
       onClose={onClose}
-      wide
+      larga
       footer={
         <>
           <span className="spacer" />
@@ -378,7 +378,7 @@ export function ImportarDoBanco({ onClose }: { onClose: () => void }) {
                               </div>
                             )}
                           </td>
-                          <td className="right">
+                          <td className="right" data-rotulo="Vezes">
                             <input
                               type="number"
                               className="input sm"
