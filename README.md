@@ -201,7 +201,22 @@ apagar uma delas, clique na linha.
   | print / foto | reconhecimento de texto em português, baixado na primeira vez |
   | colar | a lista copiada do aplicativo do banco, que não exporta nada |
 
-  Os três últimos não têm cabeçalho, então a descoberta é **por conteúdo**: numa linha, o que
+  **O PDF de fatura vem em duas colunas.** Foi o que a fatura do Santander mostrou: dois
+  lançamentos lado a lado na mesma altura da página. Agrupar só pela altura fundia os dois
+  numa linha só — saía um lançamento com a data de um e o valor do outro, que é pior do que
+  não importar, porque parece certo. A detecção de colunas é geral e não uma regra para um
+  banco: procura faixas verticais onde nenhum texto aparece, e só aceita o corte se as faixas
+  dos dois lados tiverem lançamentos por conta própria. Sem ela, 17 dos 56 lançamentos da
+  fatura de teste sumiam e faltavam R$ 442.
+
+  Três coisas a mais que essa fatura ensinou: a **capa** tem linhas com data e valor que não
+  são lançamento ("R$ 2.577,79 15/09/2026 R$30.040,00"), e o que as denuncia é a ordem — num
+  lançamento a data vem **antes** do valor, sempre; a fatura traz a **data original** da
+  compra parcelada, então "26/12" numa fatura de setembro é o Natal que passou, e uma data
+  sem ano que cairia no futuro recua um ano; e a fatura com mais de um portador **numera o
+  cartão antes da data**, número que não é parte do nome da loja.
+
+  Os três últimos formatos não têm cabeçalho, então a descoberta é **por conteúdo**: numa linha, o que
   parece data é a data, o que parece dinheiro é dinheiro, e o que sobra é a descrição. Dois
   cuidados que fazem a diferença entre funcionar e importar lixo: o **último número de cada
   linha do extrato é o saldo**, não o valor (decidido pelo formato do arquivo inteiro, não

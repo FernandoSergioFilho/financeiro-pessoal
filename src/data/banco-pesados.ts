@@ -56,6 +56,128 @@ interface ItemDeTexto {
   str: string;
   /** `[a, b, c, d, x, y]`, onde 4 e 5 são a posição na página. */
   transform: number[];
+  /** Largura do pedaço na página, usada para achar as colunas. */
+  width?: number;
+}
+
+/**
+ * Parece um lançamento? Data, **nome**, e valor com centavos, nessa ordem.
+ *
+ * Exigir o nome fecha a porta para "02/04 15,77" — a coluna de parcela ao lado
+ * da de valor — passar por lançamento e transformar o vão entre descrição e
+ * valor num corte de coluna.
+ *
+ * Na prática a prova por faixa, logo abaixo, já barra esse caso sozinha: as
+ * duas guardas se cobrem, e foi com as duas ausentes que a fatura saiu partida
+ * em três. Fica assim mesmo, porque "um lançamento tem nome" é verdade por si,
+ * e não uma defesa contra um caso específico.
+ */
+const PARECE_LANCAMENTO = /\d{1,2}[/.-]\d{1,2}\s.*[A-Za-zÀ-ÿ]{3}.*\d,\d{2}/;
+
+/**
+ * Onde a página se divide em colunas.
+ *
+ * A fatura do Santander imprime **duas colunas de lançamentos lado a lado**, e
+ * agrupar só pela altura funde as duas numa linha só:
+ *
+ *     16/07 JIM COM* PAULA CRISTI -0,02   18/07 IFD*RAIA DROGASIL 02/04 15,77
+ *     └───────── um lançamento ────────┘  └───────── outro lançamento ───────┘
+ *
+ * O resultado seria um lançamento com a data de um e o valor do outro — pior do
+ * que não importar, porque parece certo.
+ *
+ * A detecção é geral, e não uma regra para um banco: procura faixas verticais
+ * onde **nenhum** texto da página aparece, largas o bastante para serem um
+ * vão de coluna. O que impede o falso positivo é a prova seguinte: um corte só
+ * vale se os dois lados, sozinhos, tiverem linhas que parecem lançamento. O vão
+ * entre a descrição e o valor também é vazio, mas cortar ali deixaria datas de
+ * um lado e números do outro — e nenhum dos dois passa na prova.
+ */
+export function acharColunas(itens: readonly ItemDeTexto[]): number[] {
+  const pontos = itens
+    .filter((i) => i.str && i.str.trim() !== '')
+    .map((i) => ({ de: i.transform[4] ?? 0, ate: (i.transform[4] ?? 0) + (i.width ?? i.str.length * 4) }));
+  if (pontos.length < 10) return [];
+
+  const inicio = Math.min(...pontos.map((p) => p.de));
+  const fim = Math.max(...pontos.map((p) => p.ate));
+  const largura = fim - inicio;
+  if (largura <= 0) return [];
+
+  // Um vão de coluna é largo; o espaço entre duas palavras não é.
+  const minimo = Math.max(18, largura * 0.04);
+
+  const ocupado = new Uint8Array(Math.ceil(largura) + 2);
+  for (const p of pontos) {
+    for (let x = Math.floor(p.de - inicio); x <= Math.ceil(p.ate - inicio); x += 1) {
+      if (x >= 0 && x < ocupado.length) ocupado[x] = 1;
+    }
+  }
+
+  const candidatos: number[] = [];
+  let vazioDesde = -1;
+  for (let x = 0; x < ocupado.length; x += 1) {
+    if (ocupado[x] === 0) {
+      if (vazioDesde === -1) vazioDesde = x;
+    } else {
+      if (vazioDesde !== -1 && x - vazioDesde >= minimo) {
+        candidatos.push(inicio + (vazioDesde + x) / 2);
+      }
+      vazioDesde = -1;
+    }
+  }
+
+  /*
+   * A prova, faixa a faixa e não metade a metade.
+   *
+   * Olhar "tudo à esquerda" contra "tudo à direita" deixava passar um corte
+   * ruim dentro da segunda coluna: a esquerda continuava cheia de lançamentos
+   * completos e carregava a aprovação. O que vale é a **faixa** que o corte
+   * cria — dela para a fronteira anterior, e dela para o fim.
+   */
+  const aceitos: number[] = [];
+  let anterior = -Infinity;
+  for (const corte of candidatos) {
+    const faixa = itens.filter((i) => {
+      const x = i.transform[4] ?? 0;
+      return x >= anterior && x < corte;
+    });
+    const resto = itens.filter((i) => (i.transform[4] ?? 0) >= corte);
+    if (quantosLancamentos(faixa) >= 2 && quantosLancamentos(resto) >= 2) {
+      aceitos.push(corte);
+      anterior = corte;
+    }
+  }
+  return aceitos;
+}
+
+function quantosLancamentos(itens: readonly ItemDeTexto[]): number {
+  return emLinhas(itens, 3).filter((l) => PARECE_LANCAMENTO.test(l)).length;
+}
+
+/** Agrupa por altura e ordena cada linha pela horizontal. */
+function emLinhas(itens: readonly ItemDeTexto[], tolerancia: number): string[] {
+  const linhas: { y: number; itens: { x: number; str: string }[] }[] = [];
+  for (const item of itens) {
+    if (!item.str || item.str.trim() === '') continue;
+    const x = item.transform[4] ?? 0;
+    const y = item.transform[5] ?? 0;
+    const existente = linhas.find((l) => Math.abs(l.y - y) <= tolerancia);
+    if (existente) existente.itens.push({ x, str: item.str });
+    else linhas.push({ y, itens: [{ x, str: item.str }] });
+  }
+  return linhas
+    // De cima para baixo: no PDF o y cresce para cima, ao contrário da leitura.
+    .sort((a, b) => b.y - a.y)
+    .map((linha) =>
+      linha.itens
+        .sort((a, b) => a.x - b.x)
+        .map((i) => i.str)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .filter((l) => l !== '');
 }
 
 /**
@@ -70,30 +192,21 @@ interface ItemDeTexto {
  * de tamanhos diferentes na mesma linha desloca a base em alguns décimos.
  */
 export function agruparEmLinhas(itens: readonly ItemDeTexto[], tolerancia = 3): string {
-  const linhas: { y: number; itens: { x: number; str: string }[] }[] = [];
+  const colunas = acharColunas(itens);
+  if (colunas.length === 0) return emLinhas(itens, tolerancia).join('\n');
 
-  for (const item of itens) {
-    if (!item.str || item.str.trim() === '') continue;
-    const x = item.transform[4] ?? 0;
-    const y = item.transform[5] ?? 0;
-    const existente = linhas.find((l) => Math.abs(l.y - y) <= tolerancia);
-    if (existente) existente.itens.push({ x, str: item.str });
-    else linhas.push({ y, itens: [{ x, str: item.str }] });
+  // Coluna por coluna, inteira, antes de passar para a seguinte — que é como
+  // se lê uma página de jornal, e como a fatura foi diagramada.
+  const limites = [-Infinity, ...colunas, Infinity];
+  const partes: string[] = [];
+  for (let c = 0; c < limites.length - 1; c += 1) {
+    const daColuna = itens.filter((i) => {
+      const x = i.transform[4] ?? 0;
+      return x >= limites[c]! && x < limites[c + 1]!;
+    });
+    partes.push(...emLinhas(daColuna, tolerancia));
   }
-
-  return linhas
-    // De cima para baixo: no PDF o y cresce para cima, ao contrário da leitura.
-    .sort((a, b) => b.y - a.y)
-    .map((linha) =>
-      linha.itens
-        .sort((a, b) => a.x - b.x)
-        .map((i) => i.str)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    )
-    .filter((l) => l !== '')
-    .join('\n');
+  return partes.join('\n');
 }
 
 /**

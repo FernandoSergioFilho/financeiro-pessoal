@@ -149,8 +149,17 @@ describe('lerLinhasSoltas', () => {
     ]);
   });
 
-  it('linha com data e sem valor vira problema, porque era para ser lançamento', () => {
-    const lido = lerLinhasSoltas('07/09/2026 COMPRA SEM VALOR', HOJE);
+  /*
+   * Entre dois lançamentos que deram certo, a linha que falhou era para ser
+   * um lançamento — e dizer isso ajuda. Já uma linha sozinha que não deu em
+   * nada não tem com o que ser comparada: aí quem fala é o chamador, com o
+   * "não achei nenhum lançamento nesse texto".
+   */
+  it('no meio de lançamentos que deram certo, a linha sem valor vira problema', () => {
+    const lido = lerLinhasSoltas(
+      ['07/09/2026 MERCADO 70,00', '08/09/2026 COMPRA SEM VALOR', '09/09/2026 UBER 21,40'].join('\n'),
+      HOJE,
+    );
     expect(lido.problemas).toHaveLength(1);
     expect(lido.problemas[0]!.motivo).toContain('nenhum valor');
   });
@@ -232,5 +241,133 @@ describe('agruparEmLinhas', () => {
 
   it('espaço em branco não vira linha', () => {
     expect(agruparEmLinhas([item('   ', 40, 700), item('a', 40, 600)])).toBe('a');
+  });
+});
+
+/**
+ * A fatura do Santander, que é o caso real que motivou tudo isto.
+ *
+ * As coordenadas são as medidas na fatura de verdade: duas colunas de
+ * lançamentos lado a lado (x≈33 e x≈327), cada uma com suas próprias colunas
+ * de marcador do cartão, data, descrição, parcela e valor. A página tem 595
+ * pontos de largura e o vão entre as colunas fica em x≈277.
+ */
+describe('a fatura do Santander', () => {
+  const item = (str: string, x: number, y: number) => ({ str, transform: [1, 0, 0, 1, x, y], width: str.length * 4 });
+
+  /** Uma linha de lançamento, nas posições reais de uma das duas colunas. */
+  function lancamento(coluna: 'esq' | 'dir', y: number, cartao: string, data: string, desc: string, parcela: string, valor: string) {
+    const base = coluna === 'esq' ? 0 : 294;
+    const itens = [item(data, base + 33, y), item(desc, base + 52, y), item(valor, base + 206, y)];
+    if (cartao) itens.push(item(cartao, base + 17, y));
+    if (parcela) itens.push(item(parcela, base + 168, y));
+    return itens;
+  }
+
+  const pagina = [
+    ...lancamento('esq', 472, '', '16/07', 'JIM COM* PAULA CRISTI', '', '-0,02'),
+    ...lancamento('dir', 472, '', '18/07', 'IFD*RAIA DROGASIL S/A', '02/04', '15,77'),
+    ...lancamento('esq', 460, '', '17/08', 'DEB AUTOM DE FATURA EM C/', '', '-1.977,95'),
+    ...lancamento('dir', 460, '', '11/08', 'MERCADO*MERCADOLIVRE', '01/06', '51,20'),
+    ...lancamento('esq', 413, '3', '26/12', 'A R G BIGUACU COMERCIO', '09/10', '96,42'),
+    ...lancamento('dir', 413, '', '12/08', 'PANVEL*DIGITAL', '03/05', '58,66'),
+    ...lancamento('esq', 401, '3', '15/04', 'LOCCITANE CONTINENTE S', '05/10', '27,99'),
+    ...lancamento('dir', 401, '', '12/08', 'PANVEL*DIGITAL', '04/05', '58,66'),
+  ];
+
+  const lido = () => lerLinhasSoltas(agruparEmLinhas(pagina), '2026-09-12');
+
+  /*
+   * O defeito que a fatura de verdade revelou. Agrupar só pela altura fundia
+   * as duas colunas numa linha só —
+   *
+   *     16/07 JIM COM* PAULA CRISTI -0,02  18/07 IFD*RAIA DROGASIL 02/04 15,77
+   *
+   * — e saía um lançamento com a data de um e o valor do outro. Pior do que
+   * não importar, porque parece certo.
+   */
+  it('as duas colunas viram lançamentos separados, e não um só', () => {
+    expect(lido().linhas).toHaveLength(8);
+  });
+
+  it('cada lançamento fica com o próprio valor', () => {
+    const porDescricao = new Map(lido().linhas.map((l) => [l.descricao.split(' ')[0], l.valor]));
+    expect(porDescricao.get('JIM')).toBe(-2);
+    expect(porDescricao.get('IFD*RAIA')).toBe(1577);
+    expect(porDescricao.get('DEB')).toBe(-197795);
+    expect(porDescricao.get('MERCADO*MERCADOLIVRE')).toBe(5120);
+  });
+
+  /*
+   * A fatura traz a data **original** da compra parcelada: "26/12" numa fatura
+   * de setembro de 2026 é o Natal que passou. Sem o recuo, a parcela 9/10
+   * entrava em dezembro de 2026 e sumia do mês que a pessoa está olhando.
+   */
+  it('a compra de 26/12 é do ano passado, e não do que vem', () => {
+    const natal = lido().linhas.find((l) => l.descricao.startsWith('A R G'));
+    expect(natal?.data).toBe('2025-12-26');
+  });
+
+  /*
+   * Fatura com mais de um portador numera o cartão antes da data. O número é
+   * do cartão, não do estabelecimento.
+   */
+  it('o número do cartão não vira parte do nome da loja', () => {
+    const descricoes = lido().linhas.map((l) => l.descricao);
+    expect(descricoes).toContain('A R G BIGUACU COMERCIO 09/10');
+    expect(descricoes.some((d) => d.startsWith('3 '))).toBe(false);
+  });
+
+  it('a marca de parcela continua no texto, para virar a coluna Vezes', () => {
+    const mercado = lido().linhas.find((l) => l.descricao.startsWith('MERCADO'));
+    expect(mercado?.descricao).toContain('01/06');
+  });
+
+  /*
+   * A capa da fatura tem linhas com data e valor que não são lançamento:
+   *
+   *     R$ 2.577,79   15/09/2026   R$30.040,00
+   *     JUL. R$ 3.305,62 R$3.305,64 09/06/26 a 08/07/26
+   *
+   * Cinco delas entravam como compras. O que as denuncia é a ordem: num
+   * lançamento a data vem antes do valor, sempre.
+   */
+  it('a capa da fatura não vira lançamento', () => {
+    const capa = lerLinhasSoltas(
+      [
+        'Total a Pagar Vencimento Seu limite é',
+        'R$ 2.577,79 15/09/2026 R$30.040,00',
+        'JUL. R$ 3.305,62 R$3.305,64 09/06/26 a 08/07/26',
+        'OUT. R$ 1.451,32 Fatura Aberta 09/09/26 a 07/10/26',
+      ].join('\n'),
+      '2026-09-12',
+    );
+    expect(capa.linhas).toEqual([]);
+  });
+
+  /*
+   * Num PDF a maior parte da página é prosa, número de página e rodapé.
+   * Relatar cada linha sem valor como problema enchia a tela com sete avisos
+   * que não eram problema nenhum — e escondia os que seriam.
+   */
+  it('a prosa do PDF é ignorada em silêncio, mas o texto colado ainda reclama', () => {
+    const pdf = lerLinhasSoltas(
+      [
+        '1/4',
+        'Olá, Thayna! Esta é a fatura do seu cartão realizados até 08/09.',
+        'No caso de pagamentos após a data de vencimento você tem custos',
+        '16/07 JIM COM* PAULA CRISTI -0,02',
+      ].join('\n'),
+      '2026-09-12',
+    );
+    expect(pdf.problemas).toEqual([]);
+    expect(pdf.linhas).toHaveLength(1);
+
+    // Colado, a maioria das linhas é lançamento: aí a que falhou era para dar certo.
+    const colado = lerLinhasSoltas(
+      ['07/09/2026 MERCADO 70,00', '08/09/2026 UBER 21,40', '09/09/2026 SEM VALOR NENHUM'].join('\n'),
+      '2026-09-12',
+    );
+    expect(colado.problemas).toHaveLength(1);
   });
 });

@@ -26,7 +26,7 @@
  */
 
 import { parseMoney } from '../domain/money.ts';
-import { isValidISO, toISO, today } from '../domain/date.ts';
+import { addDays, isValidISO, toISO, today } from '../domain/date.ts';
 import type { LeituraBanco, LinhaBanco, ProblemaLeitura } from './banco-csv.ts';
 
 const MESES: Record<string, number> = {
@@ -87,7 +87,11 @@ export function acharValores(linha: string): ValorAchado[] {
  * regra no print da tela de um banco: sem ele o extrato de dezembro importado
  * em janeiro cairia no ano errado.
  */
-export function acharData(linha: string, anoDeReferencia: number): { iso: string; inicio: number; fim: number } | null {
+export function acharData(
+  linha: string,
+  anoDeReferencia: number,
+  hoje = today(),
+): { iso: string; inicio: number; fim: number } | null {
   for (const padrao of PADROES_DE_DATA) {
     const m = padrao.exec(linha);
     if (!m) continue;
@@ -112,8 +116,22 @@ export function acharData(linha: string, anoDeReferencia: number): { iso: string
     }
 
     if (mes < 1 || mes > 12 || dia < 1 || dia > 31) continue;
-    const iso = toISO({ year: ano, month: mes, day: dia });
+    let iso = toISO({ year: ano, month: mes, day: dia });
     if (!isValidISO(iso)) continue;
+
+    /*
+     * Data sem ano que cairia no futuro é do ano passado.
+     *
+     * A fatura traz a data **original** da compra parcelada: "26/12" numa
+     * fatura de setembro é o Natal que passou, não o que vem. Sem isto, uma
+     * parcela 9/10 entrava em dezembro de 2026 e sumia do mês que a pessoa
+     * está olhando.
+     */
+    const semAno = padrao === PADROES_DE_DATA[4] || (padrao === PADROES_DE_DATA[5] && !m[3]);
+    if (semAno && iso > addDays(hoje, 45)) {
+      iso = toISO({ year: ano - 1, month: mes, day: dia });
+      if (!isValidISO(iso)) continue;
+    }
     return { iso, inicio: m.index, fim: m.index + m[0].length };
   }
   return null;
@@ -205,7 +223,7 @@ export function lerLinhasSoltas(texto: string, hoje = today()): LeituraDeTexto {
   const lidas = linhas.map((linha, i) => ({
     numero: i + 1,
     texto: linha,
-    data: acharData(linha, ano),
+    data: acharData(linha, ano, hoje),
     valores: acharValores(linha),
   }));
 
@@ -215,6 +233,22 @@ export function lerLinhasSoltas(texto: string, hoje = today()): LeituraDeTexto {
   // Dois números por linha e o segundo é o saldo corrente. Três ou mais: o
   // último ainda é o saldo, e o primeiro continua sendo o valor.
   const temSaldo = quantosValores >= 2;
+
+  /*
+   * Uma linha com data e sem valor é problema ou é ruído?
+   *
+   * Depende do documento. No texto que a pessoa colou — só os lançamentos que
+   * ela copiou —, uma linha assim era para ser um lançamento e falhou: dizer
+   * isso ajuda. Num PDF de fatura, "1/4" é número de página e "realizados até
+   * 08/09." é uma frase da capa; relatar as duas como problema enche a tela de
+   * ruído e esconde o que importa.
+   *
+   * O critério é a densidade, o mesmo princípio que já escolhe o separador e
+   * decide o que é saldo: num documento em que a maioria das linhas virou
+   * lançamento, o que falhou era para ter dado certo.
+   */
+  const densidade = lidas.filter((l) => l.data && l.valores.length > 0).length / lidas.length;
+  const exigente = densidade >= 0.5;
 
   const achadas: LinhaBanco[] = [];
   const problemas: ProblemaLeitura[] = [];
@@ -226,9 +260,24 @@ export function lerLinhasSoltas(texto: string, hoje = today()): LeituraDeTexto {
     if (!l.data) { ignoradas += 1; continue; }
 
     if (l.valores.length === 0) {
-      problemas.push({ linha: l.numero, motivo: `Achei a data mas nenhum valor: "${l.texto.slice(0, 60)}".` });
+      if (exigente) {
+        problemas.push({ linha: l.numero, motivo: `Achei a data mas nenhum valor: "${l.texto.slice(0, 60)}".` });
+      } else ignoradas += 1;
       continue;
     }
+
+    /*
+     * Numa linha de lançamento a data vem **antes** do valor: é assim que
+     * extrato e fatura são diagramados, sem exceção. O contrário denuncia a
+     * capa da fatura, onde moram linhas como
+     *
+     *     R$ 2.577,79   15/09/2026   R$30.040,00
+     *     JUL. R$ 3.305,62 R$3.305,64 09/06/26 a 08/07/26
+     *
+     * que têm data e valor e não são lançamento nenhum. Cinco delas entravam
+     * como compras na fatura do Santander.
+     */
+    if (l.valores[0]!.inicio < l.data.inicio) { ignoradas += 1; continue; }
 
     const oValor = l.valores[0]!;
     const oSaldo = temSaldo && l.valores.length >= 2 ? l.valores.at(-1)! : null;
@@ -248,14 +297,22 @@ export function lerLinhasSoltas(texto: string, hoje = today()): LeituraDeTexto {
       l.texto.slice(l.data.fim, oValor.inicio),
       oSaldo ? '' : l.texto.slice(oValor.fim),
     ];
-    const descricao = pedacos.join(' ').replace(/\s+/g, ' ').replace(/^[\s\-–—|.:]+|[\s\-–—|.:]+$/g, '').trim();
+    const descricao = pedacos
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      // A fatura com mais de um portador numera o cartão antes da data: "3
+      // LOPESEAMARAL". O número é do cartão, não do estabelecimento.
+      .replace(/^\d{1,2}\s+(?=\D)/, '')
+      .replace(/^[\s\-–—|.:]+|[\s\-–—|.:]+$/g, '')
+      .trim();
 
     if (!descricao) {
       problemas.push({ linha: l.numero, motivo: `Linha sem descrição: "${l.texto.slice(0, 60)}".` });
       continue;
     }
     if (valor === 0) {
-      problemas.push({ linha: l.numero, motivo: `Valor zerado: "${l.texto.slice(0, 60)}".` });
+      if (exigente) problemas.push({ linha: l.numero, motivo: `Valor zerado: "${l.texto.slice(0, 60)}".` });
+      else ignoradas += 1;
       continue;
     }
     // Resumo não é lançamento, e também não é problema: é parte do documento.
