@@ -7,7 +7,10 @@
  * podem demorar e falhar.
  */
 
-import { motivoParaCopiar, quantidadeDeRegistros, type Copia, type MotivoDaCopia } from '../domain/backup.ts';
+import {
+  motivoParaCopiar, quantidadeDeRegistros, PRECIOSIDADE,
+  type Copia, type MotivoDaCopia,
+} from '../domain/backup.ts';
 import type { FinanceData } from '../domain/types.ts';
 import { emptyData, migrate } from './schema.ts';
 
@@ -28,11 +31,12 @@ export interface FinanceRepository {
 const STORAGE_KEY = 'financeiro-pessoal';
 
 /**
- * Onde ficam as cópias automáticas. Duas, com propósitos diferentes — a regra
+ * Onde ficam as cópias automáticas. Três, com propósitos diferentes — a regra
  * e o porquê estão em `domain/backup.ts`.
  */
 const CHAVES_DE_COPIA: Record<MotivoDaCopia, string> = {
   rotina: `${STORAGE_KEY}:copia-rotina`,
+  lote: `${STORAGE_KEY}:copia-lote`,
   queda: `${STORAGE_KEY}:copia-queda`,
 };
 
@@ -82,7 +86,7 @@ export class LocalStorageRepository implements FinanceRepository {
   }
 
   async copias(): Promise<Copia[]> {
-    const lidas = (['queda', 'rotina'] as MotivoDaCopia[])
+    const lidas = PRECIOSIDADE
       .map((motivo) => this.lerCopia(motivo))
       .filter((copia): copia is Copia => copia !== null);
     return lidas.sort((a, b) => b.gravadaEm.localeCompare(a.gravadaEm));
@@ -124,19 +128,23 @@ export class LocalStorageRepository implements FinanceRepository {
       );
     } catch (error) {
       // Sem espaço para a cópia: os dados de verdade já estão salvos, então
-      // some com a de rotina (a menos preciosa) e tenta uma vez só.
+      // abre caminho sacrificando as menos preciosas, uma de cada vez, e só
+      // as que valem menos do que a que está tentando entrar.
       console.warn('Não foi possível guardar a cópia automática.', error);
-      if (motivo === 'queda') {
+      const menosPreciosas = PRECIOSIDADE.slice(PRECIOSIDADE.indexOf(motivo) + 1);
+      for (const sacrificada of menosPreciosas) {
         try {
-          window.localStorage.removeItem(CHAVES_DE_COPIA.rotina);
+          window.localStorage.removeItem(CHAVES_DE_COPIA[sacrificada]);
           window.localStorage.setItem(
-            CHAVES_DE_COPIA.queda,
+            CHAVES_DE_COPIA[motivo],
             JSON.stringify({ gravadaEm: agora, data: anterior }),
           );
+          return;
         } catch {
-          // Desistir aqui é o certo: os dados atuais continuam salvos.
+          // Ainda não coube: tenta abrir mais espaço na volta seguinte.
         }
       }
+      // Desistir aqui é o certo: os dados atuais continuam salvos.
     }
   }
 }

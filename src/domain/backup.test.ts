@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { descreverCopia, motivoParaCopiar, quantidadeDeRegistros } from './backup.ts';
+import {
+  descreverCopia, motivoParaCopiar, quantidadeDeRegistros, rotuloDoMotivo, PRECIOSIDADE,
+} from './backup.ts';
 import type { Entry, FinanceData } from './types.ts';
 
 const STAMP = '2026-09-08T12:00:00.000Z';
@@ -67,9 +69,28 @@ describe('motivoParaCopiar', () => {
     expect(motivoParaCopiar(carteira(100), carteira(60), agoraMesmo, STAMP)).toBe('queda');
   });
 
-  it('perder pouco é uso normal — apagar um lançamento não é desastre', () => {
+  /*
+   * Antes, perder pouco não guardava nada: apagar 5 de 300 em lote deixava a
+   * pessoa sem caminho de volta. Agora guarda, mas numa gaveta própria — ver
+   * o teste da preciosidade logo abaixo, que é o que faz isso ser seguro.
+   */
+  it('perder pouco também guarda cópia, na gaveta do lote', () => {
     const agoraMesmo = '2026-09-08T11:59:00.000Z';
-    expect(motivoParaCopiar(carteira(100), carteira(99), agoraMesmo, STAMP)).toBeNull();
+    expect(motivoParaCopiar(carteira(100), carteira(99), agoraMesmo, STAMP)).toBe('lote');
+  });
+
+  it('apagar 5 de 300 em lote guarda cópia', () => {
+    const agoraMesmo = '2026-09-08T11:59:00.000Z';
+    expect(motivoParaCopiar(carteira(300), carteira(295), agoraMesmo, STAMP)).toBe('lote');
+  });
+
+  it('perda grande continua sendo queda, e não lote', () => {
+    const agoraMesmo = '2026-09-08T11:59:00.000Z';
+    expect(motivoParaCopiar(carteira(300), carteira(10), agoraMesmo, STAMP)).toBe('queda');
+  });
+
+  it('a queda é a mais preciosa, e a rotina a que se sacrifica primeiro', () => {
+    expect(PRECIOSIDADE).toEqual(['queda', 'lote', 'rotina']);
   });
 
   it('crescer nunca é queda', () => {
@@ -101,5 +122,13 @@ describe('descreverCopia', () => {
       data: vazia,
     });
     expect(texto).toBe('1 registro, de 08/09/2026 às 09:05');
+  });
+});
+
+describe('rotuloDoMotivo', () => {
+  it('cada gaveta diz de que susto protege', () => {
+    expect(rotuloDoMotivo('queda')).toBe('Antes de uma perda grande');
+    expect(rotuloDoMotivo('lote')).toBe('Antes da última exclusão');
+    expect(rotuloDoMotivo('rotina')).toBe('De rotina');
   });
 });

@@ -8,13 +8,21 @@
  *
  * Guardar a cópia a cada gravação não protege de nada: o app grava a cada
  * poucos segundos, então a cópia boa seria substituída pela ruim antes de
- * alguém perceber. Por isso são duas cópias com propósitos diferentes:
+ * alguém perceber. Por isso são três cópias com propósitos diferentes:
  *
  * - **rotina** — de tempos em tempos, sobrescrevendo a anterior. É o "ontem
  *   estava assim";
+ * - **lote** — tirada antes de qualquer exclusão, do tamanho que for. É o
+ *   "desfazer" do apagar em lote: apagar 5 de 300 não é desastre, mas quem
+ *   apagou quer o caminho de volta;
  * - **queda** — tirada no instante anterior a uma perda grande, e só
- *   substituída por outra queda. É a que salva o dia, e uma rotina nunca a
- *   apaga por cima.
+ *   substituída por outra queda. É a que salva o dia, e nem uma rotina nem um
+ *   lote a apagam por cima.
+ *
+ * As três existem porque a perda grande é a que se percebe tarde. Se toda
+ * exclusão escrevesse na mesma gaveta, apagar dois lançamentos na semana
+ * seguinte jogaria fora a cópia tirada antes do "apagar tudo" — que é
+ * justamente a que ninguém sabe ainda que vai precisar.
  */
 
 import type { FinanceData } from './types.ts';
@@ -25,7 +33,10 @@ export const HORAS_DE_ROTINA = 6;
 /** Quanto do conteúdo pode sumir de uma vez antes de virar "queda". */
 export const FRACAO_DE_QUEDA = 0.3;
 
-export type MotivoDaCopia = 'rotina' | 'queda';
+export type MotivoDaCopia = 'rotina' | 'lote' | 'queda';
+
+/** Da mais preciosa para a menos: quem some primeiro quando falta espaço. */
+export const PRECIOSIDADE: MotivoDaCopia[] = ['queda', 'lote', 'rotina'];
 
 export function quantidadeDeRegistros(data: FinanceData): number {
   return data.accounts.length + data.categories.length + data.entries.length
@@ -51,6 +62,10 @@ export function motivoParaCopiar(
 
   const depois = quantidadeDeRegistros(novo);
   if (depois === 0 || depois < antes * (1 - FRACAO_DE_QUEDA)) return 'queda';
+  // Qualquer perda, do tamanho que for, deixa por onde voltar. Não distingue
+  // "apagou em lote" de "apagou um": pela contagem os dois são iguais, e
+  // guardar a mais é barato — é uma gaveta só, sempre sobrescrita.
+  if (depois < antes) return 'lote';
 
   if (!ultimaRotinaEm) return 'rotina';
   const horas = (Date.parse(agora) - Date.parse(ultimaRotinaEm)) / 3_600_000;
@@ -62,6 +77,13 @@ export interface Copia {
   motivo: MotivoDaCopia;
   registros: number;
   data: FinanceData;
+}
+
+/** O nome da cópia na tela: diz de que susto ela protege. */
+export function rotuloDoMotivo(motivo: MotivoDaCopia): string {
+  if (motivo === 'queda') return 'Antes de uma perda grande';
+  if (motivo === 'lote') return 'Antes da última exclusão';
+  return 'De rotina';
 }
 
 /** "312 registros, de 08/09/2026 às 14:32" — o que a tela mostra sobre a cópia. */

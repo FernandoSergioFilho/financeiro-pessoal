@@ -162,11 +162,21 @@ apagar uma delas, clique na linha.
   pode não ter sido paga. Quem diz que pagou é você, na caixa de seleção da lista — que vai
   e volta. Em Ajustes há um **desmarcar todos como pagos**, para recomeçar a marcação do
   zero.
-- **Cópias automáticas** — o app guarda sozinho o estado anterior de tempos em tempos, e
-  **sempre no instante antes de uma perda grande** (um "apagar tudo" sem querer, uma
-  importação torta, uma sincronização que trouxe a carteira vazia por cima da cheia). São
-  duas cópias com propósitos diferentes: a de rotina, que se sobrescreve, e a de queda, que
-  só outra queda substitui. Em Ajustes dá para ver, baixar e restaurar cada uma.
+- **Cópias automáticas** — o app guarda sozinho o estado anterior, em três gavetas com
+  propósitos diferentes:
+
+  | Gaveta | Quando sai | Quem a substitui |
+  | --- | --- | --- |
+  | **De rotina** | a cada 6 horas de uso | outra rotina |
+  | **Antes da última exclusão** | toda vez que algum registro some, do tamanho que for | outra exclusão |
+  | **Antes de uma perda grande** | quando some mais de um terço de uma vez | só outra perda grande |
+
+  As três existem porque a perda grande — um "apagar tudo" sem querer, uma importação
+  torta, uma sincronização que trouxe a carteira vazia por cima da cheia — é a que se
+  percebe tarde. Se toda exclusão escrevesse na mesma gaveta, apagar dois lançamentos na
+  semana seguinte jogaria fora justamente a cópia que ninguém sabia ainda que ia precisar.
+  Quando falta espaço no navegador, o app sacrifica as menos preciosas primeiro, nessa
+  ordem. Em Ajustes dá para ver, baixar e restaurar cada uma.
 - **Importar o CSV do banco** — o extrato ou a fatura que o Nubank (e os outros) exportam.
   O app descobre sozinho o separador e as colunas de data, descrição e valor, compara com o
   que você já lançou e mostra linha por linha o que é novo, o que já existe e o que ficou em

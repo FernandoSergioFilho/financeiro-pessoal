@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { descreverUso, limparComprasOrfas, moverConta, usoDaConta } from '../../domain/accounts.ts';
 import { today } from '../../domain/date.ts';
-import { descreverCopia, type Copia } from '../../domain/backup.ts';
+import { descreverCopia, rotuloDoMotivo, type Copia } from '../../domain/backup.ts';
 import { corrigirNomesDeParcelas, parcelasComNomeErrado } from '../../domain/installments.ts';
 import { desmarcarTodosComoPagos, quantosEstaoPagos } from '../../domain/pagamentos.ts';
 import { agruparPorInstituicao, instituicoesConhecidas, sugerirInstituicao } from '../../domain/institutions.ts';
@@ -1036,22 +1036,26 @@ export function SettingsPage({
               {copias.map((copia) => (
                 <li key={copia.motivo} className="row wrap" style={{ gap: 8 }}>
                   <span>
-                    <strong>{copia.motivo === 'queda' ? 'Antes de uma perda grande' : 'De rotina'}</strong>
+                    <strong>{rotuloDoMotivo(copia.motivo)}</strong>
                     <span className="dim"> — {descreverCopia(copia)}</span>
                   </span>
                   <span className="spacer" />
-                  <button
-                    type="button"
-                    className="btn sm ghost"
-                    onClick={() =>
-                      downloadJson(`financeiro-copia-${copia.gravadaEm.slice(0, 10)}.json`, copia.data)
-                    }
-                  >
-                    Baixar
-                  </button>
-                  <button type="button" className="btn sm" onClick={() => setRestaurando(copia)}>
-                    Restaurar
-                  </button>
+                  {/* Os dois num grupo só: soltos na linha, "Baixar" ficava numa
+                      linha e "Restaurar" na seguinte quando o texto era longo. */}
+                  <span className="row" style={{ gap: 8, flex: 'none' }}>
+                    <button
+                      type="button"
+                      className="btn sm ghost"
+                      onClick={() =>
+                        downloadJson(`financeiro-copia-${copia.gravadaEm.slice(0, 10)}.json`, copia.data)
+                      }
+                    >
+                      Baixar
+                    </button>
+                    <button type="button" className="btn sm" onClick={() => setRestaurando(copia)}>
+                      Restaurar
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>

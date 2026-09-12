@@ -146,6 +146,41 @@ describe('cópias automáticas', () => {
     expect(queda?.registros).toBe(100);
   });
 
+  /*
+   * O apagar em lote pequeno: 5 de 300 não chega a ser queda, mas quem apagou
+   * quer o caminho de volta. Antes não guardava nada.
+   */
+  it('apagar poucos em lote guarda a cópia do antes', async () => {
+    const repo = new LocalStorageRepository();
+    await repo.save(carteira(300));
+    await repo.save(carteira(295));
+
+    const lote = (await repo.copias()).find((c) => c.motivo === 'lote');
+    expect(lote?.registros).toBe(300);
+  });
+
+  /*
+   * E a razão de o lote ter gaveta própria em vez de escrever na da queda.
+   * O desastre é o que se percebe tarde: se a exclusão miúda da semana
+   * seguinte apagasse a cópia do "apagar tudo", a proteção teria sido
+   * trocada por uma conveniência.
+   */
+  it('apagar pouco depois não come a cópia da perda grande', async () => {
+    const repo = new LocalStorageRepository();
+    await repo.save(carteira(300));
+    await repo.save(carteira(2)); // o desastre: guarda os 300 na queda
+
+    // Dias de uso normal por cima, com exclusões miúdas.
+    await repo.save(carteira(40));
+    await repo.save(carteira(39));
+    avancar(HORAS_DE_ROTINA + 1);
+    await repo.save(carteira(38));
+
+    const copias = await repo.copias();
+    expect(copias.find((c) => c.motivo === 'queda')!.registros).toBe(300);
+    expect(copias.find((c) => c.motivo === 'lote')!.registros).toBe(39);
+  });
+
   it('a cópia dá para restaurar tal e qual', async () => {
     const repo = new LocalStorageRepository();
     const original = carteira(10);
