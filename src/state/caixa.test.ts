@@ -51,7 +51,8 @@ describe('dataDeCaixa', () => {
   it('no cartão, é o vencimento da fatura em que a compra caiu', () => {
     // Fecha dia 1º: a compra de 01/09 abre a fatura que fecha em 01/10 e
     // vence em 10/10.
-    expect(dataDeCaixa(cartao, { date: '2026-09-01', kind: 'expense' })).toBe('2026-10-10');
+    // 10/10/2026 é sábado, então o pagamento sai na segunda, dia 12.
+    expect(dataDeCaixa(cartao, { date: '2026-09-01', kind: 'expense' })).toBe('2026-10-12');
     // A véspera ainda é da fatura que fecha em 01/09 e vence em 10/09.
     expect(dataDeCaixa(cartao, { date: '2026-08-31', kind: 'expense' })).toBe('2026-09-10');
   });
@@ -109,7 +110,7 @@ describe('o período do cartão', () => {
    * fora — foi por isso que a busca precisou de folga nos dois lados.
    */
   it('a busca alcança a compra feita fora da janela que a recebe', () => {
-    const soUmDia = entriesInRange(data, '2026-10-10', '2026-10-10');
+    const soUmDia = entriesInRange(data, '2026-10-12', '2026-10-12');
     expect(soUmDia.map((e) => e.id)).toEqual(['a']);
   });
 
@@ -146,12 +147,12 @@ describe('comDataDeCaixa', () => {
     const doCartao = gasto('a', '2026-09-01', 10000);
     const doDebito = gasto('c', '2026-09-05', 40000, conta.id);
     const [cartaoCom, debitoCom] = comDataDeCaixa([cartao, conta], [doCartao, doDebito]);
-    expect(cartaoCom!.caixa).toBe('2026-10-10');
+    expect(cartaoCom!.caixa).toBe('2026-10-12');
     expect(debitoCom).toBe(doDebito);
   });
 
   it('quandoSai cai na data quando não há deslocamento', () => {
     expect(quandoSai({ date: '2026-09-05' })).toBe('2026-09-05');
-    expect(quandoSai({ date: '2026-09-01', caixa: '2026-10-10' })).toBe('2026-10-10');
+    expect(quandoSai({ date: '2026-09-01', caixa: '2026-10-12' })).toBe('2026-10-12');
   });
 });

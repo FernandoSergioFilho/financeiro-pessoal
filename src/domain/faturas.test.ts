@@ -99,13 +99,14 @@ describe('faturaAberta', () => {
     expect(faturaDaCompra(cartaoDoDia1, '2026-09-01')).toMatchObject({
       comecaEm: '2026-09-01',
       fecha: '2026-10-01',
-      vence: '2026-10-10',
+      // 10/10/2026 é um sábado: o pagamento sai na segunda.
+      vence: '2026-10-12',
     });
     // E a véspera, dia 31/08, ainda é da fatura que fecha em 01/09.
     expect(faturaDaCompra(cartaoDoDia1, '2026-08-31')).toMatchObject({
       comecaEm: '2026-08-01',
       fecha: '2026-09-01',
-      vence: '2026-09-10',
+      vence: '2026-09-10', // uma quinta-feira: não move
     });
   });
 
@@ -116,7 +117,8 @@ describe('faturaAberta', () => {
   it('fechando dia 5 e vencendo dia 20, o vencimento é do mesmo mês', () => {
     const fatura = faturaAberta(cartao({ closingDay: 5, dueDay: 20 }), [], '2026-09-02')!;
     expect(fatura.fecha).toBe('2026-09-05');
-    expect(fatura.vence).toBe('2026-09-20');
+    // 20/09/2026 é um domingo: paga-se na segunda.
+    expect(fatura.vence).toBe('2026-09-21');
   });
 
   it('ignora lançamento de outro cartão', () => {
@@ -216,5 +218,23 @@ describe('faturaDaCompra', () => {
         f: daCompra.fecha, v: daCompra.vence, c: daCompra.comecaEm,
       });
     }
+  });
+});
+
+describe('vencimento em fim de semana', () => {
+  /*
+   * O vencimento é data derivada, e num fluxo de caixa vale o dia em que o
+   * dinheiro sai. A fatura que vence num sábado é paga na segunda.
+   */
+  it('a fatura que vence no sábado sai na segunda', () => {
+    // 10/10/2026 é sábado.
+    const fatura = faturaDaCompra(cartao({ closingDay: 1, dueDay: 10 }), '2026-09-15')!;
+    expect(fatura.vence).toBe('2026-10-12');
+  });
+
+  it('o vencimento em dia útil fica onde está', () => {
+    // 05/10/2026 é segunda-feira.
+    const fatura = faturaDaCompra(cartao({ closingDay: 1, dueDay: 5 }), '2026-09-15')!;
+    expect(fatura.vence).toBe('2026-10-05');
   });
 });

@@ -23,6 +23,7 @@
  */
 
 import { addMonths, daysInMonth, parseISO, toISO } from './date.ts';
+import { ajustarParaDiaUtil } from './diautil.ts';
 import type { Account, DisplayEntry } from './types.ts';
 
 /**
@@ -83,7 +84,10 @@ export function faturaDaCompra(conta: Account, data: string): CicloDaFatura | nu
   // O vencimento é o primeiro `dueDay` **depois** do fechamento: fechando dia
   // 28 e vencendo dia 5, o vencimento é do mês seguinte; fechando dia 5 e
   // vencendo dia 20, é do mesmo mês.
-  const vence = conta.dueDay ? proximoDiaDoMes(fecha, conta.dueDay) : fecha;
+  // O vencimento que cai num sábado é pago na segunda: é uma data derivada, e
+  // num fluxo de caixa o dia em que o dinheiro sai é o que vale.
+  const venceNoPapel = conta.dueDay ? proximoDiaDoMes(fecha, conta.dueDay) : fecha;
+  const vence = ajustarParaDiaUtil(venceNoPapel, 'expense');
 
   return { fecha, vence, comecaEm };
 }
@@ -152,10 +156,23 @@ export function faturasAbertas(
  */
 export function dataDeCaixa(
   conta: Account | undefined,
-  entrada: { date: string; kind: string },
+  entrada: { date: string; kind: string; projected?: boolean },
 ): string {
-  if (!conta || entrada.kind === 'transfer' || !temCiclo(conta)) return entrada.date;
-  return faturaDaCompra(conta, entrada.date)?.vence ?? entrada.date;
+  if (conta && entrada.kind !== 'transfer' && temCiclo(conta)) {
+    // O vencimento da fatura já vem ajustado para dia útil.
+    return faturaDaCompra(conta, entrada.date)?.vence ?? entrada.date;
+  }
+  // A ocorrência de uma conta recorrente é data derivada: a do dia 5 que cai
+  // num domingo não move dinheiro no domingo. Já o lançamento que a pessoa
+  // digitou fica onde ela o pôs — cartão e Pix funcionam no fim de semana, e
+  // corrigir o que ela viu acontecer seria o app achando que sabe mais.
+  if (entrada.projected) {
+    return ajustarParaDiaUtil(
+      entrada.date,
+      entrada.kind === 'income' ? 'income' : entrada.kind === 'transfer' ? 'transfer' : 'expense',
+    );
+  }
+  return entrada.date;
 }
 
 /**
@@ -175,7 +192,7 @@ export function quandoSai(entrada: { date: string; caixa?: string }): string {
  * Quem agrupa por mês precisa dela: sem isto, a lista do período mostraria a
  * compra no mês da fatura e o gráfico no mês da compra.
  */
-export function comDataDeCaixa<T extends { date: string; kind: string; accountId: string }>(
+export function comDataDeCaixa<T extends { date: string; kind: string; accountId: string; projected?: boolean }>(
   contas: readonly Account[],
   entradas: readonly T[],
 ): (T & { caixa?: string })[] {

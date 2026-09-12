@@ -809,6 +809,77 @@ for (const [rota, nome, singular] of [
   await ctx.close();
 }
 
+/* ------------------------------- 15. o aviso do dia em que o dinheiro acaba
+
+   A frase que um fluxo de caixa existe para produzir. O gráfico já mostrava a
+   linha cruzando o zero, mas ninguém lê um gráfico procurando isso — e ele só
+   desenha o período aberto, enquanto o aperto costuma estar meses adiante. */
+{
+  const T = '2026-01-01T00:00:00.000Z';
+  const dia = (n) => {
+    const d = new Date(`${HOJE}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const lanc = (id, date, description, amount, kind) => ({
+    id, date, description, amount, kind, accountId: 'cc', toAccountId: null, categoryId: null,
+    status: 'pending', recurringId: null, occurrenceDate: null, purchaseId: null,
+    installmentNumber: null, installmentTotal: null, createdAt: T, updatedAt: T,
+  });
+  const apertada = JSON.stringify({
+    version: 2,
+    accounts: [
+      { id: 'cc', name: 'Conta corrente', kind: 'checking', openingBalance: 250000, color: 'green', updatedAt: T },
+      { id: 'inv', name: 'Tesouro', kind: 'investment', openingBalance: 1500000, color: 'purple', updatedAt: T },
+    ],
+    categories: [],
+    entries: [
+      lanc('s1', dia(3), 'Salário', 400000, 'income'),
+      lanc('a1', dia(5), 'Aluguel', 320000, 'expense'),
+      lanc('i1', dia(12), 'IPVA', 290000, 'expense'),
+      lanc('e1', dia(18), 'Escola', 180000, 'expense'),
+    ],
+    recurring: [], purchases: [], tombstones: [],
+  });
+
+  for (const width of [390, 1280]) {
+    const ctx = await browser.newContext({ viewport: { width, height: 1000 } });
+    const page = await ctx.newPage();
+    await page.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), apertada);
+    await page.goto(`${APP}#/painel`);
+    await page.waitForTimeout(800);
+
+    const lido = await page.evaluate(() => {
+      const grave = document.querySelector('.banner.grave');
+      const cartao = [...document.querySelectorAll('.card.stat')]
+        .find((c) => c.textContent.includes('Dinheiro disponível'));
+      return {
+        aviso: grave ? grave.textContent.replace(/\s+/g, ' ').trim() : null,
+        saldo: cartao ? cartao.textContent.replace(/\s+/g, ' ').trim() : null,
+      };
+    });
+
+    if (!lido.aviso) erro(`${width}px: a carteira fica negativa e o painel não avisa`);
+    else if (!lido.aviso.includes('o dinheiro acaba')) erro(`${width}px: aviso com texto inesperado — ${lido.aviso}`);
+    else if (!/-R\$/.test(lido.aviso)) erro(`${width}px: o aviso não diz de quanto é o buraco`);
+    // O disponível é só a conta corrente: os R$ 15.000 do Tesouro ficam à parte.
+    else if (!lido.saldo?.includes('R$ 2.500,00')) erro(`${width}px: o disponível somou o investido — ${lido.saldo}`);
+    else if (!lido.saldo.includes('investido')) erro(`${width}px: o investido sumiu da tela em vez de ficar ao lado`);
+    else ok(`o painel avisa o dia em que o dinheiro acaba (${width}px)`);
+
+    // O aviso é um atalho: leva para o dia.
+    if (lido.aviso) {
+      await page.click('.banner.grave');
+      await page.waitForTimeout(700);
+      const foi = await page.evaluate(() => location.hash.includes('lancamentos'));
+      if (!foi) erro(`${width}px: o aviso não leva a lugar nenhum`);
+      else ok(`o aviso leva para o dia (${width}px)`);
+    }
+
+    await ctx.close();
+  }
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

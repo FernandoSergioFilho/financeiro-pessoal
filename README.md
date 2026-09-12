@@ -406,6 +406,34 @@ mandou um Pix. É nas descrições que mora o que é íntimo, e para saber que S
 total de Saúde basta. Um teste nomeado guarda essa promessa, e o aviso de privacidade fica
 acima do texto justamente para ser lido antes do botão, não depois.
 
+### Este app é um fluxo de caixa
+
+Não é um demonstrativo de resultado, não é um controle de patrimônio: é **quando entra e
+quando sai**. Isso não é rótulo — decide coisas concretas, e três delas estavam decididas de
+outro jeito até serem corrigidas:
+
+1. **O número grande do painel é o dinheiro disponível**, e não o patrimônio líquido. Antes
+   ele somava tudo (corrente, poupança, dinheiro, investimento) e descontava a dívida dos
+   cartões. Na carteira de exemplo isso dava R$ 118.132,10 contra **R$ 112.634,00** de caixa
+   real: o número inflava com o que está investido, que não é caixa deste mês, e descontava
+   uma dívida que ainda vai aparecer sozinha no dia em que a fatura vence. O investido e a
+   fatura por vencer aparecem ao lado, ditos com todas as letras — sem isso, quem tem dinheiro
+   no Tesouro acha que o app perdeu dinheiro quando o número encolheu.
+2. **O painel diz em que dia o dinheiro acaba.** "Em 30/09 o dinheiro acaba — o saldo fica em
+   −R$ 1.400,00 nesse dia", clicável, levando para os lançamentos do dia. O gráfico de saldo
+   já mostrava a linha cruzando o zero, mas ninguém lê um gráfico procurando isso. Quando não
+   há vermelho nenhum, o aviso ainda aparece se o pior dia ficar abaixo de R$ 300 — terminar o
+   fundo do poço com R$ 40 não é negativo, e é exatamente a hora de não parcelar mais nada.
+   Esse fluxo olha **90 dias para a frente, independente do período aberto na barra**: o
+   aperto costuma estar dois meses adiante, onde as parcelas se acumulam, e ninguém troca o
+   período para procurar um problema que ainda não sabe que existe.
+3. **O dinheiro não se move no fim de semana.** Uma conta do dia 5 que cai num domingo não sai
+   no domingo. Entrada antecipa (o salário vem na sexta), saída posterga (o boleto é pago na
+   segunda) — é o que os bancos fazem aqui, e juntar as duas numa regra só faria o salário
+   atrasar. Vale para as datas que o app **deriva** (a ocorrência de uma recorrente, o
+   vencimento de uma fatura), nunca para a data que a pessoa digitou: se ela lançou um gasto
+   num sábado, foi num sábado que ela gastou. Feriados ainda não entram, e está dito no código.
+
 ### Duas datas: a da compra e a do caixa
 
 No débito e no Pix são a mesma. No crédito não: comprar dia 1º num cartão que fecha dia 1º e

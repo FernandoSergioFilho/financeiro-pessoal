@@ -3,6 +3,9 @@
 import { useMemo, useState } from 'react';
 
 import { addDays, addMonthsToKey, formatDate, monthEnd, monthKey, today } from '../../domain/date.ts';
+import {
+  HORIZONTE_DE_CAIXA, dividaDosCartoes, ehContaDeCaixa, lerCaixa, saldoDisponivel, saldoInvestido,
+} from '../../domain/caixa.ts';
 import { faturasAbertas } from '../../domain/faturas.ts';
 import { agruparPorInstituicao } from '../../domain/institutions.ts';
 import { calcularOrcamento } from '../../domain/orcamento.ts';
@@ -27,6 +30,7 @@ import {
   totalsByCategory,
 } from '../../domain/summary.ts';
 import type { DisplayEntry } from '../../domain/types.ts';
+import type { LeituraDoCaixa } from '../../domain/caixa.ts';
 import { entriesInRange, useLookups, useOverdue, usePeriodEntries, useUpcoming } from '../../state/selectors.ts';
 import { useFinance } from '../../state/store.tsx';
 import { BotaoDeAnalise } from '../components/Analise.tsx';
@@ -42,6 +46,57 @@ const MAX_BARRAS = 12;
 
 /** A janela de "vence nos próximos dias" — uma semana é o que se planeja. */
 const DIAS_A_FRENTE = 7;
+
+/**
+ * A frase que um fluxo de caixa existe para produzir.
+ *
+ * O gráfico de saldo já mostrava a linha cruzando o zero, mas ninguém lê um
+ * gráfico procurando isso — e ele só desenha o período aberto, enquanto o
+ * aperto costuma estar dois meses adiante, onde as parcelas se acumulam. Aqui
+ * a data está escrita, e o clique leva para os lançamentos daquele dia.
+ *
+ * Quando não há vermelho nenhum, o aviso ainda tem o que dizer: o pior dia do
+ * trimestre. Terminar com R$ 40 no fundo do poço não é negativo, e é
+ * exatamente a hora de não parcelar mais nada.
+ */
+function AvisoDeCaixa({ fluxo, irPara }: { fluxo: LeituraDoCaixa; irPara: IrPara }) {
+  const { primeiroNegativo, menorSaldo } = fluxo;
+  if (!menorSaldo) return null;
+
+  const alvo = primeiroNegativo ?? menorSaldo;
+  const apertado = !primeiroNegativo && menorSaldo.balance < APERTO;
+  if (!primeiroNegativo && !apertado) return null;
+
+  return (
+    <button
+      type="button"
+      className={`banner clicavel ${primeiroNegativo ? 'grave' : 'warn'}`}
+      style={{ alignItems: 'flex-start', width: '100%', textAlign: 'left' }}
+      onClick={() =>
+        irPara({ pagina: 'lancamentos', periodo: { grao: 'dia', ancora: alvo.date } })
+      }
+    >
+      <span className="emoji" aria-hidden="true">{primeiroNegativo ? '🔴' : '⚠️'}</span>
+      <span>
+        <strong>
+          {primeiroNegativo
+            ? `Em ${formatDate(alvo.date)} o dinheiro acaba`
+            : `Em ${formatDate(alvo.date)} sobra pouco`}
+        </strong>
+        <br />
+        <span className="dim">
+          {primeiroNegativo
+            ? `Contando o que está previsto, o saldo fica em ${formatMoney(alvo.balance)} nesse dia. `
+            : `É o dia mais apertado dos próximos ${HORIZONTE_DE_CAIXA} dias: ${formatMoney(alvo.balance)}. `}
+          Toque para ver o que cai nesse dia.
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** Abaixo disto o mês está apertado, ainda que no azul. */
+const APERTO = 30000;
 
 export function Dashboard({
   periodo,
@@ -83,10 +138,48 @@ export function Dashboard({
 
   // O saldo de hoje conta só o que já aconteceu; a projeção soma o que ainda
   // está previsto até o fim do período — a diferença é o que dá ou não para gastar.
+  //
+  // **Disponível, e não patrimônio.** Antes este número era `netWorth`: somava
+  // o investimento (que não é caixa deste mês) e descontava a dívida do cartão
+  // (que ainda vai aparecer sozinha como saída no dia do vencimento). Num fluxo
+  // de caixa o número grande é o dinheiro que dá para gastar; o resto fica ao
+  // lado, dito com todas as letras.
   const balanceNow = useMemo(
-    () => netWorth(accounts, data.entries, { onlySettled: true, upTo: today() }),
+    () => saldoDisponivel(accounts, data.entries, { onlySettled: true, upTo: today() }),
     [accounts, data.entries],
   );
+  const investido = useMemo(
+    () => saldoInvestido(accounts, data.entries, { onlySettled: true, upTo: today() }),
+    [accounts, data.entries],
+  );
+  const divida = useMemo(
+    () => dividaDosCartoes(accounts, data.entries, { onlySettled: true, upTo: today() }),
+    [accounts, data.entries],
+  );
+
+  /*
+   * O fluxo dos próximos noventa dias, **independente do período aberto**.
+   *
+   * O gráfico de saldo segue o período que está na barra: olhando setembro, ele
+   * mostra setembro. Mas o aperto costuma estar dois meses adiante, onde as
+   * parcelas se acumulam — e ninguém troca o período para ir procurar um
+   * problema que ainda não sabe que existe.
+   */
+  const fluxo = useMemo(() => {
+    const de = today();
+    const ate = addDays(de, HORIZONTE_DE_CAIXA);
+    const abertura = saldoDisponivel(accounts, entriesInRange(data, INICIO_DOS_TEMPOS, addDays(de, -1)), {
+      upTo: addDays(de, -1),
+    });
+    const soDeCaixa = entriesInRange(data, de, ate).filter((entrada) => {
+      const conta = accounts.find((c) => c.id === entrada.accountId);
+      // O que sai de uma conta de caixa, mais o que a fatura do cartão leva
+      // embora no vencimento — que é justamente o que este fluxo existe para
+      // mostrar chegando.
+      return conta ? ehContaDeCaixa(conta) || conta.kind === 'credit_card' : false;
+    });
+    return lerCaixa(balanceWalk(soDeCaixa, de, ate, abertura, de));
+  }, [accounts, data]);
   const projected = useMemo(() => {
     const upToEnd = entriesInRange(data, INICIO_DOS_TEMPOS, janela.ate);
     return netWorth(accounts, upToEnd, { upTo: janela.ate });
@@ -226,6 +319,8 @@ export function Dashboard({
         <BotaoDeAnalise periodo={periodo} entradas={entradas} />
       </div>
 
+      <AvisoDeCaixa fluxo={fluxo} irPara={irPara} />
+
       {/* O que decide o dia vem primeiro e maior; o resto é contexto. */}
       <div className="grid split" style={{ alignItems: 'stretch' }}>
         <CartaoDisponivel orcamento={orcamento} />
@@ -233,10 +328,16 @@ export function Dashboard({
       </div>
 
       <div className="grid cols-4 keep">
+        {/* O rodapé não é enfeite: sem ele, quem tem R$ 26 mil no Tesouro acha
+            que o app perdeu dinheiro quando o número encolheu. */}
         <div className="card stat">
-          <span className="stat-label">Saldo hoje</span>
+          <span className="stat-label">Dinheiro disponível</span>
           <span className={`stat-value num ${balanceNow < 0 ? 'bad' : ''}`}>{formatMoney(balanceNow)}</span>
-          <span className="stat-hint">Somando o que já entrou e saiu</span>
+          <span className="stat-hint">
+            Nas contas e na carteira
+            {investido > 0 && <> · {formatMoney(investido)} investido, à parte</>}
+            {divida > 0 && <> · {formatMoney(divida)} em faturas por vencer</>}
+          </span>
         </div>
         <button
           type="button"
