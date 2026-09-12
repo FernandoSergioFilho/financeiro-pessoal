@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { diaDoMes, faturaAberta, faturasAbertas, proximoDiaDoMes } from './faturas.ts';
+import {
+  diaDoMes, faturaAberta, faturaDaCompra, faturasAbertas, proximoDiaDoMes,
+} from './faturas.ts';
 import type { Account, DisplayEntry } from './types.ts';
 
 const STAMP = '2026-01-01T00:00:00.000Z';
@@ -74,14 +76,37 @@ describe('faturaAberta', () => {
     expect(fatura.lancamentos).toBe(2);
   });
 
-  it('a compra do próprio dia do fechamento ainda entra', () => {
+  /*
+   * NÃO VOLTA A ACONTECER — o intervalo estava invertido.
+   *
+   * O app incluía o dia do fechamento e excluía o do fechamento anterior. A
+   * fatura faz o contrário, e diz isso com todas as letras: "compras
+   * realizadas a partir da data de fechamento entrarão na próxima fatura".
+   * Num cartão que fecha dia 1º, o erro jogava o mês inteiro na fatura errada.
+   */
+  it('a compra do próprio dia do fechamento já é da fatura seguinte', () => {
     const fatura = faturaAberta(cartao(), [gasto('2026-09-28', 10000)], '2026-09-15')!;
+    expect(fatura.total).toBe(0);
+  });
+
+  it('a compra do dia do fechamento anterior entra, porque abriu esta fatura', () => {
+    const fatura = faturaAberta(cartao(), [gasto('2026-08-28', 10000)], '2026-09-15')!;
     expect(fatura.total).toBe(10000);
   });
 
-  it('a compra do dia do fechamento anterior já não entra', () => {
-    const fatura = faturaAberta(cartao(), [gasto('2026-08-28', 10000)], '2026-09-15')!;
-    expect(fatura.total).toBe(0);
+  it('cartão que fecha dia 1º: a compra do dia 1º é da fatura do mês que vem', () => {
+    const cartaoDoDia1 = cartao({ closingDay: 1, dueDay: 10 });
+    expect(faturaDaCompra(cartaoDoDia1, '2026-09-01')).toMatchObject({
+      comecaEm: '2026-09-01',
+      fecha: '2026-10-01',
+      vence: '2026-10-10',
+    });
+    // E a véspera, dia 31/08, ainda é da fatura que fecha em 01/09.
+    expect(faturaDaCompra(cartaoDoDia1, '2026-08-31')).toMatchObject({
+      comecaEm: '2026-08-01',
+      fecha: '2026-09-01',
+      vence: '2026-09-10',
+    });
   });
 
   it('fechando dia 28 e vencendo dia 5, o vencimento é do mês seguinte', () => {
@@ -136,5 +161,60 @@ describe('faturasAbertas', () => {
 
   it('cartão arquivado fica de fora', () => {
     expect(faturasAbertas([cartao({ archived: true })], [], '2026-09-10')).toEqual([]);
+  });
+});
+
+describe('faturaDaCompra', () => {
+  it('a compra do meio do ciclo cai na fatura que está aberta', () => {
+    expect(faturaDaCompra(cartao(), '2026-09-10')).toMatchObject({
+      comecaEm: '2026-08-28',
+      fecha: '2026-09-28',
+      vence: '2026-10-05',
+    });
+  });
+
+  it('a compra do dia do fechamento abre a fatura seguinte', () => {
+    expect(faturaDaCompra(cartao(), '2026-09-28')).toMatchObject({
+      comecaEm: '2026-09-28',
+      fecha: '2026-10-28',
+    });
+  });
+
+  it('a véspera do fechamento ainda é da que fecha', () => {
+    expect(faturaDaCompra(cartao(), '2026-09-27')!.fecha).toBe('2026-09-28');
+  });
+
+  /*
+   * Mês curto: um cartão que fecha dia 31 fecha no último dia de fevereiro.
+   * Sem isto ele não fecharia nunca nesse mês, e a compra ficaria sem fatura.
+   */
+  it('cartão que fecha dia 31 fecha no último dia de fevereiro', () => {
+    const trintaEUm = cartao({ closingDay: 31, dueDay: 10 });
+    expect(faturaDaCompra(trintaEUm, '2026-02-10')!.fecha).toBe('2026-02-28');
+    expect(faturaDaCompra(trintaEUm, '2026-02-28')!.fecha).toBe('2026-03-31');
+  });
+
+  it('conta que não é cartão não tem fatura', () => {
+    expect(faturaDaCompra(cartao({ kind: 'checking' }), '2026-09-10')).toBeNull();
+  });
+
+  it('cartão sem dia de fechamento não tem como ter fatura', () => {
+    expect(faturaDaCompra(cartao({ closingDay: null }), '2026-09-10')).toBeNull();
+  });
+
+  /*
+   * A fatura aberta é, por definição, aquela em que cairia uma compra de hoje.
+   * Se as duas contas divergissem, o app diria uma coisa ao cadastrar e outra
+   * no painel — foi por terem sido calculadas em lugares diferentes que o
+   * intervalo ficou invertido sem ninguém ver.
+   */
+  it('a fatura aberta é a mesma em que cairia uma compra de hoje', () => {
+    for (const hoje of ['2026-09-27', '2026-09-28', '2026-09-29', '2026-10-01']) {
+      const aberta = faturaAberta(cartao(), [], hoje)!;
+      const daCompra = faturaDaCompra(cartao(), hoje)!;
+      expect({ f: aberta.fecha, v: aberta.vence, c: aberta.comecaEm }).toEqual({
+        f: daCompra.fecha, v: daCompra.vence, c: daCompra.comecaEm,
+      });
+    }
   });
 });

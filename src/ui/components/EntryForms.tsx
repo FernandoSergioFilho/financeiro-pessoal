@@ -9,6 +9,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 
 import { addMonths, formatDate, isValidISO, today } from '../../domain/date.ts';
+import { faturaDaCompra } from '../../domain/faturas.ts';
 import { formatMoney, splitInstallments } from '../../domain/money.ts';
 import { describeFrequency } from '../../domain/recurrence.ts';
 import {
@@ -245,6 +246,8 @@ function SingleFields({
         )}
       </div>
 
+      {state.kind === 'expense' && <AvisoDeFatura contaId={state.accountId} data={state.date} />}
+
       <Field label="Observação">
         {(id) => (
           <textarea
@@ -480,6 +483,8 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
             {(id) => <AccountSelect id={id} value={accountId} onChange={setAccountId} />}
           </Field>
         </div>
+
+        <AvisoDeFatura contaId={accountId} data={firstDate} />
 
         <Field label="Categoria">
           {(id) => (
@@ -863,6 +868,35 @@ export function RecurringDialog({ rule, onClose }: { rule?: RecurringRule; onClo
 /* ---------------------------------------------------------------- criação */
 
 type NewMode = 'single' | 'installment' | 'recurring';
+
+/**
+ * Em que fatura cai o que se está lançando no cartão.
+ *
+ * Sem isto a data do lançamento não quer dizer nada no crédito: comprar dia 1º
+ * num cartão que fecha dia 1º é comprar para pagar daqui a dois meses, e a tela
+ * mostrava só "01/09" como se o dinheiro fosse sair em setembro. A regra do
+ * corte está em `domain/faturas.ts`; aqui é só mostrá-la na hora de decidir.
+ */
+function AvisoDeFatura({ contaId, data }: { contaId: string; data: string }) {
+  const { accountById } = useLookups();
+  const conta = accountById(contaId);
+  const ciclo = useMemo(
+    () => (conta && isValidISO(data) ? faturaDaCompra(conta, data) : null),
+    [conta, data],
+  );
+  if (!ciclo || !conta) return null;
+
+  return (
+    <p className="hint">
+      💳 Vai para a fatura do <strong>{conta.name}</strong> que fecha em{' '}
+      <strong>{formatDate(ciclo.fecha)}</strong>
+      {conta.dueDay ? (
+        <> e vence em <strong>{formatDate(ciclo.vence)}</strong></>
+      ) : null}
+      . Compra feita no próprio dia do fechamento já entra na fatura seguinte.
+    </p>
+  );
+}
 
 export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string; onClose: () => void }) {
   const { data, api } = useFinance();

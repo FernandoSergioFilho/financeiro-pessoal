@@ -122,7 +122,11 @@ apagar uma delas, clique na linha.
   diferentes de quem lê. Ao lado, o **ritmo do período**: um medidor com uma marca em onde o
   gasto deveria estar a esta altura do mês.
 - **Faturas em aberto** — por cartão, quanto está na fatura que fecha agora, quando fecha e
-  quando vence. Com quatro cartões, "saldo do cartão" não responde nada.
+  quando vence. Com quatro cartões, "saldo do cartão" não responde nada. E ao lançar no
+  cartão o app diz **em que fatura aquilo cai**: no crédito a data da compra não é a data do
+  pagamento, e comprar dia 1º num cartão que fecha dia 1º é comprar para pagar dali a dois
+  meses. O corte é `[fechamento anterior, fechamento)` — **a compra do próprio dia do
+  fechamento já é da fatura seguinte**, que é o que a fatura diz com todas as letras.
 - **Atalhos em todo número** — o aviso de atrasados é um botão; os cartões de entradas,
   saídas e "ainda vai sair" levam à lista daquele recorte; cada barra de categoria abre os
   lançamentos dela; cada coluna do gráfico mensal passa o painel para aquele mês; cada conta
