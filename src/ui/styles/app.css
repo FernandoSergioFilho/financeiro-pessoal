@@ -850,6 +850,25 @@ textarea.input { resize: vertical; min-height: 64px; }
 .segmented button[aria-pressed='true'][data-tone='income'] { color: var(--good); }
 .segmented button[aria-pressed='true'][data-tone='expense'] { color: var(--bad); }
 
+/* As perguntas para a IA: cartões em vez de uma fila de botões iguais, porque
+   cada uma precisa do título **e** da linha que diz o que ela entrega — sem
+   isso a pessoa abre as cinco para descobrir a diferença. Uma coluna só: os
+   títulos têm comprimentos bem diferentes e em grade ficavam desalinhados. */
+.lista-perguntas { display: grid; gap: 6px; margin-top: 6px; }
+.lista-perguntas .pergunta {
+  display: grid; gap: 2px; text-align: left;
+  padding: 9px 11px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text);
+  font: inherit; cursor: pointer;
+}
+.lista-perguntas .pergunta:hover { background: var(--surface-2); }
+.lista-perguntas .pergunta .dim { font-size: 0.8rem; }
+.lista-perguntas .pergunta.escolhida {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* `flex-start`: com a explicação embaixo, centralizar deixava o quadradinho
    flutuando entre as duas linhas em vez de junto do rótulo. */
 .switch { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }

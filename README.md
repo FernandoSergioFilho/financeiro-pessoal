@@ -128,10 +128,19 @@ apagar uma delas, clique na linha.
   lançamentos dela; cada coluna do gráfico mensal passa o painel para aquele mês; cada conta
   do "saldo por conta" abre o extrato dela. Ver um número sem poder ir até ele transforma
   informação em cobrança.
-- **Analisar** — no painel, um botão que lê o período como um relatório de fechamento:
-  resultado e margem, gasto contra a própria média dos meses fechados, custo fixo sobre a
-  renda, parcelas já comprometidas, onde o dinheiro concentra e quais categorias fugiram do
-  padrão. Cada achado carrega o número que o sustenta, e o mais grave vem primeiro.
+- **Analisar** — no painel, um botão com duas abas, porque são duas perguntas diferentes.
+  A **leitura do período** responde "o que aconteceu": resultado e margem, gasto contra a
+  própria média dos meses fechados, custo fixo sobre a renda, parcelas já comprometidas, onde
+  o dinheiro concentra e quais categorias fugiram do padrão. Cada achado carrega o número que
+  o sustenta, e o mais grave vem primeiro. É conta, sai na hora, funciona sem internet.
+- **Perguntar a uma IA** — a segunda aba responde "e agora, o que eu faço", que é conversa e
+  não conta. O app monta o texto e você leva: cinco perguntas prontas (o que está
+  acontecendo, onde cortar, como sair das parcelas, posso fazer esta compra, relatório de
+  fechamento), com os seus números já organizados e somados. O texto fica à vista num campo
+  que dá para editar, e o botão copia. **Nada sai do aparelho sozinho — quem cola é você**, e
+  o aviso disso vem antes do texto, não depois. Vão os agregados: totais, série dos meses,
+  categorias, custo fixo, parcelas e saldos. **Não vai a descrição de nenhum lançamento** —
+  é nelas que mora o que é íntimo, e nenhuma pergunta sobre orçamento precisa delas.
 - **Contas agrupadas por banco** — um banco tem conta corrente *e* cartão, e agora eles
   aparecem juntos numa linha só, com o subtotal do grupo no painel. Os dois saldos continuam
   separados de propósito: o dinheiro que está na conta e a fatura que se deve são coisas
@@ -384,6 +393,15 @@ resultado toda vez — o que, para número de dinheiro, é qualidade e não limi
 faz é o que um relatório de fechamento faz: compara o período com a própria história, separa
 estrutura (custo fixo, parcelas comprometidas) do que é escolha do mês, e aponta o que fugiu
 do normal com o tamanho de cada coisa.
+
+Isso responde "o que aconteceu". Não responde "e agora, o que eu faço" — isso depende do que
+você quer, do que está disposto a cortar, do que vem pela frente, e é conversa. Daí a
+segunda aba, em `src/domain/prompt.ts`: o app monta o texto, você leva para o chat que
+preferir. A escolha de projeto aqui é o que **não** vai junto. Vão os agregados; **não vai a
+descrição de nenhum lançamento** — "Farmácia São João", "Dr. Fulano", o nome de quem te
+mandou um Pix. É nas descrições que mora o que é íntimo, e para saber que Saúde subiu 40% o
+total de Saúde basta. Um teste nomeado guarda essa promessa, e o aviso de privacidade fica
+acima do texto justamente para ser lido antes do botão, não depois.
 
 ### Simulação de uso
 

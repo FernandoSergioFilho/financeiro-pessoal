@@ -117,6 +117,15 @@ const DIALOGOS = [
     },
   },
   { nome: 'Analisar', rota: 'painel', abrir: async (p) => p.click('button:has-text("Analisar")') },
+  {
+    nome: 'Analisar — texto para IA',
+    rota: 'painel',
+    abrir: async (p) => {
+      await p.click('button:has-text("Analisar")');
+      await p.click('.segmented button:has-text("Perguntar a uma IA")');
+      await p.waitForTimeout(300);
+    },
+  },
   { nome: 'Editar lançamento', rota: 'lancamentos', abrir: async (p) => p.locator('.entry').first().click() },
   { nome: 'Conta recorrente', rota: 'recorrentes', abrir: async (p) => p.locator('tbody tr').first().click() },
   { nome: 'Compra parcelada', rota: 'parceladas', abrir: async (p) => p.locator('tbody tr').first().click() },
