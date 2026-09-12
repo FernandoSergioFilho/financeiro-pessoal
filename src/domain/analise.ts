@@ -19,6 +19,7 @@
  */
 
 import { addMonthsToKey, monthEnd, monthKey, monthStart, today } from './date.ts';
+import { comDataDeCaixa, quandoSai } from './faturas.ts';
 import { formatMoney } from './money.ts';
 import { periodTotals, totalsByCategory } from './summary.ts';
 import type { Category, DisplayEntry, FinanceData, RecurringRule } from './types.ts';
@@ -94,10 +95,17 @@ export function analisar(
 
   // A base de comparação são meses **fechados**: comparar o mês corrente pela
   // metade com meses inteiros diria que tudo caiu, todo dia primeiro.
+  // Pela data de caixa, e não pela da compra: o mês de comparação tem de ser o
+  // mesmo que a tela mostra, senão a análise diz que Mercado subiu num mês em
+  // que a lista não mostra nada.
+  const comCaixa = comDataDeCaixa(data.accounts, data.entries);
   const janelas: Janela[] = mesesFechados(hoje, MESES_DE_BASE)
     .map((chave) => ({
       chave,
-      entries: data.entries.filter((e) => e.date >= monthStart(chave) && e.date <= monthEnd(chave)),
+      entries: comCaixa.filter((e) => {
+        const sai = quandoSai(e);
+        return sai >= monthStart(chave) && sai <= monthEnd(chave);
+      }),
     }))
     .filter((janela) => janela.entries.length > 0);
 

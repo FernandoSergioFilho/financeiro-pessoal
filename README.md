@@ -123,10 +123,9 @@ apagar uma delas, clique na linha.
   gasto deveria estar a esta altura do mês.
 - **Faturas em aberto** — por cartão, quanto está na fatura que fecha agora, quando fecha e
   quando vence. Com quatro cartões, "saldo do cartão" não responde nada. E ao lançar no
-  cartão o app diz **em que fatura aquilo cai**: no crédito a data da compra não é a data do
-  pagamento, e comprar dia 1º num cartão que fecha dia 1º é comprar para pagar dali a dois
-  meses. O corte é `[fechamento anterior, fechamento)` — **a compra do próprio dia do
-  fechamento já é da fatura seguinte**, que é o que a fatura diz com todas as letras.
+  cartão o app diz **em que fatura aquilo cai**.
+- **O mês do cartão é o mês em que a fatura vence** — no crédito a data da compra não é a
+  data do pagamento, e o app trabalha com as duas (a explicação longa está logo abaixo).
 - **Atalhos em todo número** — o aviso de atrasados é um botão; os cartões de entradas,
   saídas e "ainda vai sair" levam à lista daquele recorte; cada barra de categoria abre os
   lançamentos dela; cada coluna do gráfico mensal passa o painel para aquele mês; cada conta
@@ -406,6 +405,37 @@ descrição de nenhum lançamento** — "Farmácia São João", "Dr. Fulano", o 
 mandou um Pix. É nas descrições que mora o que é íntimo, e para saber que Saúde subiu 40% o
 total de Saúde basta. Um teste nomeado guarda essa promessa, e o aviso de privacidade fica
 acima do texto justamente para ser lido antes do botão, não depois.
+
+### Duas datas: a da compra e a do caixa
+
+No débito e no Pix são a mesma. No crédito não: comprar dia 1º num cartão que fecha dia 1º e
+vence dia 10 é gastar hoje um dinheiro que só sai em **10 de novembro**. O app guarda a data
+da compra e deriva a do caixa, e cada uma manda numa coisa:
+
+| Quem pergunta | Responde pela data | Por quê |
+| --- | --- | --- |
+| Em que fatura a compra caiu | **compra** | é o que define o conteúdo da fatura |
+| Quanto devo no cartão | **compra** | a dívida nasce ao passar o cartão |
+| A importação do CSV, para não duplicar | **compra** | é a data que o extrato traz |
+| O total do mês, a lista, os gráficos | **caixa** | é quando o dinheiro sai da conta |
+| Está atrasado? | **caixa** | a compra não atrasa antes de a fatura vencer |
+
+O corte da fatura é `[fechamento anterior, fechamento)` — **a compra do próprio dia do
+fechamento já é da fatura seguinte**, que é o que a fatura diz com todas as letras
+("compras realizadas a partir da data de fechamento entrarão na próxima fatura"). Num cartão
+que fecha dia 28 isso desloca um dia; num que fecha dia 1º, o mês inteiro.
+
+A data de caixa é calculada num lugar só, `entriesInRange` em `src/state/selectors.ts`, que é
+o funil por onde todas as telas passam — se cada uma calculasse a sua, a lista e o gráfico
+discordariam. Na lista, a data grande é a do dinheiro saindo e uma etiqueta diz de quando é a
+compra ("💳 compra 01 set"), porque uma linha em outubro com a data 01/09 e nenhuma
+explicação seria pior do que o defeito original.
+
+Um detalhe que custou uma depuração: a janela de busca precisa de folga dos dois lados (uma
+compra entra no mês vinda de fora dele), e alargar os extremos do período "Tudo" estoura o
+calendário — `0000-01-01 − 70` vira 1899, e `9999-12-31 + 70` vira `10000-03-10`, que
+comparado como texto é **menor** que qualquer data de verdade. O mês ficava certo, o ano
+ficava certo, e "Tudo" voltava vazio.
 
 ### Simulação de uso
 

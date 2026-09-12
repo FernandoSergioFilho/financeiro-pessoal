@@ -183,4 +183,16 @@ export interface ProjectedEntry extends Omit<Entry, 'createdAt' | 'updatedAt'> {
   projected: true;
 }
 
-export type DisplayEntry = (Entry & { projected?: false }) | ProjectedEntry;
+/**
+ * O que a tela mostra: o lançamento gravado ou a ocorrência prevista, mais a
+ * data em que o dinheiro sai de fato.
+ */
+export type DisplayEntry = ((Entry & { projected?: false }) | ProjectedEntry) & {
+  /**
+   * Quando o dinheiro sai, quando isso difere da data da compra — só no
+   * crédito, onde a compra entra numa fatura que vence depois. Ausente
+   * significa "sai no próprio dia"; use `quandoSai` de `domain/faturas.ts`
+   * em vez de ler este campo direto.
+   */
+  caixa?: string;
+};

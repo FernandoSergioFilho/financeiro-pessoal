@@ -25,6 +25,7 @@
 
 import { analisar, custoMensalDaRegra } from './analise.ts';
 import { addMonthsToKey, monthEnd, monthKey, monthStart, today } from './date.ts';
+import { comDataDeCaixa, quandoSai } from './faturas.ts';
 import { formatMoney } from './money.ts';
 import { rotuloDoPeriodo, type Periodo } from './period.ts';
 import { periodTotals, totalsByCategory } from './summary.ts';
@@ -156,11 +157,16 @@ export function reunirDados(
 
   // Meses **fechados**: incluir o mês corrente pela metade na série faria a IA
   // ler queda de gasto todo dia primeiro.
+  // Pela data de caixa: o mês do texto tem de ser o mesmo mês da tela.
+  const comCaixa = comDataDeCaixa(data.accounts, data.entries);
   const serie = Array.from({ length: MESES_DA_SERIE }, (_, i) =>
     addMonthsToKey(atual, -(MESES_DA_SERIE - i)),
   )
     .map((mes) => {
-      const doMes = data.entries.filter((e) => e.date >= monthStart(mes) && e.date <= monthEnd(mes));
+      const doMes = comCaixa.filter((e) => {
+        const sai = quandoSai(e);
+        return sai >= monthStart(mes) && sai <= monthEnd(mes);
+      });
       const t = periodTotals(doMes as DisplayEntry[]);
       return { mes, entradas: t.income, saidas: t.expense, vazio: doMes.length === 0 };
     })
@@ -178,9 +184,10 @@ export function reunirDados(
   // próximos meses sem aparecer no extrato de hoje.
   const limite = addMonthsToKey(atual, MESES_DE_PARCELAS);
   const porMes = new Map<string, number>();
-  for (const entrada of data.entries) {
+  for (const entrada of comCaixa) {
     if (!entrada.purchaseId || entrada.kind !== 'expense') continue;
-    const mes = monthKey(entrada.date);
+    // Em que mês a parcela vai pesar no bolso, que é o que aperta.
+    const mes = monthKey(quandoSai(entrada));
     if (mes < atual || mes > limite) continue;
     porMes.set(mes, (porMes.get(mes) ?? 0) + entrada.amount);
   }

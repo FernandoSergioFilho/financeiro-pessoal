@@ -704,6 +704,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
    o lançamento, e a conta já aparece pela cor do ponto. */
 .entry-meta .cat { flex: 0 1 auto; }
 .entry-meta .acc { flex: 0 8 auto; }
+/* A etiqueta da data da compra pode encolher, mas não some: no celular a
+   linha do lançamento não mostra data nenhuma (quem a mostra é o cabeçalho do
+   dia, que aqui é o do vencimento), então sem ela não haveria como saber que a
+   compra é de outro mês. Quem cede primeiro continua sendo o nome da conta. */
+.entry-meta .tag.compra { flex: 0 1 auto; overflow: hidden; min-width: 0; }
 .entry-amount { grid-area: amount; font-weight: 620; text-align: right; white-space: nowrap; }
 .entry-amount.projected { opacity: 0.75; }
 /* No celular não existe passar o mouse: se as ações só aparecessem no hover, o

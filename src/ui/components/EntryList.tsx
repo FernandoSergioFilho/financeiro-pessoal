@@ -3,6 +3,7 @@
 import { Fragment, useRef, useState } from 'react';
 
 import { formatDate, formatDayMonth, today } from '../../domain/date.ts';
+import { quandoSai } from '../../domain/faturas.ts';
 import { formatMoney, formatSigned } from '../../domain/money.ts';
 import type { DisplayEntry, ProjectedEntry } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
@@ -45,7 +46,9 @@ export function EntryRow({
   const { accountName, categoryById } = useLookups();
   const category = categoryById(entry.categoryId);
   const pending = entry.status === 'pending';
-  const overdue = pending && entry.date < today();
+  // Pela data de caixa: uma compra no cartão só atrasa quando a fatura vence,
+  // e não no dia seguinte ao da compra.
+  const overdue = pending && quandoSai(entry) < today();
 
   /**
    * Marcar e desmarcar como pago.
@@ -164,7 +167,7 @@ export function EntryRow({
             />
           </span>
         )}
-      {showDate && <span className="entry-date num">{formatDayMonth(entry.date)}</span>}
+      {showDate && <span className="entry-date num">{formatDayMonth(quandoSai(entry))}</span>}
 
       {/* Título e detalhe são filhos diretos da grade: dentro de um invólucro,
           a coluna deles encolhia a zero em cartões estreitos e o valor acabava
@@ -183,6 +186,17 @@ export function EntryRow({
           {accountName(entry.accountId)}
           {entry.kind === 'transfer' && ` → ${accountName(entry.toAccountId)}`}
         </span>
+        {/* Sem isto a lista de outubro mostraria uma compra de 01/09 sem
+            explicação nenhuma. A data grande é a do dinheiro saindo; esta
+            diz de quando é a compra. */}
+        {entry.caixa && entry.caixa !== entry.date && (
+          <span
+            className="tag compra"
+            title={`Comprado em ${formatDate(entry.date)}, entra na fatura que vence em ${formatDate(entry.caixa!)}`}
+          >
+            💳 {formatDayMonth(entry.date)}
+          </span>
+        )}
         {entry.installmentNumber && (
           <span className="tag installment">
             {entry.installmentNumber}/{entry.installmentTotal}
@@ -264,11 +278,14 @@ export function EntryList({
     );
   }
 
+  // Pelo dia em que o dinheiro sai: a compra no cartão fica sob a data do
+  // vencimento da fatura, junto do resto que sai naquele dia.
   const days = new Map<string, DisplayEntry[]>();
   for (const entry of entries) {
-    const list = days.get(entry.date);
+    const dia = quandoSai(entry);
+    const list = days.get(dia);
     if (list) list.push(entry);
-    else days.set(entry.date, [entry]);
+    else days.set(dia, [entry]);
   }
 
   return (

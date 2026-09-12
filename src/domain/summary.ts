@@ -1,6 +1,7 @@
 /** Agregações de saldo e resumo do período. */
 
 import { addDays, formatMonthKey, monthEnd, monthKey, monthStart } from './date.ts';
+import { quandoSai } from './faturas.ts';
 import type { Account, Category, DisplayEntry } from './types.ts';
 
 /**
@@ -32,6 +33,8 @@ export function accountBalance(
 ): number {
   let balance = account.openingBalance;
   for (const entry of entries) {
+    // Aqui é a data da compra, de propósito: o que se deve no cartão nasce
+    // quando se passa o cartão, e não quando a fatura vence.
     if (options.upTo && entry.date > options.upTo) continue;
     if (options.onlySettled && entry.status !== 'settled') continue;
     balance += entryDelta(entry, account.id);
@@ -136,7 +139,9 @@ export function monthlySeries(
 ): MonthPoint[] {
   const buckets = new Map(months.map((key) => [key, { income: 0, expense: 0 }]));
   for (const entry of entries) {
-    const bucket = buckets.get(monthKey(entry.date));
+    // Pelo mês em que o dinheiro sai: a compra no cartão pesa no mês da
+    // fatura, não no da compra.
+    const bucket = buckets.get(monthKey(quandoSai(entry)));
     if (!bucket || entry.kind === 'transfer') continue;
     if (entry.kind === 'income') bucket.income += entry.amount;
     else bucket.expense += entry.amount;
@@ -179,7 +184,7 @@ export function dailyBalance(
   for (const entry of entries) {
     if (entry.kind === 'transfer') continue;
     const delta = entry.kind === 'income' ? entry.amount : -entry.amount;
-    porDia.set(entry.date, (porDia.get(entry.date) ?? 0) + delta);
+    porDia.set(quandoSai(entry), (porDia.get(quandoSai(entry)) ?? 0) + delta);
   }
 
   return balanceWalk(entries, monthStart(month), monthEnd(month), startingBalance, todayIso);
@@ -205,9 +210,11 @@ export function balanceWalk(
   const porDia = new Map<string, number>();
   for (const entry of entries) {
     if (entry.kind === 'transfer') continue;
-    if (entry.date < from || entry.date > to) continue;
+    // O saldo muda quando o dinheiro sai, e não quando a compra foi feita.
+    const dia = quandoSai(entry);
+    if (dia < from || dia > to) continue;
     const delta = entry.kind === 'income' ? entry.amount : -entry.amount;
-    porDia.set(entry.date, (porDia.get(entry.date) ?? 0) + delta);
+    porDia.set(dia, (porDia.get(dia) ?? 0) + delta);
   }
 
   const dias = diasEntre(from, to);

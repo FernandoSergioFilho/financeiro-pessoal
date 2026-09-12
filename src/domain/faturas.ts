@@ -129,3 +129,59 @@ export function faturasAbertas(
     .filter((fatura): fatura is Fatura => fatura !== null)
     .sort((a, b) => a.vence.localeCompare(b.vence));
 }
+
+/* --------------------------------------------------------- data de caixa */
+
+/**
+ * **Duas datas, e cada uma manda numa coisa.**
+ *
+ * A *data da compra* é quando você passou o cartão. É ela que decide em que
+ * fatura a compra cai, quanto você deve no cartão, e é ela que o extrato do
+ * banco traz — então é ela que fica gravada, e é por ela que a importação
+ * compara para não duplicar. Mexer nisso corromperia o que veio do banco.
+ *
+ * A *data de caixa* é quando o dinheiro sai da sua conta. No débito e no Pix
+ * são a mesma data. **No crédito não**: comprar dia 1º num cartão que fecha
+ * dia 1º e vence dia 10 é gastar hoje um dinheiro que só sai em 10 de
+ * novembro. É por esta data que o mês fecha, porque é ela que responde
+ * "quanto vai sair este mês".
+ *
+ * Esta função dá a segunda a partir da primeira. O que ela **não** desloca:
+ * a transferência para o cartão, que é o pagamento da fatura em si e já
+ * acontece no dia em que acontece.
+ */
+export function dataDeCaixa(
+  conta: Account | undefined,
+  entrada: { date: string; kind: string },
+): string {
+  if (!conta || entrada.kind === 'transfer' || !temCiclo(conta)) return entrada.date;
+  return faturaDaCompra(conta, entrada.date)?.vence ?? entrada.date;
+}
+
+/**
+ * Quando o dinheiro deste lançamento sai, já calculado.
+ *
+ * `caixa` é preenchido em `entriesInRange`, onde as contas estão à mão. Quem
+ * recebe uma lista de outro lugar cai no `date`, que é o certo para tudo o
+ * que não é cartão.
+ */
+export function quandoSai(entrada: { date: string; caixa?: string }): string {
+  return entrada.caixa ?? entrada.date;
+}
+
+/**
+ * A lista com a data de caixa já calculada em cada item.
+ *
+ * Quem agrupa por mês precisa dela: sem isto, a lista do período mostraria a
+ * compra no mês da fatura e o gráfico no mês da compra.
+ */
+export function comDataDeCaixa<T extends { date: string; kind: string; accountId: string }>(
+  contas: readonly Account[],
+  entradas: readonly T[],
+): (T & { caixa?: string })[] {
+  const porId = new Map(contas.map((c) => [c.id, c]));
+  return entradas.map((entrada) => {
+    const caixa = dataDeCaixa(porId.get(entrada.accountId), entrada);
+    return caixa === entrada.date ? entrada : { ...entrada, caixa };
+  });
+}
