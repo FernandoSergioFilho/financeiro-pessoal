@@ -1,6 +1,29 @@
+import { execSync } from 'node:child_process';
+
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/**
+ * A versão que o app mostra em Ajustes.
+ *
+ * Existe para uma pergunta que apareceu no uso real — "o botão novo não está
+ * aqui, será que atualizou?" — e que não tinha como ser respondida nem por
+ * quem usa nem por quem programa. Com a versão na tela, a resposta é uma
+ * olhada.
+ */
+function versaoDoBuild(): string {
+  const data = new Date().toISOString().slice(0, 10);
+  try {
+    const commit = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+    return `${data} · ${commit}`;
+  } catch {
+    // Build fora de um repositório git: a data já identifica.
+    return data;
+  }
+}
 
 /**
  * Dois alvos de build:
@@ -21,6 +44,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: './',
+    define: { __VERSAO_DO_APP__: JSON.stringify(versaoDoBuild()) },
     resolve: {
       // O arquivo único não tem service worker, então o módulo virtual do
       // plugin não existe nesse build: aponta para um substituto que não faz

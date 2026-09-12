@@ -5,6 +5,11 @@
  * há o que atualizar, e o módulo virtual do plugin nem existe naquele build.
  * Sem este substituto, a compilação falha ao não achar o módulo.
  */
-export function registerSW(): (recarregar?: boolean) => Promise<void> {
+export interface OpcoesDeRegistro {
+  onNeedRefresh?: () => void;
+  onRegisteredSW?: (url: string, registro: ServiceWorkerRegistration | undefined) => void;
+}
+
+export function registerSW(_opcoes?: OpcoesDeRegistro): (recarregar?: boolean) => Promise<void> {
   return async () => {};
 }

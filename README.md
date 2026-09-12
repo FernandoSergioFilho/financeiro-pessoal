@@ -327,14 +327,23 @@ lançamentos são as políticas de acesso em `supabase/schema.sql`.
 
 ### Como a atualização chega
 
-O site é um PWA: um service worker guarda os arquivos para o app abrir offline. O preço
-disso é que a versão nova não aparece sozinha na página já aberta — e a configuração
-anterior (`autoUpdate`) tornava isso pior do que parece: o worker novo assumia, mas o
-JavaScript em execução continuava sendo o antigo, então a mudança só aparecia no **segundo**
-recarregamento, sem nada na tela explicando.
+O app é um PWA: fica guardado no aparelho e abre offline. Isso tem um custo — a versão que
+roda é a que está guardada, não a que está publicada — e o custo apareceu no uso real: um
+botão publicado havia dias **simplesmente não existia no celular**, e não dava para saber se
+era defeito da tela ou versão velha.
 
-Agora o app usa `registerType: 'prompt'` e mostra um aviso com um botão. A troca acontece
-quando a pessoa manda — recarregar sozinho poderia apagar um lançamento digitado pela metade.
+Três coisas resolvem isso, e as três são necessárias:
+
+1. **Procurar.** O registro do service worker só olha uma vez, ao carregar a página. Num app
+   instalado que fica suspenso em segundo plano, isso pode não acontecer por dias. O app
+   agora procura de hora em hora e, principalmente, **toda vez que volta para a frente** —
+   que é quando a pessoa abre para lançar algo e repararia que falta um botão.
+2. **Avisar, sem trocar por baixo.** Achada a versão nova, aparece o aviso com *Atualizar* e
+   *Depois*. A troca acontece quando a pessoa manda: recarregar por conta própria pode apagar
+   um lançamento digitado pela metade.
+3. **Mostrar a versão.** Ajustes → Aparência traz a data e o commit do build, e um botão
+   **Procurar atualização** para quem está desconfiado e quer a resposta agora. O botão sempre
+   diz o que encontrou — inclusive "não deu para verificar", em vez de fingir que está em dia.
 
 ### Testar as telas no navegador
 

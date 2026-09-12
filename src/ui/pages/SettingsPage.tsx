@@ -29,7 +29,9 @@ import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '.
 import { CloudPanel } from '../components/CloudPanel.tsx';
 import { ImportarDoBanco } from '../components/ImportarDoBanco.tsx';
 import type { IrPara } from '../navegacao.ts';
+import { procurarAtualizacao } from '../atualizacao.ts';
 import type { ThemeChoice } from '../theme.ts';
+import { VERSAO_DO_APP } from '../../versao.ts';
 
 const ACCOUNT_KINDS: { value: AccountKind; label: string }[] = [
   { value: 'checking', label: 'Conta corrente' },
@@ -1150,6 +1152,26 @@ export function SettingsPage({
             {data.entries.length} lançamentos · {data.recurring.length} contas recorrentes ·{' '}
             {data.purchases.length} compras parceladas.
           </p>
+
+          {/* A versão na tela responde "estou vendo a atualização?" sem
+              adivinhação — a dúvida que apareceu quando um botão publicado há
+              dias não existia no celular, por causa da versão velha em cache. */}
+          <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '14px 0' }} />
+          <div className="setting-text">
+            <div className="title">Versão</div>
+            <div className="dim num">{VERSAO_DO_APP}</div>
+          </div>
+          <div className="row wrap" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                void procurarAtualizacao().then(setMessage);
+              }}
+            >
+              🔄 Procurar atualização
+            </button>
+          </div>
         </Card>
       </div>
 
