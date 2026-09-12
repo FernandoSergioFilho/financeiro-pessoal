@@ -636,10 +636,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
    havia um botão de confirmar — esconderia a informação junto. */
 .entry-actions { grid-area: actions; display: flex; gap: 2px; align-items: center; }
 
+/*
+ * **Redonda**, e não quadrada, de propósito.
+ *
+ * Ela era um quadrado azul com ✓ — igualzinha à caixa de selecionar. Quem
+ * queria apagar vários lançamentos marcava essas caixas, achava que estava
+ * selecionando, e na verdade dava seis contas como pagas sem perceber. Caixa
+ * quadrada seleciona; botão redondo é estado do próprio item. A forma é o que
+ * separa as duas coisas num relance, sem texto e sem aprender nada.
+ */
 .check-pago {
   appearance: none;
-  width: 20px; height: 20px; margin: 0;
-  border: 1.5px solid var(--border-strong); border-radius: 6px;
+  width: 22px; height: 22px; margin: 0;
+  border: 1.5px solid var(--border-strong); border-radius: 50%;
   background: var(--surface);
   cursor: pointer;
   display: grid; place-content: center;
@@ -652,7 +661,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transform: scale(0);
   transition: transform 0.12s;
 }
-.check-pago:checked { background: var(--accent); border-color: var(--accent); }
+.check-pago:checked { background: var(--good); border-color: var(--good); }
 .check-pago:checked::after { transform: scale(1); }
 .check-pago:hover { border-color: var(--accent); }
 .check-pago:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

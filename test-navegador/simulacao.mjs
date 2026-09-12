@@ -721,6 +721,17 @@ for (const [rota, nome, singular] of [
     page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
   const antes = await gravados();
 
+  // A caixa de "pago" e a de selecionar não podem se parecer: uma é redonda,
+  // a outra quadrada. Quando eram iguais, quem queria apagar em lote marcava
+  // as de pago e dava seis contas como pagas sem perceber.
+  const formas = await page.evaluate(() => {
+    const pago = document.querySelector('.check-pago');
+    return pago ? getComputedStyle(pago).borderRadius : null;
+  });
+  if (!formas || !/50%|9999px|999px/.test(formas)) {
+    erro(`a caixa de "pago" não é redonda (${formas}) — fica igual à de selecionar`);
+  } else ok('a caixa de "pago" é redonda, distinta da caixa quadrada de selecionar');
+
   await page.click('button:has-text("Selecionar")');
   await page.waitForTimeout(400);
 
@@ -729,6 +740,27 @@ for (const [rota, nome, singular] of [
   if ((await page.locator('.entry .check-pago').count()) > 0) {
     erro('a caixa de "pago" continuou na linha durante a seleção');
   } else ok('no modo de seleção só existe a caixa de selecionar');
+
+  /*
+   * O beco que apareceu no uso real: "marcar todos" morava dentro da barra,
+   * e a barra só aparecia depois de marcar um à mão. Não havia como marcar
+   * tudo sem antes marcar um.
+   */
+  const barraVazia = await page.locator('.barra-selecao').innerText().catch(() => '');
+  if (!barraVazia) erro('a barra não aparece ao entrar no modo de seleção, sem nada marcado');
+  else if (!/Marcar os \d+ da lista/.test(barraVazia)) {
+    erro(`sem nada marcado, não há como marcar todos — "${barraVazia.replace(/\n/g, ' ')}"`);
+  } else ok('com zero marcados a barra já oferece "marcar todos"');
+
+  await page.click('.barra-selecao button:has-text("Marcar os")');
+  await page.waitForTimeout(400);
+  const naTela = await page.locator('.entry').count();
+  const todos = await page.locator('.barra-selecao').innerText();
+  if (!todos.includes(`${naTela} lançamentos selecionados`)) {
+    erro(`"marcar todos" não marcou os ${naTela} da lista — "${todos.split('\n')[0]}"`);
+  } else ok(`"marcar todos" marcou os ${naTela} da lista`);
+  await page.click('.barra-selecao button:has-text("Limpar seleção")');
+  await page.waitForTimeout(300);
 
   // Clicar na linha seleciona em vez de abrir o lançamento.
   await page.locator('.entry').first().click();

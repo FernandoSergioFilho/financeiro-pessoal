@@ -150,6 +150,7 @@ export function EntriesPage({
           singular="lançamento"
           plural="lançamentos"
           genero="m"
+          sempreVisivel
           onLimpar={() => setMarcados(new Set())}
           onApagar={() => setApagando(true)}
         >

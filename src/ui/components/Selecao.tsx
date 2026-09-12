@@ -78,6 +78,15 @@ export function BarraDeSelecao({
   // "conta selecionada" mas "lançamento selecionado": sem isto a barra saía
   // escrita "3 lançamentos selecionadas".
   genero = 'f',
+  /**
+   * Manter a barra na tela mesmo sem nada marcado.
+   *
+   * Nas listas que têm caixa no cabeçalho, a barra pode sumir quando não há
+   * seleção — o "marcar todos" continua alcançável. Onde o marcar-todos mora
+   * **dentro** da barra, sumir com ela seria um beco: não dá para marcar tudo
+   * sem antes marcar um à mão. Foi exatamente o que aconteceu em Lançamentos.
+   */
+  sempreVisivel = false,
   onLimpar,
   onApagar,
   children,
@@ -86,24 +95,35 @@ export function BarraDeSelecao({
   singular: string;
   plural: string;
   genero?: 'f' | 'm';
+  sempreVisivel?: boolean;
   onLimpar: () => void;
   onApagar: () => void;
   children?: ReactNode;
 }) {
-  if (quantos === 0) return null;
+  if (quantos === 0 && !sempreVisivel) return null;
   const marcado = `selecionad${genero === 'f' ? 'a' : 'o'}${quantos === 1 ? '' : 's'}`;
+  const artigo = genero === 'f' ? (quantos === 1 ? 'a' : 'as') : quantos === 1 ? 'o' : 'os';
+
   return (
     <div className="barra-selecao" role="status">
       <strong>
-        {quantos} {quantos === 1 ? singular : plural} {marcado}
+        {quantos === 0 ? (
+          <span className="dim">Toque nas linhas para selecionar</span>
+        ) : (
+          <>
+            {quantos} {quantos === 1 ? singular : plural} {marcado}
+          </>
+        )}
       </strong>
       {children}
       <span className="spacer" />
-      <button type="button" className="btn sm ghost" onClick={onLimpar}>
-        Limpar seleção
-      </button>
-      <button type="button" className="btn sm danger" onClick={onApagar}>
-        Apagar {quantos === 1 ? `${genero === 'f' ? 'a' : 'o'} ${marcado}` : `${genero === 'f' ? 'as' : 'os'} ${marcado}`}
+      {quantos > 0 && (
+        <button type="button" className="btn sm ghost" onClick={onLimpar}>
+          Limpar seleção
+        </button>
+      )}
+      <button type="button" className="btn sm danger" disabled={quantos === 0} onClick={onApagar}>
+        {quantos === 0 ? 'Apagar' : `Apagar ${artigo} ${marcado}`}
       </button>
     </div>
   );
