@@ -75,6 +75,9 @@ export function BarraDeSelecao({
   quantos,
   singular,
   plural,
+  // "conta selecionada" mas "lançamento selecionado": sem isto a barra saía
+  // escrita "3 lançamentos selecionadas".
+  genero = 'f',
   onLimpar,
   onApagar,
   children,
@@ -82,15 +85,17 @@ export function BarraDeSelecao({
   quantos: number;
   singular: string;
   plural: string;
+  genero?: 'f' | 'm';
   onLimpar: () => void;
   onApagar: () => void;
   children?: ReactNode;
 }) {
   if (quantos === 0) return null;
+  const marcado = `selecionad${genero === 'f' ? 'a' : 'o'}${quantos === 1 ? '' : 's'}`;
   return (
     <div className="barra-selecao" role="status">
       <strong>
-        {quantos} {quantos === 1 ? singular : plural} {quantos === 1 ? 'selecionada' : 'selecionadas'}
+        {quantos} {quantos === 1 ? singular : plural} {marcado}
       </strong>
       {children}
       <span className="spacer" />
@@ -98,7 +103,7 @@ export function BarraDeSelecao({
         Limpar seleção
       </button>
       <button type="button" className="btn sm danger" onClick={onApagar}>
-        Apagar {quantos === 1 ? 'a selecionada' : 'as selecionadas'}
+        Apagar {quantos === 1 ? `${genero === 'f' ? 'a' : 'o'} ${marcado}` : `${genero === 'f' ? 'as' : 'os'} ${marcado}`}
       </button>
     </div>
   );

@@ -12,7 +12,7 @@
  * "apagar 30 itens": diz quantos lançamentos somem e quantos ficam.
  */
 
-import type { FinanceData } from './types.ts';
+import type { DisplayEntry, FinanceData } from './types.ts';
 
 export interface ImpactoDeExclusao {
   /** Quantos cadastros serão apagados. */
@@ -60,4 +60,78 @@ export function descreverImpacto(impacto: ImpactoDeExclusao, um: string, varios:
     );
   }
   return `${cabeca}. Nenhum lançamento é afetado.`;
+}
+
+
+/* ------------------------------------------------- lançamentos em lote */
+
+export interface ImpactoEmLancamentos {
+  /** Lançamentos gravados que serão apagados. */
+  gravados: number;
+  /**
+   * Ocorrências previstas de contas fixas. Elas não existem como registro —
+   * são geradas pela regra a cada mês —, então não há o que apagar: o que
+   * acontece é a ocorrência daquele mês ser dispensada, e a regra continuar
+   * valendo nos outros. Chamar isso de "apagar" sem explicar faria alguém
+   * achar que acabou de matar a conta de luz inteira.
+   */
+  previstos: number;
+  /**
+   * Compras parceladas que perdem **todas** as parcelas de uma vez e somem
+   * junto — o mesmo que acontece ao apagar a última parcela à mão.
+   */
+  comprasEsvaziadas: number;
+}
+
+function ehPrevisao(entrada: DisplayEntry): boolean {
+  return 'projected' in entrada && entrada.projected === true;
+}
+
+export function impactoDeApagarLancamentos(
+  data: FinanceData,
+  selecionados: readonly DisplayEntry[],
+): ImpactoEmLancamentos {
+  const gravados = selecionados.filter((entrada) => !ehPrevisao(entrada));
+  const idsGravados = new Set(gravados.map((entrada) => entrada.id));
+
+  const compras = new Set(
+    gravados.map((entrada) => entrada.purchaseId).filter((id): id is string => Boolean(id)),
+  );
+  let comprasEsvaziadas = 0;
+  for (const compra of compras) {
+    const todas = data.entries.filter((entrada) => entrada.purchaseId === compra);
+    if (todas.length > 0 && todas.every((entrada) => idsGravados.has(entrada.id))) comprasEsvaziadas += 1;
+  }
+
+  return {
+    gravados: gravados.length,
+    previstos: selecionados.length - gravados.length,
+    comprasEsvaziadas,
+  };
+}
+
+/** A frase da confirmação de lançamentos, que distingue apagar de dispensar. */
+export function descreverImpactoEmLancamentos(impacto: ImpactoEmLancamentos): string {
+  const { gravados, previstos, comprasEsvaziadas } = impacto;
+  const partes: string[] = [];
+
+  if (gravados > 0) {
+    partes.push(`${gravados} ${gravados === 1 ? 'lançamento será apagado' : 'lançamentos serão apagados'}`);
+  }
+  if (previstos > 0) {
+    partes.push(
+      `${previstos} ${previstos === 1 ? 'ocorrência prevista de conta fixa será dispensada' : 'ocorrências previstas de contas fixas serão dispensadas'} ` +
+        `${previstos === 1 ? 'naquele mês' : 'naqueles meses'} — a regra continua valendo nos outros`,
+    );
+  }
+  if (comprasEsvaziadas > 0) {
+    partes.push(
+      `${comprasEsvaziadas} ${comprasEsvaziadas === 1 ? 'compra parcelada fica' : 'compras parceladas ficam'} sem nenhuma parcela e ` +
+        `${comprasEsvaziadas === 1 ? 'some' : 'somem'} junto`,
+    );
+  }
+
+  if (partes.length === 0) return 'Nada foi selecionado.';
+  const frase = partes.length === 1 ? partes[0]! : `${partes.slice(0, -1).join('; ')}; e ${partes.at(-1)}`;
+  return `${frase[0]!.toUpperCase()}${frase.slice(1)}.`;
 }

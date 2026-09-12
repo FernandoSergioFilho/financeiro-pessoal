@@ -543,6 +543,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
    1000px pode dar 900px de linha numa página e 250px na outra. Por isso o
    ajuste é por @container e não por @media. */
 .entries { display: flex; flex-direction: column; container-type: inline-size; }
+/* A coluna da seleção só existe no modo de seleção, e entra antes da data. */
+.entry:has(.entry-selecao) {
+  grid-template-columns: 28px 54px minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'sel date title amount actions'
+    'sel date meta  meta   actions';
+}
+.entry.no-date:has(.entry-selecao) {
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'sel title amount actions'
+    'sel meta  meta   actions';
+}
+.entry-selecao { grid-area: sel; display: flex; align-items: center; }
+
 .entry {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr) auto auto;

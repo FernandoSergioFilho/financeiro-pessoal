@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { descreverImpacto, impactoDeApagarCompras, impactoDeApagarRecorrentes } from './exclusao.ts';
-import type { Entry, FinanceData, InstallmentPurchase, RecurringRule } from './types.ts';
+import {
+  descreverImpacto,
+  descreverImpactoEmLancamentos,
+  impactoDeApagarCompras,
+  impactoDeApagarLancamentos,
+  impactoDeApagarRecorrentes,
+} from './exclusao.ts';
+import type { DisplayEntry, Entry, FinanceData, InstallmentPurchase, RecurringRule } from './types.ts';
 
 const STAMP = '2026-01-01T00:00:00.000Z';
 
@@ -103,5 +109,55 @@ describe('descreverImpacto', () => {
   it('diz claramente quando nada mais é afetado', () => {
     expect(descreverImpacto({ itens: 2, lancamentosApagados: 0, lancamentosDesvinculados: 0 }, 'regra', 'regras'))
       .toBe('2 regras. Nenhum lançamento é afetado.');
+  });
+});
+
+describe('impactoDeApagarLancamentos', () => {
+  const previsto = (id: string): DisplayEntry =>
+    ({ ...lanc(id), projected: true, recurringId: 'r1', occurrenceDate: '2026-09-01' }) as DisplayEntry;
+
+  it('separa o que é gravado do que é só previsto', () => {
+    const data = carteira({ entries: [lanc('a')] });
+    const impacto = impactoDeApagarLancamentos(data, [lanc('a') as DisplayEntry, previsto('proj:r1:2026-09-01')]);
+    expect(impacto).toMatchObject({ gravados: 1, previstos: 1 });
+  });
+
+  /*
+   * A distinção que a confirmação precisa carregar: a ocorrência prevista não
+   * é um registro, é gerada pela regra. "Apagar" ali dispensa aquele mês — e
+   * chamar isso de apagar faria alguém achar que matou a conta de luz inteira.
+   */
+  it('a frase explica que a regra continua valendo', () => {
+    const texto = descreverImpactoEmLancamentos({ gravados: 0, previstos: 3, comprasEsvaziadas: 0 });
+    expect(texto).toContain('dispensadas');
+    expect(texto).toContain('a regra continua valendo');
+  });
+
+  it('avisa quando a compra fica sem nenhuma parcela', () => {
+    const data = carteira({
+      purchases: [compra('p1')],
+      entries: [lanc('a', { purchaseId: 'p1' }), lanc('b', { purchaseId: 'p1' })],
+    });
+    const todas = data.entries as DisplayEntry[];
+    expect(impactoDeApagarLancamentos(data, todas).comprasEsvaziadas).toBe(1);
+  });
+
+  it('apagar só parte das parcelas não esvazia a compra', () => {
+    const data = carteira({
+      purchases: [compra('p1')],
+      entries: [lanc('a', { purchaseId: 'p1' }), lanc('b', { purchaseId: 'p1' })],
+    });
+    expect(impactoDeApagarLancamentos(data, [data.entries[0] as DisplayEntry]).comprasEsvaziadas).toBe(0);
+  });
+
+  it('junta as três coisas numa frase só', () => {
+    const texto = descreverImpactoEmLancamentos({ gravados: 5, previstos: 2, comprasEsvaziadas: 1 });
+    expect(texto).toMatch(/^5 lançamentos serão apagados; /);
+    expect(texto).toContain('; e 1 compra parcelada fica sem nenhuma parcela e some junto.');
+  });
+
+  it('seleção vazia não inventa frase', () => {
+    expect(descreverImpactoEmLancamentos({ gravados: 0, previstos: 0, comprasEsvaziadas: 0 }))
+      .toBe('Nada foi selecionado.');
   });
 });

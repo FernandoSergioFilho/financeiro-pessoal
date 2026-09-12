@@ -710,6 +710,73 @@ for (const [rota, nome, singular] of [
   await ctx.close();
 }
 
+/* ------------------- 14. apagar lançamentos em lote */
+
+{
+  const { ctx, page, quebras } = await abrir();
+  await page.goto(`${APP}#/lancamentos`);
+  await page.waitForTimeout(900);
+
+  const gravados = () =>
+    page.evaluate(() => JSON.parse(localStorage.getItem('financeiro-pessoal')).entries.length);
+  const antes = await gravados();
+
+  await page.click('button:has-text("Selecionar")');
+  await page.waitForTimeout(400);
+
+  // No modo de seleção a caixa de "pago" sai da linha: duas caixas lado a
+  // lado, uma marcando e outra pagando, seria erro garantido.
+  if ((await page.locator('.entry .check-pago').count()) > 0) {
+    erro('a caixa de "pago" continuou na linha durante a seleção');
+  } else ok('no modo de seleção só existe a caixa de selecionar');
+
+  // Clicar na linha seleciona em vez de abrir o lançamento.
+  await page.locator('.entry').first().click();
+  await page.waitForTimeout(300);
+  if ((await page.locator('.dialog').count()) > 0) erro('clicar na linha abriu o lançamento em vez de selecionar');
+
+  await page.locator('.entry').nth(1).click();
+  await page.locator('.entry').nth(2).click();
+  await page.waitForTimeout(300);
+
+  const barra = await page.locator('.barra-selecao').innerText();
+  if (!/3 lançamentos selecionados/.test(barra)) erro(`a barra não concorda: "${barra.split('\n')[0]}"`);
+  else ok(`barra: "${barra.split('\n')[0].trim()}"`);
+
+  await page.click('.barra-selecao button.danger');
+  await page.waitForTimeout(400);
+  const aviso = await page.locator('.dialog').innerText();
+
+  // A distinção que não pode se perder: previsto de conta fixa é dispensado,
+  // não apagado — e a regra continua valendo nos outros meses.
+  const temPrevisto = /previsto/.test(barra);
+  if (temPrevisto && !/dispensad/.test(aviso)) {
+    erro('a confirmação não explicou que o previsto é dispensado, não apagado');
+  } else if (temPrevisto) ok('a confirmação separa o que é apagado do que é dispensado');
+
+  const regrasAntes = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('financeiro-pessoal')).recurring.length,
+  );
+  await page.click('.dialog button:has-text("Apagar 3")');
+  await page.waitForTimeout(900);
+
+  const depois = await gravados();
+  const regrasDepois = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('financeiro-pessoal')).recurring.length,
+  );
+  if (depois >= antes) erro(`nada foi apagado (${antes} → ${depois})`);
+  else if (regrasDepois !== regrasAntes) erro('apagar um previsto apagou a conta fixa inteira');
+  else ok(`${antes - depois} lançamentos apagados, e as ${regrasDepois} contas fixas intactas`);
+
+  // Sai do modo sozinho: uma seleção que sobrevive ao que foi apagado faria o
+  // clique seguinte agir sobre o que não existe mais.
+  if ((await page.locator('.barra-selecao').count()) > 0) erro('a barra de seleção ficou depois de apagar');
+  else ok('o modo de seleção se encerra depois de apagar');
+
+  if (quebras.length > 0) erro(`lote em lançamentos: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

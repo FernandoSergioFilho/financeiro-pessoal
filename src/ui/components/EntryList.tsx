@@ -28,10 +28,18 @@ export function EntryRow({
   entry,
   onOpen,
   showDate = true,
+  selecao,
 }: {
   entry: DisplayEntry;
   onOpen: (entry: DisplayEntry) => void;
   showDate?: boolean;
+  /**
+   * Quando presente, a lista está em modo de seleção: a linha marca em vez de
+   * abrir. É um modo, e não uma caixa a mais na linha, porque a linha já tem a
+   * caixa de "pago" e o gesto de arrastar — três controles no mesmo lugar
+   * seria erro garantido no celular.
+   */
+  selecao?: { marcada: boolean; onAlternar: () => void };
 }) {
   const { api } = useFinance();
   const { accountName, categoryById } = useLookups();
@@ -103,6 +111,7 @@ export function EntryRow({
 
   const puxando = Math.abs(arrasto) > 4;
   const vaiValer = passouDoLimiar(arrasto);
+  const selecionando = Boolean(selecao);
 
   return (
     <div className="entry-swipe">
@@ -119,11 +128,15 @@ export function EntryRow({
         role="button"
         tabIndex={0}
         style={arrasto === 0 ? undefined : { transform: `translateX(${arrasto}px)`, transition: 'none' }}
-        onTouchStart={aoTocar}
-        onTouchMove={aoMover}
-        onTouchEnd={aoSoltar}
-        onTouchCancel={aoSoltar}
+        onTouchStart={selecionando ? undefined : aoTocar}
+        onTouchMove={selecionando ? undefined : aoMover}
+        onTouchEnd={selecionando ? undefined : aoSoltar}
+        onTouchCancel={selecionando ? undefined : aoSoltar}
         onClick={() => {
+          if (selecao) {
+            selecao.onAlternar();
+            return;
+          }
           // Depois de um arrasto o navegador ainda dispara o clique; abrir o
           // lançamento aqui seria o gesto fazendo duas coisas de uma vez.
           if (arrastou.current) {
@@ -133,12 +146,24 @@ export function EntryRow({
           onOpen(entry);
         }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onOpen(entry);
-          }
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          if (selecao) selecao.onAlternar();
+          else onOpen(entry);
         }}
       >
+        {selecao && (
+          <span className="entry-selecao">
+            <input
+              type="checkbox"
+              className="check-selecao"
+              checked={selecao.marcada}
+              aria-label={`Selecionar ${entry.description}`}
+              onClick={(event) => event.stopPropagation()}
+              onChange={selecao.onAlternar}
+            />
+          </span>
+        )}
       {showDate && <span className="entry-date num">{formatDayMonth(entry.date)}</span>}
 
       {/* Título e detalhe são filhos diretos da grade: dentro de um invólucro,
@@ -179,7 +204,12 @@ export function EntryRow({
         {amountText(entry)}
       </span>
 
+      {/* No modo de seleção a caixa de "pago" sai da linha: duas caixas de
+          seleção lado a lado, uma marcando e outra pagando, é erro garantido.
+          Sai de verdade, e não com `hidden` — o atributo não vence o
+          `display: grid` que ela própria tem. */}
       <span className="entry-actions">
+        {!selecionando && (
         <input
           type="checkbox"
           className="check-pago"
@@ -189,10 +219,16 @@ export function EntryRow({
           onClick={(event) => event.stopPropagation()}
           onChange={alternarPago}
         />
+        )}
       </span>
       </div>
     </div>
   );
+}
+
+export interface SelecaoDaLista {
+  marcados: ReadonlySet<string>;
+  onAlternar: (entry: DisplayEntry) => void;
 }
 
 export function EntryList({
@@ -200,12 +236,16 @@ export function EntryList({
   onOpen,
   groupByDay = true,
   emptyAction,
+  selecao,
 }: {
   entries: DisplayEntry[];
   onOpen: (entry: DisplayEntry) => void;
   groupByDay?: boolean;
   emptyAction?: React.ReactNode;
+  selecao?: SelecaoDaLista;
 }) {
+  const daLinha = (entry: DisplayEntry) =>
+    selecao ? { marcada: selecao.marcados.has(entry.id), onAlternar: () => selecao.onAlternar(entry) } : undefined;
   if (entries.length === 0) {
     return (
       <EmptyState emoji="🗒️" title="Nenhum lançamento aqui" action={emptyAction}>
@@ -218,7 +258,7 @@ export function EntryList({
     return (
       <div className="entries">
         {entries.map((entry) => (
-          <EntryRow key={entry.id} entry={entry} onOpen={onOpen} />
+          <EntryRow key={entry.id} entry={entry} onOpen={onOpen} selecao={daLinha(entry)} />
         ))}
       </div>
     );
@@ -246,7 +286,7 @@ export function EntryList({
               <span className={`total num ${net < 0 ? '' : 'good'}`}>{formatSigned(net)}</span>
             </div>
             {list.map((entry) => (
-              <EntryRow key={entry.id} entry={entry} onOpen={onOpen} showDate={false} />
+              <EntryRow key={entry.id} entry={entry} onOpen={onOpen} showDate={false} selecao={daLinha(entry)} />
             ))}
           </Fragment>
         );

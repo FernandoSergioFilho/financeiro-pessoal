@@ -138,7 +138,13 @@ apagar uma delas, clique na linha.
   diferentes, e somá-las daria um número que não existe em lugar nenhum. Ao cadastrar
   "Nubank cartão" com um "Nubank" já existente, o app oferece o agrupamento — oferece, nunca
   aplica sozinho.
-- **Apagar em lote** — Fixas e Parcelas têm caixa de seleção por linha e uma no cabeçalho
+- **Apagar em lote** — Lançamentos, Fixas e Parcelas. Em Lançamentos é um **modo**: o botão
+  *Selecionar* troca a caixa de "pago" pela de marcar e faz a linha selecionar em vez de
+  abrir — a linha já tem a caixa de pago e o gesto de arrastar, e três controles no mesmo
+  lugar seria erro garantido no celular. A confirmação separa o que é apagado do que é
+  apenas **dispensado**: a ocorrência prevista de uma conta fixa não é um registro, é gerada
+  pela regra, e some só daquele mês.
+  Fixas e Parcelas têm caixa de seleção por linha e uma no cabeçalho
   que marca **o que está na tela**, e não o que existe no banco: com filtros ligados, um
   "selecionar tudo" que pegasse o escondido seria armadilha. A barra que aparece carrega o
   número o tempo todo, e a confirmação distingue as duas ações, que só parecem a mesma:
