@@ -394,8 +394,8 @@ describe('não volta a acontecer', () => {
     const doMes = entriesInRange(data, de, ate);
 
     const tudo = periodTotals(filtrarPorSituacao(doMes, 'tudo'));
-    const pago = periodTotals(filtrarPorSituacao(doMes, 'pago'));
-    const aPagar = periodTotals(filtrarPorSituacao(doMes, 'a-pagar'));
+    const pago = periodTotals(filtrarPorSituacao(doMes, 'confirmado'));
+    const aPagar = periodTotals(filtrarPorSituacao(doMes, 'em-aberto'));
 
     expect(pago.expense + aPagar.expense).toBe(tudo.expense);
     expect(pago.income + aPagar.income).toBe(tudo.income);

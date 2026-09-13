@@ -115,12 +115,22 @@ apagar uma delas, clique na linha.
   baixar um backup completo em JSON e restaurá-lo depois.
 - **Juntar cadastros repetidos** — se a mesma conta ou categoria aparecer duas vezes,
   Ajustes avisa e junta tudo num clique: os lançamentos passam para o cadastro que fica.
-- **Ainda posso gastar** — o número que o painel não dava. Do que entra no período, o app
-  subtrai o que já saiu **e** o que ainda vai sair (contas fixas, parcelas, boletos
-  marcados). O que sobra é o que é escolha — e vem também dividido pelos dias que faltam,
+- **Ainda posso gastar** — o número que o painel não dava. Do **dinheiro que já estava nas
+  contas quando o período começou**, mais o que entra nele, o app subtrai o que já saiu **e** o
+  que ainda vai sair (contas fixas, parcelas, boletos marcados). O saldo de abertura faltava, e
+  isso fazia o painel dizer "ainda posso gastar R$ 4.000" para quem começava o mês com R$ 4.500
+  na conta e recebia R$ 4.000 — enquanto o cartão ao lado mostrava "Dinheiro disponível
+  R$ 8.500". Dois números para a mesma pergunta, discordando na mesma tela; hoje uma verificação
+  da simulação cobra que eles sejam iguais. A conta de trás fica escrita embaixo do número
+  ("R$ 4.500,00 já havia · R$ 4.000,00 entram · …"), para ser conferida em vez de acreditada.
+  O que sobra é o que é escolha — e vem também dividido pelos dias que faltam,
   porque "sobram R$ 1.200" e "sobram R$ 60 por dia até o dia 30" pedem comportamentos
   diferentes de quem lê. Ao lado, o **ritmo do período**: um medidor com uma marca em onde o
   gasto deveria estar a esta altura do mês.
+- **Confirmados e em aberto** — o filtro de situação usa esse par, e não "pagos" e "a pagar".
+  Nem todo lançamento é conta a pagar: entrada também tem os dois estados, e "salário a pagar"
+  é exatamente ao contrário do que acontece. Confirmado/em aberto descreve o estado sem supor
+  a direção do dinheiro.
 - **Faturas em aberto** — por cartão, quanto está na fatura que fecha agora, quando fecha e
   quando vence. Com quatro cartões, "saldo do cartão" não responde nada. E ao lançar no
   cartão o app diz **em que fatura aquilo cai**.

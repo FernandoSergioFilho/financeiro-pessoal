@@ -144,3 +144,42 @@ describe('calcularOrcamento', () => {
     expect(Number.isNaN(o.porDia)).toBe(false);
   });
 });
+
+/*
+ * NÃO VOLTA A ACONTECER — o dinheiro que já estava na conta sumia da conta.
+ *
+ * O painel dizia "Ainda posso gastar R$ 4.000,00" para quem começou o mês com
+ * R$ 4.500 na conta e recebeu R$ 4.000: contava só a entrada do período e
+ * ignorava o saldo que abriu o mês. A resposta é R$ 8.500 — e é o mesmo número
+ * que o cartão "Dinheiro disponível" mostra ao lado, que era a contradição na
+ * cara de quem olhava.
+ */
+describe('o saldo que abriu o período', () => {
+  const janela = { de: '2026-09-01', ate: '2026-09-30' };
+
+  it('entra no que dá para gastar', () => {
+    const com = calcularOrcamento([entrada(400000)], janela, '2026-09-12', 450000);
+    expect(com.disponivel).toBe(850000);
+    expect(com.saldoInicial).toBe(450000);
+  });
+
+  it('sem informar, a conta é a de antes — só o período', () => {
+    expect(calcularOrcamento([entrada(400000)], janela, '2026-09-12').disponivel).toBe(400000);
+  });
+
+  it('o que já saiu e o que ainda vai sair continuam descontando', () => {
+    const o = calcularOrcamento(
+      [entrada(400000), saidaPaga(100000), saidaAPagar(50000)],
+      janela,
+      '2026-09-12',
+      450000,
+    );
+    expect(o.disponivel).toBe(450000 + 400000 - 100000 - 50000);
+  });
+
+  it('o por dia acompanha, senão diria que se pode gastar menos do que se tem', () => {
+    const sem = calcularOrcamento([entrada(400000)], janela, '2026-09-12');
+    const com = calcularOrcamento([entrada(400000)], janela, '2026-09-12', 450000);
+    expect(com.porDia!).toBeGreaterThan(sem.porDia!);
+  });
+});

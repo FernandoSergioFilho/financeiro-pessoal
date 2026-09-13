@@ -13,7 +13,9 @@ import { formatMoney } from '../../domain/money.ts';
 import type { Orcamento } from '../../domain/orcamento.ts';
 
 export function CartaoDisponivel({ orcamento }: { orcamento: Orcamento }) {
-  const { disponivel, porDia, diasRestantes, emAndamento, entradas, gastoRealizado, comprometido } = orcamento;
+  const {
+    disponivel, porDia, diasRestantes, emAndamento, saldoInicial, entradas, gastoRealizado, comprometido,
+  } = orcamento;
   const negativo = disponivel < 0;
 
   return (
@@ -35,9 +37,14 @@ export function CartaoDisponivel({ orcamento }: { orcamento: Orcamento }) {
           </>
         ) : null}
       </span>
+      {/* A conta de trás, parcela por parcela: sem ela o número grande é uma
+          afirmação para acreditar, e com ela é uma conta para conferir. O saldo
+          que abriu o período entra primeiro porque é o que faltava — quem tem
+          R$ 4.500 na conta e recebe R$ 4.000 pode gastar R$ 8.500. */}
       <span className="dim" style={{ fontSize: '0.78rem', marginTop: 2 }}>
-        {formatMoney(entradas)} entram · {formatMoney(gastoRealizado)} já saíram ·{' '}
-        {formatMoney(comprometido)} ainda vão sair
+        {saldoInicial !== 0 && <>{formatMoney(saldoInicial)} já havia · </>}
+        {formatMoney(entradas)} {entradas === 0 ? 'entrou' : 'entram'} ·{' '}
+        {formatMoney(gastoRealizado)} já saíram · {formatMoney(comprometido)} ainda vão sair
       </span>
     </div>
   );

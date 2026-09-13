@@ -25,7 +25,6 @@ import {
   balanceWalk,
   categoryChanges,
   monthlySeries,
-  netWorth,
   periodTotals,
   totalsByCategory,
 } from '../../domain/summary.ts';
@@ -182,14 +181,18 @@ export function Dashboard({
   }, [accounts, data]);
   const projected = useMemo(() => {
     const upToEnd = entriesInRange(data, INICIO_DOS_TEMPOS, janela.ate);
-    return netWorth(accounts, upToEnd, { upTo: janela.ate });
+    return saldoDisponivel(accounts, upToEnd, { upTo: janela.ate });
   }, [accounts, data, janela.ate]);
 
   // O saldo com que o período começou: tudo que aconteceu antes do primeiro dia.
   const saldoDeAbertura = useMemo(() => {
     const vespera = addDays(janela.de, -1);
     const anterior = entriesInRange(data, INICIO_DOS_TEMPOS, vespera);
-    return netWorth(accounts, anterior, { upTo: vespera });
+    // Caixa, e não patrimônio: é o dinheiro com que o período começou, e é ele
+    // que o gráfico de saldo percorre e que o orçamento tem por base. Somar o
+    // investimento aqui faria o gráfico fechar em número que ninguém pode
+    // gastar — e discordar do "Dinheiro disponível" logo ao lado.
+    return saldoDisponivel(accounts, anterior, { upTo: vespera });
   }, [accounts, data, janela.de]);
 
   const percurso = useMemo(
@@ -224,7 +227,7 @@ export function Dashboard({
   // "Quanto ainda posso gastar" mede o período inteiro, e não o recorte: com
   // "Já pago" selecionado o comprometido some, e a resposta viraria mentira.
   const orcamento = useMemo(
-    () => calcularOrcamento(doPeriodo, janela, today()),
+    () => calcularOrcamento(doPeriodo, janela, today(), saldoDeAbertura),
     [doPeriodo, janela],
   );
 

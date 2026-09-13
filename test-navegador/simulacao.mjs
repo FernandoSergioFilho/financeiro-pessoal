@@ -960,6 +960,74 @@ for (const [rota, nome, singular] of [
   await ctx.close();
 }
 
+/* --------------------- 17. o saldo que já existe entra no que dá para gastar
+
+   O painel dizia "Ainda posso gastar R$ 4.000,00" para quem começou o mês com
+   R$ 4.500 na conta e recebeu R$ 4.000 — e mostrava "Dinheiro disponível
+   R$ 8.500,00" no cartão ao lado. Os dois respondem a mesma pergunta e
+   precisam dar o mesmo número. */
+{
+  const T = '2026-01-01T00:00:00.000Z';
+  const carteira = JSON.stringify({
+    version: 2,
+    accounts: [
+      { id: 'cc', name: 'Conta corrente', kind: 'checking', openingBalance: 300000, color: 'green', updatedAt: T },
+      { id: 'pp', name: 'Poupança', kind: 'savings', openingBalance: 150000, color: 'blue', updatedAt: T },
+      { id: 'inv', name: 'Tesouro', kind: 'investment', openingBalance: 1000000, color: 'violet', updatedAt: T },
+    ],
+    categories: [],
+    entries: [{
+      id: 'sal', date: `${HOJE.slice(0, 8)}05`, description: 'Salário', amount: 400000, kind: 'income',
+      accountId: 'cc', toAccountId: null, categoryId: null, status: 'settled', recurringId: null,
+      occurrenceDate: null, purchaseId: null, installmentNumber: null, installmentTotal: null,
+      createdAt: T, updatedAt: T,
+    }],
+    recurring: [], purchases: [], tombstones: [],
+  });
+
+  // Contexto próprio, e não o `abrir()`: aquele já semeia a carteira de
+  // exemplo antes da primeira navegação, e semear por cima depois é uma
+  // corrida com o app, que grava o estado dele ao montar.
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+  const page = await ctx.newPage();
+  const quebras = [];
+  page.on('pageerror', (e) => quebras.push(String(e)));
+  await page.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), carteira);
+  await page.goto(`${APP}#/painel`);
+  await page.waitForTimeout(900);
+
+  const lido = await page.evaluate(() => {
+    const limpo = (t) => Number((t ?? '').replace(/[^\d,]/g, '').replace(/\./g, '').replace(',', '.')) * 100;
+    const cartao = (rotulo) => [...document.querySelectorAll('.card.stat')]
+      .find((c) => c.textContent.startsWith(rotulo));
+    return {
+      podeGastar: Math.round(limpo(document.querySelector('.card.destaque .valor')?.textContent)),
+      disponivel: Math.round(limpo(cartao('Dinheiro disponível')?.querySelector('.stat-value')?.textContent)),
+      apoio: document.querySelector('.card.destaque .dim')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      filtros: [...document.querySelectorAll('.segmented button')].map((b) => b.textContent.trim()),
+    };
+  });
+
+  // 3.000 na conta + 1.500 na poupança + 4.000 de salário. O Tesouro fica fora.
+  if (lido.podeGastar !== 850000) erro(`"ainda posso gastar" deu ${lido.podeGastar} em vez de 850000`);
+  else ok('o saldo que já existe entra no que dá para gastar');
+
+  if (lido.podeGastar !== lido.disponivel) {
+    erro(`os dois números da mesma pergunta discordam: ${lido.podeGastar} e ${lido.disponivel}`);
+  } else ok('"ainda posso gastar" e "dinheiro disponível" dão o mesmo número');
+
+  if (!lido.apoio.includes('já havia')) erro(`a conta de trás não mostra o que já havia — "${lido.apoio}"`);
+  else ok('a conta de trás mostra o saldo que abriu o período');
+
+  // Os nomes dos recortes: nem todo lançamento é conta a pagar.
+  if (!lido.filtros.includes('Confirmados') || !lido.filtros.includes('Em aberto')) {
+    erro(`os filtros voltaram aos nomes antigos — ${JSON.stringify(lido.filtros)}`);
+  } else ok('os filtros são "Confirmados" e "Em aberto"');
+
+  if (quebras.length > 0) erro(`saldo inicial: erro no console — ${quebras[0]}`);
+  await ctx.close();
+}
+
 await browser.close();
 console.log('──────────────────────────────────────────────');
 console.log(falhas === 0 ? 'TUDO PASSOU' : `${falhas} FALHA(S)`);

@@ -17,13 +17,23 @@ import type { DisplayEntry } from './types.ts';
 import { contaNoFluxo } from './investimentos.ts';
 
 export interface Orcamento {
+  /**
+   * O dinheiro que já estava nas contas quando o período começou.
+   *
+   * Sem ele a conta responde a pergunta errada. Quem começa setembro com
+   * R$ 4.500 na conta e recebe R$ 4.000 pode gastar R$ 8.500, não R$ 4.000 —
+   * e era R$ 4.000 que o painel dizia, ignorando o dinheiro que a pessoa já
+   * tinha. Só o caixa entra aqui: o que está investido não é para gastar este
+   * mês, e a fatura do cartão já aparece como saída no dia em que vence.
+   */
+  saldoInicial: number;
   /** Tudo que entra no período, confirmado ou previsto. */
   entradas: number;
   /** Saídas já marcadas como pagas. */
   gastoRealizado: number;
   /** Saídas do período que ainda não foram pagas: contas, parcelas, fixas. */
   comprometido: number;
-  /** Entradas menos o que já saiu e o que ainda vai sair. É o que é escolha. */
+  /** O que já havia mais o que entra, menos o que saiu e o que ainda vai sair. */
   disponivel: number;
   /** Quantos dias faltam até o fim do período, contando hoje. Zero se já acabou. */
   diasRestantes: number;
@@ -61,6 +71,8 @@ export function calcularOrcamento(
   entradasDoPeriodo: readonly DisplayEntry[],
   janela: { de: string; ate: string },
   hoje: string,
+  /** Caixa disponível na véspera do período. Zero quando não se sabe. */
+  saldoInicial = 0,
 ): Orcamento {
   let entradas = 0;
   let gastoRealizado = 0;
@@ -77,7 +89,7 @@ export function calcularOrcamento(
     else comprometido += entrada.amount;
   }
 
-  const disponivel = entradas - gastoRealizado - comprometido;
+  const disponivel = saldoInicial + entradas - gastoRealizado - comprometido;
   const emAndamento = hoje >= janela.de && hoje <= janela.ate;
   const diasRestantes = emAndamento ? diasEntre(hoje, janela.ate) : 0;
 
@@ -92,6 +104,7 @@ export function calcularOrcamento(
   const gastoEsperado = Math.round(gastoTotal * fracaoDecorrida);
 
   return {
+    saldoInicial,
     entradas,
     gastoRealizado,
     comprometido,

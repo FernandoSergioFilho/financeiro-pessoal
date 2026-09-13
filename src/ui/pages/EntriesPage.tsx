@@ -22,11 +22,11 @@ const FILTERS: { value: RecorteDaLista; label: string }[] = [
   { value: 'expense', label: 'Saídas' },
   { value: 'income', label: 'Entradas' },
   { value: 'transfer', label: 'Transferências' },
-  { value: 'pending', label: 'A pagar' },
+  { value: 'pending', label: 'Em aberto' },
   { value: 'atrasados', label: 'Atrasados' },
 ];
 
-/** O recorte aplicado a um lançamento. Atrasado = a pagar com data já passada. */
+/** O recorte aplicado a um lançamento. Atrasado = em aberto com data já passada. */
 function passaNoRecorte(entry: DisplayEntry, recorte: RecorteDaLista, hoje: string): boolean {
   if (recorte === 'all') return true;
   if (recorte === 'pending') return entry.status === 'pending';
