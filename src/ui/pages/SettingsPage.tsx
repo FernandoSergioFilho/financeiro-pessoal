@@ -793,11 +793,13 @@ export function SettingsPage({
       <Card>
         <div className="row wrap" style={{ gap: 12, alignItems: 'center' }}>
           <span className="setting-text" style={{ flex: '1 1 14rem' }}>
-            <span className="title">Primeira vez por aqui?</span>
-            <span className="dim">
+            {/* `div`, e não `span`, como nos outros cartões: em linha os dois
+                colavam um no outro e saía "Primeira vez por aqui?Um guia". */}
+            <div className="title">Primeira vez por aqui?</div>
+            <div className="dim">
               Um guia curto: o que lançar primeiro, como o cartão funciona, como importar do banco
               e como instalar no celular.
-            </span>
+            </div>
           </span>
           <button type="button" className="btn primary" onClick={() => setTutorial(true)}>
             📖 Como usar o aplicativo

@@ -1061,6 +1061,10 @@ textarea.input { resize: vertical; min-height: 64px; }
   font-size: 0.86rem;
 }
 .banner.warn { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 30%, var(--border)); }
+/* O par do `warn`, para o aviso que é boa notícia — "deu certo, e o próximo
+   passo é ali". Mesma receita, trocando `--bad` por `--good`, para os dois
+   claros e os dois escuros virem dos mesmos tokens. */
+.banner.ok { background: var(--good-soft); border-color: color-mix(in srgb, var(--good) 30%, var(--border)); }
 /* Mais forte que o `warn`: o dia em que o dinheiro acaba não pode parecer com
    "está apertado". A borda cheia é o que separa os dois de relance. */
 .banner.grave {

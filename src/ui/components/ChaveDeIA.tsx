@@ -28,6 +28,10 @@ export function ChaveDeIA() {
   const [modelos, setModelos] = useState<ModeloDisponivel[]>([]);
   const [estado, setEstado] = useState<'parado' | 'testando' | 'ok' | 'erro'>('parado');
   const [recado, setRecado] = useState('');
+  // Guardar a chave não muda nada visível nesta tela, e quem acabou de guardar
+  // fica sem saber o que fazer com ela. O caminho é de três passos e nenhum
+  // deles tem a palavra "IA" no rótulo; então ele é dito aqui, na hora.
+  const [ondeUsar, setOndeUsar] = useState(false);
 
   // Com uma chave já guardada, a lista se preenche sozinha: sem isso o seletor
   // de modelo nasce vazio em quem já configurou tudo da última vez.
@@ -55,6 +59,7 @@ export function ChaveDeIA() {
       }
       setEstado('ok');
       setRecado(`Funcionou. ${lista.length} modelos disponíveis com esta chave.`);
+      setOndeUsar(true);
     } catch (e: unknown) {
       setEstado('erro');
       setRecado(e instanceof Error ? e.message : 'Não consegui falar com o Google.');
@@ -144,6 +149,23 @@ export function ChaveDeIA() {
         <p className={estado === 'erro' ? 'error' : 'hint'} style={{ marginTop: 8 }}>
           {estado === 'ok' ? '✅ ' : ''}{recado}
         </p>
+      )}
+
+      {(ondeUsar || guardada) && estado !== 'erro' && (
+        <div className="banner ok" style={{ alignItems: 'flex-start', marginTop: 10 }}>
+          <span className="emoji" aria-hidden="true">✨</span>
+          <span>
+            <strong>Onde a resposta aparece</strong>
+            <br />
+            <span className="dim">
+              No <strong>Painel</strong>, toque em <strong>🔎 Analisar</strong> (na barra de
+              ações, ao lado do período). Abre um diálogo com quatro abas — vá na última,{' '}
+              <strong>Levar a uma IA</strong>. Escolha uma das perguntas prontas e toque em{' '}
+              <strong>✨ Perguntar agora</strong>. A resposta aparece ali mesmo, no topo do
+              diálogo.
+            </span>
+          </span>
+        </div>
       )}
 
       {modelos.length > 0 && (

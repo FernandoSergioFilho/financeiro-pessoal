@@ -562,16 +562,25 @@ function PainelDeIA({
       </div>
       )}
 
+      {/* O aviso muda com a chave, e tem de mudar: dizer "quem cola é você"
+          para quem configurou o Gemini seria falso — aí o app manda mesmo, ao
+          toque do botão. Um aviso de privacidade errado é pior do que nenhum. */}
       <div className="banner warn" style={{ alignItems: 'flex-start' }}>
         <span className="emoji" aria-hidden="true">🔒</span>
         <span>
-          <strong>Este texto sai do seu aparelho quando você colar</strong>
+          <strong>
+            {comChave
+              ? 'Este texto sai do seu aparelho quando você perguntar'
+              : 'Este texto sai do seu aparelho quando você colar'}
+          </strong>
           <br />
           <span className="dim">
             Vão os totais, as categorias, o custo fixo, as parcelas e os saldos — <strong>nenhuma
             descrição de lançamento</strong>, nenhum nome de quem te pagou ou de onde você comprou.
-            Ainda assim, é o retrato do seu dinheiro indo para a empresa que opera o chat. O app não
-            manda nada sozinho: quem cola é você.
+            Ainda assim, é o retrato do seu dinheiro indo para a empresa que opera o chat.{' '}
+            {comChave
+              ? 'Nada sai enquanto você não tocar em "Perguntar agora" — e aí vai para o Google, com a sua chave.'
+              : 'O app não manda nada sozinho: quem cola é você.'}
           </span>
         </span>
       </div>
