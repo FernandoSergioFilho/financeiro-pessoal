@@ -162,6 +162,21 @@ const DIALOGOS = [
     rota: 'investimentos',
     abrir: async (p) => p.click('.investimento button:text-is("Rendimento")'),
   },
+  {
+    nome: 'Tutorial',
+    rota: 'ajustes',
+    abrir: async (p) => p.click('button:has-text("Como usar o aplicativo")'),
+  },
+  {
+    // Aberto no capítulo mais longo: é onde o texto tem mais chance de estourar.
+    nome: 'Tutorial — capítulo aberto',
+    rota: 'ajustes',
+    abrir: async (p) => {
+      await p.click('button:has-text("Como usar o aplicativo")');
+      await p.click('.capitulo .cabeca:has-text("Instalar no celular")');
+      await p.waitForTimeout(300);
+    },
+  },
   { nome: 'Nova conta', rota: 'ajustes', abrir: async (p) => p.click('button:text-is("Nova conta")') },
   { nome: 'Nova categoria', rota: 'ajustes', abrir: async (p) => p.click('button:text-is("Nova categoria")') },
   { nome: 'Importar planilha', rota: 'ajustes', abrir: async (p) => p.click('button:has-text("Importar planilha")') },

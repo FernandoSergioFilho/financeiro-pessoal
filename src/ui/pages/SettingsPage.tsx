@@ -28,6 +28,7 @@ import { useFinance } from '../../state/store.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '../components/primitives.tsx';
 import { CloudPanel } from '../components/CloudPanel.tsx';
 import { ImportarDoBanco } from '../components/ImportarDoBanco.tsx';
+import { TutorialDialog } from '../components/Tutorial.tsx';
 import type { IrPara } from '../navegacao.ts';
 import { procurarAtualizacao } from '../atualizacao.ts';
 import type { ThemeChoice } from '../theme.ts';
@@ -702,6 +703,7 @@ export function SettingsPage({
   const [resetting, setResetting] = useState(false);
   const [importando, setImportando] = useState(false);
   const [importandoBanco, setImportandoBanco] = useState(false);
+  const [tutorial, setTutorial] = useState(false);
   const [copias, setCopias] = useState<Copia[]>([]);
   const [restaurando, setRestaurando] = useState<Copia | null>(null);
   const [desmarcando, setDesmarcando] = useState(false);
@@ -784,6 +786,23 @@ export function SettingsPage({
           </span>
         </div>
       )}
+
+      {/* Primeiro de tudo em Ajustes: quem vem procurar ajuda vem aqui, e o
+          tutorial não pode estar embaixo de nove cartões de configuração. */}
+      <Card>
+        <div className="row wrap" style={{ gap: 12, alignItems: 'center' }}>
+          <span className="setting-text" style={{ flex: '1 1 14rem' }}>
+            <span className="title">Primeira vez por aqui?</span>
+            <span className="dim">
+              Um guia curto: o que lançar primeiro, como o cartão funciona, como importar do banco
+              e como instalar no celular.
+            </span>
+          </span>
+          <button type="button" className="btn primary" onClick={() => setTutorial(true)}>
+            📖 Como usar o aplicativo
+          </button>
+        </div>
+      </Card>
 
       <Card
         title="Contas"
@@ -1181,6 +1200,7 @@ export function SettingsPage({
 
       {importando && <ImportarPlanilha onClose={() => setImportando(false)} />}
       {importandoBanco && <ImportarDoBanco onClose={() => setImportandoBanco(false)} />}
+      {tutorial && <TutorialDialog onClose={() => setTutorial(false)} />}
 
       {desmarcando && (
         <ConfirmDialog

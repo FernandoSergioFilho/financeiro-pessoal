@@ -435,6 +435,22 @@ pelo mouse não dava, porque o seletor só produz datas completas.
 npm run build:single && npm run test:telas
 ```
 
+### Tutorial dentro do app
+
+O primeiro cartão de Ajustes é **"📖 Como usar o aplicativo"** — primeiro de tudo porque quem
+vem procurar ajuda vem ali, e o tutorial não pode estar embaixo de nove cartões de
+configuração. São nove capítulos em sanfona: fechados são um índice, abertos são o capítulo.
+Abertos de uma vez seriam uma parede de texto que ninguém lê.
+
+O conteúdo mora em `src/domain/tutorial.ts`, como dado e não como JSX, por dois motivos: texto
+longo no meio de componente vira uma parede que ninguém revisa, e assim dá para **testar** que
+nenhum capítulo ficou vazio. Um tutorial com um buraco no meio é pior do que nenhum, porque
+quem procurou ali desiste do resto.
+
+A ordem é a de quem está aprendendo, não a do menu. O capítulo do cartão vem cedo de propósito:
+é onde o app faz uma coisa que quase nenhum outro faz — mostrar a compra no mês em que a fatura
+vence — e não entender isso é achar que os números estão errados.
+
 ### "O que fazer": achados com número e caminho
 
 A aba **O que fazer** do Analisar responde a pergunta seguinte à do fechamento. Cada achado
