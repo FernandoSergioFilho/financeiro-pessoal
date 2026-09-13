@@ -118,11 +118,29 @@ const DIALOGOS = [
   },
   { nome: 'Analisar', rota: 'painel', abrir: async (p) => p.click('button:has-text("Analisar")') },
   {
+    nome: 'Analisar — o que fazer',
+    rota: 'painel',
+    abrir: async (p) => {
+      await p.click('button:has-text("Analisar")');
+      await p.click('.segmented button:text-is("O que fazer")');
+      await p.waitForTimeout(400);
+    },
+  },
+  {
+    nome: 'Analisar — números',
+    rota: 'painel',
+    abrir: async (p) => {
+      await p.click('button:has-text("Analisar")');
+      await p.click('.segmented button:text-is("Números")');
+      await p.waitForTimeout(400);
+    },
+  },
+  {
     nome: 'Analisar — texto para IA',
     rota: 'painel',
     abrir: async (p) => {
       await p.click('button:has-text("Analisar")');
-      await p.click('.segmented button:has-text("Perguntar a uma IA")');
+      await p.click('.segmented button:text-is("Levar a uma IA")');
       await p.waitForTimeout(300);
     },
   },
@@ -213,6 +231,21 @@ async function estadoDoDialogo(page) {
         .filter((el) => visivel(el) && el.scrollWidth > el.clientWidth + 1)
         .slice(0, 3)
         .map(texto),
+      /*
+       * Botão que quebrou em tantas linhas que virou um bloco. Não estoura
+       * nada, não corta nada, e mesmo assim está errado: "Copiar e abrir o
+       * Claude ↗" saía em quatro linhas no rodapé a 390px. Três linhas de
+       * texto num botão é o limite do que ainda se lê como botão.
+       */
+      espremidos: [...dialogo.querySelectorAll('.btn')]
+        .filter((el) => {
+          if (!visivel(el)) return false;
+          const altura = el.getBoundingClientRect().height;
+          const linha = parseFloat(getComputedStyle(el).fontSize) * 1.4;
+          return altura > linha * 3.2;
+        })
+        .slice(0, 3)
+        .map((el) => `${texto(el).slice(0, 24)} (${Math.round(el.getBoundingClientRect().height)}px de altura)`),
       // Foi assim que a descrição do extrato sumiu: célula de 6px com texto
       // dentro. Nenhuma coluna com conteúdo pode ficar estreita demais para ler.
       espremidas: [...dialogo.querySelectorAll('td, th')]
@@ -252,6 +285,7 @@ for (const tema of ['light', 'dark']) {
         if (estado.naoCabem.length > 0) problemas.push(`rola de lado por dentro — ${JSON.stringify(estado.naoCabem)}`);
         if (estado.cortados.length > 0) problemas.push(`texto cortado — ${JSON.stringify(estado.cortados)}`);
         if (estado.espremidas.length > 0) problemas.push(`coluna espremida — ${JSON.stringify(estado.espremidas)}`);
+        if (estado.espremidos.length > 0) problemas.push(`botão quebrado em linhas demais — ${JSON.stringify(estado.espremidos)}`);
       }
       for (const problema of problemas) erro(`${onde}: ${problema}`);
       if (problemas.length === 0) bons += 1;

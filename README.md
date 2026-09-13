@@ -435,6 +435,46 @@ pelo mouse não dava, porque o seletor só produz datas completas.
 npm run build:single && npm run test:telas
 ```
 
+### "O que fazer": achados com número e caminho
+
+A aba **O que fazer** do Analisar responde a pergunta seguinte à do fechamento. Cada achado
+passa por três perguntas antes de existir: o número é grande o bastante para valer a atenção?
+existe uma ação concreta, e não um conselho genérico? o valor em reais está dito? Um painel
+cheio de "considere revisar seus gastos" não ajuda ninguém e ensina a pessoa a ignorar a tela.
+
+| Achado | O que ele procura | Para onde aponta |
+| --- | --- | --- |
+| Dinheiro parado | saldo na corrente acima de um mês de gasto | Tesouro Selic, CDB de liquidez diária, conta remunerada |
+| Juros pagos | "juros", "rotativo", "IOF", "mora", "multa" nas descrições | portabilidade de dívida, crédito mais barato |
+| Tarifas e anuidades | "tarifa", "pacote", "cesta", "anuidade" | conta digital sem tarifa, pedido de isenção |
+| Custo fixo subindo | a reta que atravessa doze meses de contas fixas | renegociar as três maiores |
+| Assinaturas | três ou mais recorrentes pequenas | a lista, e o que não se usou no mês |
+| Parcelas comprometidas | quanto dos próximos 12 meses já está vendido | antecipar com desconto, que a lei obriga |
+
+**Dois totais, e não um.** "Vazando por ano" soma juros, tarifas e contas que subiram — parar
+de perder é ganho certo. "Deixando de ganhar" é o dinheiro parado, que depende de uma taxa.
+As parcelas comprometidas não entram em nenhum dos dois: não são perda nem ganho, são uma
+decisão já tomada. O total único que existia antes somava R$ 16 mil de compromisso com R$ 13
+mil de ganho potencial e dava um número grande que não queria dizer nada.
+
+A ordem também é por natureza antes de por valor: o que está queimando vem antes do que está
+dormindo, por maior que seja o segundo. Juros de R$ 200 pedem ação hoje; R$ 13 mil parados
+podem esperar a semana que vem.
+
+**A única coisa que não vem dos seus lançamentos** é a taxa de rendimento, que fica editável
+na própria tela — ela envelhece, e a régua de cada um é diferente.
+
+### "Números": a estatística sem conclusão
+
+A aba ao lado é o material de quem quer conferir a conclusão em vez de aceitá-la: por
+categoria, doze meses de **mediana** (e não média — um mês com a compra do notebook levanta a
+média e faz o app dizer que você gasta o que não gasta), a **tendência** em reais por mês, a
+**previsibilidade** e a projeção do mês seguinte.
+
+A tendência é a reta de mínimos quadrados que atravessa a série, não a diferença entre dois
+meses seguidos — essa é ruído. E quando a reta **não descreve** a série (R² abaixo de 0,5),
+está escrito "varia demais" em vez de um número inventado com aparência de método.
+
 ### Por que a análise é calculada, e não pedida a uma IA
 
 O app é uma página estática publicada no GitHub Pages: não existe servidor onde guardar uma

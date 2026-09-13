@@ -851,6 +851,14 @@ textarea.input { resize: vertical; min-height: 64px; }
 .segmented.scroll-x { grid-auto-flow: column; overflow-x: auto; scrollbar-width: none; justify-content: start; }
 .segmented.scroll-x::-webkit-scrollbar { display: none; }
 .segmented.scroll-x button { white-space: nowrap; }
+
+/* Quatro opções não cabem lado a lado num celular, e rolar de lado esconde a
+   última — quem não souber que ela existe não vai procurar. Em duas linhas
+   todas aparecem, com o rótulo inteiro. */
+.segmented.duas-linhas { grid-auto-flow: row; grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 560px) {
+  .segmented.duas-linhas { grid-template-columns: 1fr 1fr; }
+}
 .segmented button[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .segmented button[aria-pressed='true'][data-tone='income'] { color: var(--good); }
 .segmented button[aria-pressed='true'][data-tone='expense'] { color: var(--bad); }
@@ -883,6 +891,30 @@ textarea.input { resize: vertical; min-height: 64px; }
   background: var(--surface-2);
 }
 .investimento .hint { font-size: 0.78rem; }
+
+/* A tabela de números por categoria: no celular vira ficha, como a do extrato.
+   São cinco colunas de números curtos, e lado a lado a 390px nenhuma sobra. */
+.tabela-numeros td.right, .tabela-numeros th.right { text-align: right; }
+@media (max-width: 700px) {
+  .table-wrap .table.tabela-numeros { min-width: 0; width: 100%; }
+  .tabela-numeros, .tabela-numeros tbody, .tabela-numeros tr, .tabela-numeros td { display: block; }
+  .tabela-numeros thead { display: none; }
+  .tabela-numeros tr {
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .table-wrap .table.tabela-numeros td {
+    padding: 2px 0; border: 0; white-space: normal;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  }
+  .tabela-numeros td[data-rotulo]::before {
+    content: attr(data-rotulo);
+    font-size: 0.72rem; font-weight: 620; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--text-3); flex: none;
+  }
+  /* A primeira linha da ficha é o nome, e ele não precisa de rótulo. */
+  .tabela-numeros td:first-child { font-weight: 620; font-size: 0.95rem; }
+  .tabela-numeros td:first-child::before { content: none; }
+}
 
 /* `flex-start`: com a explicação embaixo, centralizar deixava o quadradinho
    flutuando entre as duas linhas em vez de junto do rótulo. */
