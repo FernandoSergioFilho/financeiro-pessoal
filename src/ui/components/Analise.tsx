@@ -12,6 +12,8 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
+import { perguntar, temChave } from '../../data/ia.ts';
+
 import { analisar, type Achado, type Tom } from '../../domain/analise.ts';
 import { addMonthsToKey, monthEnd, monthKey, monthStart, today } from '../../domain/date.ts';
 import { CONFIANCA_MINIMA, mediana, projetar, tendencia, variacao } from '../../domain/estatistica.ts';
@@ -68,6 +70,38 @@ export function AnaliseDialog({
   const [copiado, setCopiado] = useState<'nao' | 'sim' | 'falhou'>('nao');
   const campo = useRef<HTMLTextAreaElement>(null);
 
+  /*
+   * Com chave configurada, a pergunta acontece aqui dentro e o colar deixa de
+   * ser necessário. Sem chave, tudo continua como estava — o app não exige
+   * chave de ninguém.
+   */
+  const [comChave] = useState(() => temChave());
+  const [perguntando, setPerguntando] = useState(false);
+  const [resposta, setResposta] = useState('');
+  const [erroDaIA, setErroDaIA] = useState('');
+  const cancelar = useRef<AbortController | null>(null);
+
+  // Quem fechou o diálogo não deve continuar esperando nem gastando por uma
+  // resposta que vai chegar numa tela que já não existe.
+  useEffect(() => () => cancelar.current?.abort(), []);
+
+  async function perguntarAgora() {
+    setPerguntando(true);
+    setResposta('');
+    setErroDaIA('');
+    cancelar.current?.abort();
+    cancelar.current = new AbortController();
+    try {
+      const r = await perguntar(texto, { sinal: cancelar.current.signal });
+      setResposta(r.texto);
+    } catch (e: unknown) {
+      if ((e as Error)?.name === 'AbortError') return;
+      setErroDaIA(e instanceof Error ? e.message : 'Não consegui falar com o Google.');
+    } finally {
+      setPerguntando(false);
+    }
+  }
+
   const modelo = MODELOS.find((m) => m.chave === escolhido) ?? MODELOS[0]!;
   const dados = useMemo(
     () => reunirDados(data, entradas, categories, accounts, periodo),
@@ -113,11 +147,23 @@ export function AnaliseDialog({
               metade da estranheza da tela. */}
           {aba === 'ia' && (
             <>
+              {/* Com chave, perguntar é a ação principal e copiar vira o plano
+                  B. Sem chave, o inverso — e é o que o app faz há mais tempo. */}
+              {comChave && (
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={perguntando}
+                  onClick={() => void perguntarAgora()}
+                >
+                  {perguntando ? 'Perguntando…' : '✨ Perguntar agora'}
+                </button>
+              )}
               {/* Rótulos curtos: no celular "Copiar e abrir o Claude" quebrava em
                   quatro linhas e o rodapé virava um bloco. Os três copiam — os
                   dois da direita também abrem o chat, e a linha acima do campo
                   diz isso. */}
-              <button type="button" className="btn primary" onClick={() => void copiar()}>
+              <button type="button" className={comChave ? 'btn' : 'btn primary'} onClick={() => void copiar()}>
                 📋 Copiar
               </button>
               <button
@@ -181,8 +227,13 @@ export function AnaliseDialog({
           onTexto={(t) => {
             setTexto(t);
             setCopiado('nao');
+            setResposta('');
           }}
           campo={campo}
+          comChave={comChave}
+          perguntando={perguntando}
+          resposta={resposta}
+          erroDaIA={erroDaIA}
         />
       ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -452,6 +503,10 @@ function PainelDeIA({
   texto,
   onTexto,
   campo,
+  comChave,
+  perguntando,
+  resposta,
+  erroDaIA,
 }: {
   modelo: ModeloDePrompt;
   escolhido: ChaveDePrompt;
@@ -459,12 +514,34 @@ function PainelDeIA({
   texto: string;
   onTexto: (texto: string) => void;
   campo: RefObject<HTMLTextAreaElement | null>;
+  comChave: boolean;
+  perguntando: boolean;
+  resposta: string;
+  erroDaIA: string;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Com chave, a resposta aparece aqui: é o primeiro que a pessoa deve ver,
+          antes de qualquer texto para copiar. */}
+      {(perguntando || resposta || erroDaIA) && (
+        <div className="resposta-ia">
+          <span className="rotulo">Resposta</span>
+          {perguntando && <p className="dim">Perguntando ao Gemini… leva alguns segundos.</p>}
+          {erroDaIA && <p className="error">{erroDaIA}</p>}
+          {resposta && <div className="texto">{resposta}</div>}
+          {resposta && (
+            <p className="hint">
+              Respondido por uma IA a partir dos números acima. Confira antes de decidir qualquer
+              coisa com dinheiro — ela erra, e erra com confiança.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* A explicação que faltava, e que fazia a tela parecer quebrada. Quem não
           sabe que o app não tem servidor não tem como entender por que ele não
           pergunta sozinho — e conclui, com razão, que o botão está com defeito. */}
+      {!comChave && (
       <div className="banner" style={{ alignItems: 'flex-start' }}>
         <span className="emoji" aria-hidden="true">💡</span>
         <span>
@@ -478,11 +555,12 @@ function PainelDeIA({
             colocou lá. Então o app faz a parte que sabe fazer — junta e organiza os seus números —
             e você leva.
             <br />
-            <strong>Dá para mudar isso:</strong> se você quiser usar uma chave sua, guardada só
-            neste aparelho, a resposta passa a aparecer aqui mesmo. É só pedir.
+            <strong>Dá para mudar isso:</strong> em Ajustes, colando uma chave do Google Gemini
+            — que tem camada gratuita —, a resposta passa a aparecer aqui mesmo.
           </span>
         </span>
       </div>
+      )}
 
       <div className="banner warn" style={{ alignItems: 'flex-start' }}>
         <span className="emoji" aria-hidden="true">🔒</span>

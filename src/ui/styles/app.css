@@ -894,6 +894,25 @@ textarea.input { resize: vertical; min-height: 64px; }
 @media (max-width: 560px) {
   .tutorial .corpo { padding: 0 13px 12px 13px; }
 }
+
+/* A resposta da IA: antes de tudo na aba, porque é o que a pessoa esperou. */
+.resposta-ia {
+  border: 1px solid var(--accent); border-radius: var(--radius);
+  background: var(--surface-2); padding: 12px 14px;
+  display: grid; gap: 6px;
+}
+.resposta-ia .rotulo {
+  font-size: 0.72rem; font-weight: 620; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-3);
+}
+/* `pre-wrap` porque o modelo responde com quebras de linha e listas, e sem
+   isso tudo vira um parágrafo só. */
+.resposta-ia .texto {
+  white-space: pre-wrap; font-size: 0.9rem; line-height: 1.55;
+  /* Resposta longa não pode empurrar o rodapé do diálogo para fora da tela. */
+  max-height: 24rem; overflow-y: auto;
+}
+.resposta-ia .hint { margin: 0; }
 .segmented button[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .segmented button[aria-pressed='true'][data-tone='income'] { color: var(--good); }
 .segmented button[aria-pressed='true'][data-tone='expense'] { color: var(--bad); }
@@ -984,9 +1003,21 @@ textarea.input { resize: vertical; min-height: 64px; }
 }
 .dialog-head h2 { flex: 1; }
 .dialog-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; max-height: 70vh; overflow-y: auto; }
+/*
+ * O rodapé quebra linha. Com cinco botões — perguntar, copiar, Claude, ChatGPT
+ * e fechar — o conteúdo dava 505px numa caixa de 388 no celular, e o "Fechar"
+ * terminava fora da tela: inalcançável, sem rolagem que o trouxesse de volta.
+ * `nowrap` só funciona enquanto ninguém acrescenta um botão.
+ */
 .dialog-foot {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 14px 18px; border-top: 1px solid var(--border);
+}
+/* O espaçador some quando a linha quebra: empurrar tudo para a direita numa
+   linha que já quebrou só deixa o primeiro botão órfão à esquerda. */
+@media (max-width: 560px) {
+  .dialog-foot .spacer { display: none; }
+  .dialog-foot .btn { flex: 1 1 auto; justify-content: center; }
 }
 
 /* Tabela (contas, categorias, parcelamentos) */

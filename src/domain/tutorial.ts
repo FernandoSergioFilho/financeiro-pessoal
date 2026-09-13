@@ -225,6 +225,14 @@ export const CAPITULOS: Capitulo[] = [
           'O app monta o texto com os seus números organizados e você cola no ChatGPT ou no Claude. '
           + 'Ele não pergunta sozinho porque não tem servidor: a explicação inteira está na aba.',
       },
+      {
+        titulo: 'Ou configure uma chave e a resposta aparece aqui',
+        detalhe:
+          'Em Ajustes, "Perguntar a uma IA": colando uma chave do Google Gemini — que tem camada '
+          + 'gratuita — o botão passa a perguntar e mostrar a resposta dentro do app. A chave fica '
+          + 'só neste aparelho e não entra em backup nem na sincronização. Leia o aviso de lá antes: '
+          + 'na camada gratuita o Google costuma usar o que você envia para treinar os modelos.',
+      },
     ],
   },
   {

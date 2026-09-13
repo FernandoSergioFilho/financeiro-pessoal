@@ -491,6 +491,29 @@ A tendência é a reta de mínimos quadrados que atravessa a série, não a dife
 meses seguidos — essa é ruído. E quando a reta **não descreve** a série (R² abaixo de 0,5),
 está escrito "varia demais" em vez de um número inventado com aparência de método.
 
+### A chave do Gemini, quando o usuário quiser
+
+Sem chave, tudo segue como antes: o app monta o texto e a pessoa cola num chat. Com uma chave
+do Google Gemini colada em Ajustes, a pergunta acontece dentro do app e a resposta aparece na
+própria aba. **O app nunca exige chave de ninguém.**
+
+**Onde a chave mora, e por que ali.** Numa entrada própria do `localStorage`, como o tema — e
+**fora do `FinanceData`**. Isso não é arrumação: `FinanceData` é o que sincroniza para o
+Supabase e o que entra em todo backup. Uma chave ali viajaria para um servidor e para dentro de
+arquivos que a pessoa manda por e-mail sem pensar. Um teste nomeado guarda essa separação, e a
+simulação confere que a chave não aparece nos dados da carteira.
+
+**O que está dito na tela, antes do campo e não depois** — quem já colou e perguntou não tem
+mais o que decidir: que na camada gratuita o Google costuma usar o enviado para treinar os
+modelos (nos pagos, não), e que a chave fica legível para quem pegar o aparelho desbloqueado.
+O texto enviado leva totais, categorias, custo fixo e saldos, e **nunca a descrição de um
+lançamento**.
+
+**Os modelos não são uma lista fixa no código.** Nome de modelo envelhece, e uma lista chumbada
+quebraria calada no dia em que o Google aposentasse um. O app pergunta à API quais existem,
+filtra os que sabem responder texto e deixa escolher. O botão "Testar e guardar" faz as duas
+coisas de uma vez: prova que a chave funciona e preenche a lista.
+
 ### Por que a análise é calculada, e não pedida a uma IA
 
 O app é uma página estática publicada no GitHub Pages: não existe servidor onde guardar uma

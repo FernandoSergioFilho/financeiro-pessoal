@@ -136,6 +136,28 @@ const DIALOGOS = [
     },
   },
   {
+    /*
+     * Com chave configurada o rodapé ganha um quinto botão, e foi esse estado
+     * que empurrou o "Fechar" para fora da tela. A varredura não o via porque
+     * nenhum caso configurava chave.
+     */
+    nome: 'Analisar — IA com chave configurada',
+    rota: 'painel',
+    abrir: async (p) => {
+      await p.evaluate(() => {
+        localStorage.setItem('financeiro-pessoal:chave-gemini', 'AIza-de-mentira-para-o-teste');
+      });
+      await p.reload();
+      await p.waitForTimeout(600);
+      await p.click('button:has-text("Analisar")');
+      await p.click('.segmented button:text-is("Levar a uma IA")');
+      await p.waitForTimeout(400);
+    },
+    depois: async (p) => {
+      await p.evaluate(() => localStorage.removeItem('financeiro-pessoal:chave-gemini'));
+    },
+  },
+  {
     nome: 'Analisar — texto para IA',
     rota: 'painel',
     abrir: async (p) => {
@@ -247,6 +269,23 @@ async function estadoDoDialogo(page) {
         .slice(0, 3)
         .map(texto),
       /*
+       * Conteúdo que escapou do diálogo pela direita.
+       *
+       * O `rolaDentro` acima só enxerga caixa com rolagem; um rodapé com
+       * `overflow: visible` deixa o conteúdo transbordar em silêncio. Foi assim
+       * que o botão "Fechar" foi parar em x=506 num diálogo de 390 — fora da
+       * tela e sem rolagem que o trouxesse de volta.
+       */
+      escapam: [...dialogo.querySelectorAll('.btn, .stat-value, td, th, input, select')]
+        .filter((el) => {
+          if (!visivel(el)) return false;
+          const meu = el.getBoundingClientRect();
+          const dele = dialogo.getBoundingClientRect();
+          return meu.right > dele.right + 2 || meu.left < dele.left - 2;
+        })
+        .slice(0, 3)
+        .map((el) => `${texto(el).slice(0, 20)} (termina em ${Math.round(el.getBoundingClientRect().right)}px)`),
+      /*
        * Botão que quebrou em tantas linhas que virou um bloco. Não estoura
        * nada, não corta nada, e mesmo assim está errado: "Copiar e abrir o
        * Claude ↗" saía em quatro linhas no rodapé a 390px. Três linhas de
@@ -301,12 +340,15 @@ for (const tema of ['light', 'dark']) {
         if (estado.cortados.length > 0) problemas.push(`texto cortado — ${JSON.stringify(estado.cortados)}`);
         if (estado.espremidas.length > 0) problemas.push(`coluna espremida — ${JSON.stringify(estado.espremidas)}`);
         if (estado.espremidos.length > 0) problemas.push(`botão quebrado em linhas demais — ${JSON.stringify(estado.espremidos)}`);
+        if (estado.escapam.length > 0) problemas.push(`conteúdo fora do diálogo — ${JSON.stringify(estado.escapam)}`);
       }
       for (const problema of problemas) erro(`${onde}: ${problema}`);
       if (problemas.length === 0) bons += 1;
 
       await page.keyboard.press('Escape');
       await page.waitForTimeout(200);
+      // Alguns casos sujam o armazenamento de propósito; limpam atrás de si.
+      if (dialogo.depois) await dialogo.depois(page);
     }
     if (quebras.length > 0) erro(`diálogos em ${width}px ${tema}: erro no console — ${quebras[0]}`);
     if (bons === DIALOGOS.length) ok(`os ${bons} diálogos em ${aparelho} (${width}px, ${tema})`);

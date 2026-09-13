@@ -28,6 +28,7 @@ import { useFinance } from '../../state/store.tsx';
 import { Card, ConfirmDialog, Dialog, Dot, Field, MoneyInput, colorVar } from '../components/primitives.tsx';
 import { CloudPanel } from '../components/CloudPanel.tsx';
 import { ImportarDoBanco } from '../components/ImportarDoBanco.tsx';
+import { ChaveDeIA } from '../components/ChaveDeIA.tsx';
 import { TutorialDialog } from '../components/Tutorial.tsx';
 import type { IrPara } from '../navegacao.ts';
 import { procurarAtualizacao } from '../atualizacao.ts';
@@ -803,6 +804,8 @@ export function SettingsPage({
           </button>
         </div>
       </Card>
+
+      <ChaveDeIA />
 
       <Card
         title="Contas"
