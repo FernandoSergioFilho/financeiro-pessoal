@@ -195,4 +195,10 @@ export type DisplayEntry = ((Entry & { projected?: false }) | ProjectedEntry) & 
    * em vez de ler este campo direto.
    */
   caixa?: string;
+  /**
+   * Fica de fora das contas de fluxo de caixa — o rendimento que ficou dentro
+   * do investimento, a taxa que saiu de lá. O porquê está em
+   * `domain/investimentos.ts`; use `contaNoFluxo` em vez de ler direto.
+   */
+  foraDoCaixa?: boolean;
 };

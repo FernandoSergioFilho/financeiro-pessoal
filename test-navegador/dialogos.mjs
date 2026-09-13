@@ -129,6 +129,21 @@ const DIALOGOS = [
   { nome: 'Editar lançamento', rota: 'lancamentos', abrir: async (p) => p.locator('.entry').first().click() },
   { nome: 'Conta recorrente', rota: 'recorrentes', abrir: async (p) => p.locator('tbody tr').first().click() },
   { nome: 'Compra parcelada', rota: 'parceladas', abrir: async (p) => p.locator('tbody tr').first().click() },
+  {
+    nome: 'Aportar',
+    rota: 'investimentos',
+    abrir: async (p) => p.click('.investimento button:text-is("Aportar")'),
+  },
+  {
+    nome: 'Retirar',
+    rota: 'investimentos',
+    abrir: async (p) => p.click('.investimento button:text-is("Retirar")'),
+  },
+  {
+    nome: 'Rendimento',
+    rota: 'investimentos',
+    abrir: async (p) => p.click('.investimento button:text-is("Rendimento")'),
+  },
   { nome: 'Nova conta', rota: 'ajustes', abrir: async (p) => p.click('button:text-is("Nova conta")') },
   { nome: 'Nova categoria', rota: 'ajustes', abrir: async (p) => p.click('button:text-is("Nova categoria")') },
   { nome: 'Importar planilha', rota: 'ajustes', abrir: async (p) => p.click('button:has-text("Importar planilha")') },

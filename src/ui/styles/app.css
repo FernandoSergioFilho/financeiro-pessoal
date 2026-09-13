@@ -874,6 +874,16 @@ textarea.input { resize: vertical; min-height: 64px; }
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* As contas de investimento: uma ficha por conta, com a conta que fecha
+   embaixo do saldo e os três botões no rodapé. */
+.lista-investimentos { display: grid; gap: 10px; }
+.investimento {
+  padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.investimento .hint { font-size: 0.78rem; }
+
 /* `flex-start`: com a explicação embaixo, centralizar deixava o quadradinho
    flutuando entre as duas linhas em vez de junto do rótulo. */
 .switch { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }

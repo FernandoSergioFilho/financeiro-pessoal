@@ -34,7 +34,7 @@ writeFileSync(
 const CARTEIRA = execFileSync('npx', ['tsx', gerador], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 
 const LARGURAS = [320, 360, 390, 414, 480, 768, 1024, 1280, 1600];
-const PAGINAS = ['painel', 'lancamentos', 'recorrentes', 'parceladas', 'ajustes'];
+const PAGINAS = ['painel', 'lancamentos', 'recorrentes', 'parceladas', 'investimentos', 'ajustes'];
 const GRAOS = ['Dia', 'Mês', 'Trimestre', 'Ano', 'Tudo'];
 
 const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
@@ -881,6 +881,83 @@ for (const [rota, nome, singular] of [
 
     await ctx.close();
   }
+}
+
+/* ----------------------------------- 16. aportar, retirar e render
+
+   A prova de que o rendimento não é entrada de caixa. Ele engorda o
+   patrimônio e só vira dinheiro no resgate — contá-lo como entrada do mês
+   inflaria a renda e faria o app dizer que sobrou o que ninguém pode gastar. */
+{
+  const { ctx, page, quebras } = await abrir({ width: 1280 });
+
+  const entradasDoMes = async () => {
+    await page.goto(`${APP}#/painel`);
+    await page.waitForTimeout(600);
+    return page.evaluate(() =>
+      [...document.querySelectorAll('.card.stat')]
+        .find((c) => c.textContent.startsWith('Entradas'))?.textContent ?? '');
+  };
+  const numeros = async () => {
+    await page.goto(`${APP}#/investimentos`);
+    await page.waitForTimeout(600);
+    return page.evaluate(() => {
+      const de = (rotulo) => {
+        const cartao = [...document.querySelectorAll('.card.stat')]
+          .find((c) => c.textContent.startsWith(rotulo));
+        const bruto = cartao?.querySelector('.stat-value')?.textContent ?? '';
+        return Number(bruto.replace(/[^\d,-]/g, '').replace(/\./g, '').replace(',', '.')) * 100;
+      };
+      return {
+        saldo: Math.round(de('Investido hoje')),
+        aportado: Math.round(de('Já aportado')),
+        retirado: Math.round(de('Já resgatado')),
+        rendimento: Math.round(de('Rendimento')),
+      };
+    });
+  };
+
+  async function movimento(botao, valor) {
+    await page.goto(`${APP}#/investimentos`);
+    await page.waitForTimeout(600);
+    await page.click(`.investimento button:text-is("${botao}")`);
+    await page.waitForTimeout(350);
+    await page.fill('.dialog input', valor);
+    await page.click(`.dialog .btn.primary:text-is("${botao}")`);
+    await page.waitForTimeout(600);
+  }
+
+  const entradasAntes = await entradasDoMes();
+  const antes = await numeros();
+
+  await movimento('Aportar', '500,00');
+  await movimento('Rendimento', '250,00');
+  await movimento('Retirar', '100,00');
+
+  const depois = await numeros();
+  const entradasDepois = await entradasDoMes();
+
+  if (depois.aportado - antes.aportado !== 50000) erro(`o aporte não entrou (${antes.aportado} → ${depois.aportado})`);
+  else if (depois.rendimento - antes.rendimento !== 25000) erro('o rendimento não foi registrado');
+  else if (depois.retirado - antes.retirado !== 10000) erro('o resgate não entrou');
+  else ok('aporte, rendimento e resgate registrados');
+
+  // A identidade: saldo = abertura + aportado − retirado + rendimento.
+  const esperado = antes.saldo + 50000 + 25000 - 10000;
+  if (depois.saldo !== esperado) erro(`o saldo não fecha: ${depois.saldo} em vez de ${esperado}`);
+  else ok('o saldo do investimento fecha com a conta');
+
+  /*
+   * O coração da coisa. Se um dia o rendimento passar a contar como entrada,
+   * é esta linha que avisa — e é ela que separa um fluxo de caixa de uma
+   * planilha de patrimônio.
+   */
+  if (entradasDepois !== entradasAntes) {
+    erro(`o rendimento inflou as entradas do mês: "${entradasAntes}" virou "${entradasDepois}"`);
+  } else ok('o rendimento não entrou nas entradas do mês');
+
+  if (quebras.length > 0) erro(`investimentos: erro no console — ${quebras[0]}`);
+  await ctx.close();
 }
 
 await browser.close();

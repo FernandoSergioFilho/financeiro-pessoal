@@ -14,6 +14,7 @@
 
 import { addDays } from './date.ts';
 import type { DisplayEntry } from './types.ts';
+import { contaNoFluxo } from './investimentos.ts';
 
 export interface Orcamento {
   /** Tudo que entra no período, confirmado ou previsto. */
@@ -68,7 +69,9 @@ export function calcularOrcamento(
   for (const entrada of entradasDoPeriodo) {
     // Transferência entre contas próprias não é receita nem despesa: sai de um
     // lado e entra no outro, e contá-la inflaria os dois lados da conta.
-    if (entrada.kind === 'transfer') continue;
+    // E o rendimento que ficou dentro do investimento: ele não é dinheiro que
+    // dá para gastar este mês, e contá-lo aqui diria que sobrou mais.
+    if (entrada.kind === 'transfer' || !contaNoFluxo(entrada)) continue;
     if (entrada.kind === 'income') entradas += entrada.amount;
     else if (entrada.status === 'settled') gastoRealizado += entrada.amount;
     else comprometido += entrada.amount;

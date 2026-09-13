@@ -18,6 +18,7 @@ import { Dashboard } from './pages/Dashboard.tsx';
 import { EntrarPage, EsperandoPage, NovaSenhaPage } from './pages/EntrarPage.tsx';
 import { EntriesPage } from './pages/EntriesPage.tsx';
 import { PurchasesPage } from './pages/PurchasesPage.tsx';
+import { InvestimentosPage } from './pages/InvestimentosPage.tsx';
 import { RecurringPage } from './pages/RecurringPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import type { Destino, DestinoAplicado } from './navegacao.ts';
@@ -38,6 +39,7 @@ const PAGES: Page[] = [
   { id: 'lancamentos', label: 'Lançamentos', short: 'Lanç.', icon: '≡', subtitle: 'Tudo que entrou e saiu', monthly: true },
   { id: 'recorrentes', label: 'Contas recorrentes', short: 'Fixas', icon: '🔁', subtitle: 'O que se repete todo mês', monthly: false },
   { id: 'parceladas', label: 'Compras parceladas', short: 'Parcelas', icon: '🧾', subtitle: 'O que ainda falta pagar', monthly: false },
+  { id: 'investimentos', label: 'Investimentos', short: 'Invest.', icon: '📈', subtitle: 'Aportes, resgates e rendimento', monthly: false },
   { id: 'ajustes', label: 'Ajustes', short: 'Ajustes', icon: '⚙', subtitle: 'Contas, categorias e dados', monthly: false },
 ];
 
@@ -201,6 +203,7 @@ export function App() {
           )}
           {page.id === 'recorrentes' && <RecurringPage onNew={() => setCreating(true)} irPara={irPara} />}
           {page.id === 'parceladas' && <PurchasesPage onNew={() => setCreating(true)} irPara={irPara} />}
+          {page.id === 'investimentos' && <InvestimentosPage irPara={irPara} />}
           {page.id === 'ajustes' && (
             <SettingsPage
               periodo={periodo}

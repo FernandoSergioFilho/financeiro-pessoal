@@ -476,6 +476,38 @@ outro jeito até serem corrigidas:
    vencimento de uma fatura), nunca para a data que a pessoa digitou: se ela lançou um gasto
    num sábado, foi num sábado que ela gastou. Feriados ainda não entram, e está dito no código.
 
+### Investimento: aporte, resgate e rendimento
+
+A guia **Investimentos** tem três botões, e a decisão que os sustenta é uma só:
+**o rendimento não é entrada de caixa**. Os R$ 250 que o Tesouro rendeu em setembro não
+entraram — engordaram um patrimônio que continua lá dentro. Contá-los como entrada inflaria a
+renda do mês, estragaria o "quanto ainda posso gastar" e faria o app dizer que sobrou dinheiro
+que ninguém pode gastar sem antes resgatar. O rendimento vira caixa **no dia do resgate**, e
+aí ele já é uma retirada.
+
+**Não existe um tipo novo de lançamento.** A tentação era criar um `kind: 'rendimento'` ao
+lado de entrada, saída e transferência, e isso obrigaria a mexer nos quinze lugares que
+decidem por tipo — para um conceito que os três existentes já expressam:
+
+| O que a pessoa faz | O que fica gravado |
+| --- | --- |
+| **Aportar** | transferência: conta corrente → investimento |
+| **Retirar** | transferência: investimento → conta corrente |
+| **Rendimento** | entrada, na conta de investimento |
+
+O que separa o rendimento de um salário não é o tipo do lançamento: é **em que conta ele
+cai**. Entrada numa conta de investimento é rendimento, por definição — não existe outra coisa
+que ela poderia ser. Daí o carimbo `foraDoCaixa`, calculado uma vez em `entriesInRange` junto
+com a data de caixa, e respeitado por todo somatório de fluxo.
+
+A poupança é caixa, e isso não é inconsistência: o rendimento dela cai numa conta de onde se
+gasta no mesmo dia, então entra no fluxo como qualquer entrada. Quem decide é a natureza da
+conta, não a palavra "rendimento".
+
+Cada conta mostra a identidade que a fecha — `saldo = abertura + aportado − retirado +
+rendimento` — escrita na tela e não só no teste: é ela que deixa conferir com o extrato da
+corretora sem precisar acreditar no app.
+
 ### Duas datas: a da compra e a do caixa
 
 No débito e no Pix são a mesma. No crédito não: comprar dia 1º num cartão que fecha dia 1º e

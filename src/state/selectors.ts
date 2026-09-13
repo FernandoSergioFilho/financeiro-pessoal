@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 
 import { addDays, monthEnd, monthStart, today } from '../domain/date.ts';
 import { dataDeCaixa, quandoSai } from '../domain/faturas.ts';
+import { foraDoCaixa } from '../domain/investimentos.ts';
 import { intervaloDoPeriodo, limiteDaPrevisao, type Periodo } from '../domain/period.ts';
 import { projectAll } from '../domain/recurrence.ts';
 import type { Account, Category, DisplayEntry, FinanceData } from '../domain/types.ts';
@@ -53,8 +54,14 @@ function alargar(iso: string, dias: number): string {
 export function entriesInRange(data: FinanceData, from: string, to: string): DisplayEntry[] {
   const contas = new Map(data.accounts.map((c) => [c.id, c]));
   const comCaixa = (entrada: DisplayEntry): DisplayEntry => {
-    const caixa = dataDeCaixa(contas.get(entrada.accountId), entrada);
-    return caixa === entrada.date ? entrada : { ...entrada, caixa };
+    const conta = contas.get(entrada.accountId);
+    const caixa = dataDeCaixa(conta, entrada);
+    // Os dois carimbos saem juntos, do mesmo lugar: quando o dinheiro sai, e
+    // se ele chega a sair. Calculá-los em telas diferentes é como o intervalo
+    // da fatura ficou invertido sem ninguém ver.
+    const fora = foraDoCaixa(conta, entrada);
+    if (caixa === entrada.date && !fora) return entrada;
+    return { ...entrada, ...(caixa === entrada.date ? {} : { caixa }), ...(fora ? { foraDoCaixa: true } : {}) };
   };
 
   // Alarga para os dois lados antes de filtrar: o que entra na janela por

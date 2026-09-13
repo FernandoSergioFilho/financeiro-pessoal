@@ -2,6 +2,7 @@
 
 import { addDays, formatMonthKey, monthEnd, monthKey, monthStart } from './date.ts';
 import { quandoSai } from './faturas.ts';
+import { contaNoFluxo } from './investimentos.ts';
 import type { Account, Category, DisplayEntry } from './types.ts';
 
 /**
@@ -78,7 +79,9 @@ const EMPTY_TOTALS: PeriodTotals = {
 export function periodTotals(entries: readonly DisplayEntry[]): PeriodTotals {
   const totals = { ...EMPTY_TOTALS };
   for (const entry of entries) {
-    if (entry.kind === 'transfer') continue;
+    // Transferência não é receita nem despesa; rendimento preso dentro do
+    // investimento não é caixa. Os dois ficam fora dos totais do período.
+    if (entry.kind === 'transfer' || !contaNoFluxo(entry)) continue;
     const settled = entry.status === 'settled';
     if (entry.kind === 'income') {
       totals.income += entry.amount;
@@ -110,7 +113,7 @@ export function totalsByCategory(
   const sums = new Map<string, number>();
 
   for (const entry of entries) {
-    if (entry.kind !== kind) continue;
+    if (entry.kind !== kind || !contaNoFluxo(entry)) continue;
     const key = entry.categoryId ?? '';
     sums.set(key, (sums.get(key) ?? 0) + entry.amount);
   }
@@ -142,7 +145,7 @@ export function monthlySeries(
     // Pelo mês em que o dinheiro sai: a compra no cartão pesa no mês da
     // fatura, não no da compra.
     const bucket = buckets.get(monthKey(quandoSai(entry)));
-    if (!bucket || entry.kind === 'transfer') continue;
+    if (!bucket || entry.kind === 'transfer' || !contaNoFluxo(entry)) continue;
     if (entry.kind === 'income') bucket.income += entry.amount;
     else bucket.expense += entry.amount;
   }
@@ -182,7 +185,7 @@ export function dailyBalance(
 ): DayPoint[] {
   const porDia = new Map<string, number>();
   for (const entry of entries) {
-    if (entry.kind === 'transfer') continue;
+    if (entry.kind === 'transfer' || !contaNoFluxo(entry)) continue;
     const delta = entry.kind === 'income' ? entry.amount : -entry.amount;
     porDia.set(quandoSai(entry), (porDia.get(quandoSai(entry)) ?? 0) + delta);
   }
@@ -209,7 +212,7 @@ export function balanceWalk(
 ): DayPoint[] {
   const porDia = new Map<string, number>();
   for (const entry of entries) {
-    if (entry.kind === 'transfer') continue;
+    if (entry.kind === 'transfer' || !contaNoFluxo(entry)) continue;
     // O saldo muda quando o dinheiro sai, e não quando a compra foi feita.
     const dia = quandoSai(entry);
     if (dia < from || dia > to) continue;
