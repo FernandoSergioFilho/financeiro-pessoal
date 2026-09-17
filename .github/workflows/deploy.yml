@@ -49,6 +49,9 @@ jobs:
           npm run test:telas
           npm run test:simulacao
           npm run test:dialogos
+          npm run test:chave
+          npm run build
+          npm run test:dois
 
       # A configuração do Supabase vem do .env.production versionado, e não de
       # secrets: a chave `anon` é entregue ao navegador de todo visitante, então

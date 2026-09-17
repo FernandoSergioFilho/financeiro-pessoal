@@ -13,12 +13,34 @@ export function newId(): string {
 
 const now = () => new Date().toISOString();
 
+/**
+ * O id de um cadastro padrão sai do NOME, e não de um sorteio.
+ *
+ * Esta linha é a correção de um defeito que voltou duas vezes: dois aparelhos
+ * que semeiam criam, cada um, a sua "Alimentação" com um id diferente, e a
+ * fusão — que junta por id, como tem de ser — não tem como saber que são a
+ * mesma coisa. Saem duas.
+ *
+ * Com o id vindo do nome, dois aparelhos que semeiam chegam ao MESMO id, a
+ * fusão junta as duas numa, e a duplicação deixa de ser possível — não importa
+ * em que ordem as coisas aconteçam, nem se a decisão de semear foi tomada na
+ * hora errada. É a diferença entre acertar o instante e não precisar acertá-lo.
+ *
+ * Um cadastro criado pela pessoa continua com id sorteado: dois "Mercado"
+ * digitados em aparelhos diferentes são mesmo dois cadastros, e juntá-los é
+ * decisão dela, no botão de repetidos.
+ */
+export function idPadrao(tipo: 'conta' | 'categoria', kind: string, nome: string): string {
+  return `padrao:${tipo}:${kind}:${chaveDeNome(nome).replace(/\s+/g, '-')}`;
+}
+
 export function defaultAccounts(): Account[] {
   const updatedAt = now();
+  const id = (kind: string, name: string) => idPadrao('conta', kind, name);
   return [
-    { id: newId(), name: 'Conta corrente', kind: 'checking', openingBalance: 0, color: 'blue', updatedAt },
-    { id: newId(), name: 'Carteira', kind: 'cash', openingBalance: 0, color: 'aqua', updatedAt },
-    { id: newId(), name: 'Cartão de crédito', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 25, dueDay: 5, updatedAt },
+    { id: id('checking', 'Conta corrente'), name: 'Conta corrente', kind: 'checking', openingBalance: 0, color: 'blue', updatedAt },
+    { id: id('cash', 'Carteira'), name: 'Carteira', kind: 'cash', openingBalance: 0, color: 'aqua', updatedAt },
+    { id: id('credit_card', 'Cartão de crédito'), name: 'Cartão de crédito', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 25, dueDay: 5, updatedAt },
   ];
 }
 
@@ -51,8 +73,8 @@ const INCOME_CATEGORIES: [string, string, SeriesColor][] = [
 export function defaultCategories(): Category[] {
   const updatedAt = now();
   return [
-    ...EXPENSE_CATEGORIES.map(([name, emoji, color]) => ({ id: newId(), name, kind: 'expense' as const, emoji, color, updatedAt })),
-    ...INCOME_CATEGORIES.map(([name, emoji, color]) => ({ id: newId(), name, kind: 'income' as const, emoji, color, updatedAt })),
+    ...EXPENSE_CATEGORIES.map(([name, emoji, color]) => ({ id: idPadrao('categoria', 'expense', name), name, kind: 'expense' as const, emoji, color, updatedAt })),
+    ...INCOME_CATEGORIES.map(([name, emoji, color]) => ({ id: idPadrao('categoria', 'income', name), name, kind: 'income' as const, emoji, color, updatedAt })),
   ];
 }
 
@@ -247,4 +269,46 @@ export function demoData(): FinanceData {
 export function categoriasPadraoQueFaltam(existentes: readonly Category[]): Category[] {
   const tem = new Set(existentes.map((c) => `${c.kind}:${chaveDeNome(c.name)}`));
   return defaultCategories().filter((padrao) => !tem.has(`${padrao.kind}:${chaveDeNome(padrao.name)}`));
+}
+
+/**
+ * As contas padrão que ainda não existem, comparando por nome.
+ *
+ * O par de `categoriasPadraoQueFaltam`, pelo mesmo motivo: "Conta Corrente" e
+ * "conta corrente" são a mesma conta para quem olha a tela, e criar a segunda
+ * é criar um repetido.
+ */
+export function contasPadraoQueFaltam(existentes: readonly Account[]): Account[] {
+  const tem = new Set(existentes.map((c) => `${c.kind}:${chaveDeNome(c.name)}`));
+  return defaultAccounts().filter((padrao) => !tem.has(`${padrao.kind}:${chaveDeNome(padrao.name)}`));
+}
+
+/**
+ * Semear SEM poder destruir nem repetir.
+ *
+ * A semeadura antiga trocava a carteira inteira por `initialData()`. Isso tem
+ * duas consequências que só aparecem com sincronização ligada, e as duas
+ * morderam o usuário:
+ *
+ * 1. **Apaga.** Se a decisão de semear escapar por um triz — a sincronização
+ *    avisa que terminou um instante antes de os dados chegarem à tela —, a
+ *    troca joga fora o que acabou de vir do servidor. Quem olha vê a carteira
+ *    "sem o que eu já tinha colocado".
+ * 2. **Repete.** Cada semeadura sorteia ids novos, então o que voltar depois
+ *    convive com o que foi criado: duas "Alimentação", duas "Conta corrente".
+ *
+ * Aqui o pior caso é não fazer nada. Só entram os padrões que faltam, pelo
+ * nome; nada é removido, nenhum lançamento é tocado, e se não falta nada a
+ * função devolve o **mesmo objeto**, o que torna uma chamada indevida um
+ * silêncio em vez de um estrago.
+ */
+export function semearSemApagar(data: FinanceData): FinanceData {
+  const contas = contasPadraoQueFaltam(data.accounts);
+  const categorias = categoriasPadraoQueFaltam(data.categories);
+  if (contas.length === 0 && categorias.length === 0) return data;
+  return {
+    ...data,
+    accounts: [...data.accounts, ...contas],
+    categories: [...data.categories, ...categorias],
+  };
 }

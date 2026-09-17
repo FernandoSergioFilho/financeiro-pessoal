@@ -4,6 +4,7 @@
  * prontos nas ações, o que mantém a função determinística e testável.
  */
 
+import { semearSemApagar } from '../data/seed.ts';
 import { contaEmUso } from '../domain/accounts.ts';
 import type {
   Account,
@@ -18,6 +19,7 @@ import type {
 
 export type Action =
   | { type: 'data/replace'; data: FinanceData }
+  | { type: 'data/seed-missing' }
   | { type: 'entry/create'; entry: Entry }
   | { type: 'entries/import'; entries: Entry[] }
   | { type: 'entry/update'; id: string; patch: Partial<Entry>; updatedAt: string }
@@ -76,6 +78,12 @@ export function reducer(state: FinanceData, action: Action): FinanceData {
   switch (action.type) {
     case 'data/replace':
       return action.data;
+
+    // Acrescenta só as contas e categorias padrão que faltam, pelo nome. Nunca
+    // remove nada e nunca toca em lançamento: é a semeadura que não tem como
+    // estragar a carteira se for disparada na hora errada.
+    case 'data/seed-missing':
+      return semearSemApagar(state);
 
     case 'entry/create':
       return { ...state, entries: [...state.entries, action.entry] };

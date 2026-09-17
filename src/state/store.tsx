@@ -137,7 +137,14 @@ export function FinanceProvider({
     const decisao = decidirDepoisDaSync({ status: cloud.status, ultimaSync: cloud.sync.lastSyncedAt }, data);
     if (decisao === 'esperar') return;
     semeou.current = true; // decidido uma vez só, para não semear duas vezes
-    if (decisao === 'semear') dispatch({ type: 'data/replace', data: initialData() });
+    // Aditiva, e nunca uma troca da carteira inteira: a decisão de semear
+    // depende de três valores que chegam por caminhos diferentes (o estado da
+    // nuvem, a data da última sincronização e os dados), e não há como garantir
+    // que cheguem juntos. Com uma semeadura que só acrescenta o que falta pelo
+    // nome, escapar por um triz deixou de poder apagar o que veio do servidor
+    // ou criar um segundo jogo de contas e categorias. O porquê está em
+    // `semearSemApagar`.
+    if (decisao === 'semear') dispatch({ type: 'data/seed-missing' });
   }, [cloud.status, cloud.sync.lastSyncedAt, data]);
 
   const now = useCallback(() => new Date().toISOString(), []);
