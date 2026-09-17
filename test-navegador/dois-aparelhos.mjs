@@ -94,6 +94,14 @@ console.log('edge:', JSON.stringify(e1));
 cobrar(e1.lanc.includes('Mercado do Edge'), 'o primeiro aparelho não recebeu o que havia na carteira');
 cobrar(e1.catsRepetidas.length>0, 'o cenário não montou os repetidos antigos — o teste não provaria nada');
 
+// O celular da esposa, ABERTO ANTES da limpeza — é o detalhe que faltava. Ele
+// segura um retrato com os repetidos ainda vivos, e era ele quem os devolvia.
+console.log('\n=== 1b) O segundo aparelho também entra, antes da limpeza ===');
+const celular = await abrir('celular');
+const s1 = await ler(celular);
+console.log('celular:', JSON.stringify(s1));
+cobrar(s1.catsRepetidas.length > 0, 'o segundo aparelho não pegou o estado de antes da limpeza');
+
 console.log('\n=== 2) Edge junta os duplicados ===');
 await edge.click('.nav-link:has-text("Ajustes")'); await edge.waitForTimeout(600);
 const temBotao = await edge.locator('button:has-text("Juntar")').count();
@@ -107,6 +115,15 @@ console.log('edge depois de juntar:', JSON.stringify(e2));
 cobrar(temBotao>0, 'o botão de juntar repetidos não apareceu com repetidos na carteira');
 cobrar(e2.catsRepetidas.length===0 && e2.contasRepetidas.length===0, 'juntar não limpou os repetidos');
 cobrar(e2.lanc.includes('Mercado do Edge'), 'juntar repetidos perdeu um lançamento');
+
+console.log('\n=== 2b) O celular sincroniza depois da limpeza ===');
+await celular.evaluate(()=>window.dispatchEvent(new Event('online')));
+await celular.waitForTimeout(6000);
+const s2 = await ler(celular);
+console.log('celular:', JSON.stringify(s2));
+cobrar(s2.catsRepetidas.length===0 && s2.contasRepetidas.length===0,
+  `o aparelho que estava aberto devolveu os repetidos: ${s2.catsRepetidas.concat(s2.contasRepetidas).join(', ')}`);
+cobrar(s2.lanc.includes('Mercado do Edge'), 'o segundo aparelho perdeu um lançamento na sincronização');
 
 console.log('\n=== 3) Chrome entra pela primeira vez ===');
 const chrome = await abrir('chrome');
@@ -137,4 +154,5 @@ if (falhas.length) { console.log('\n'+falhas.map(f=>'❌ '+f).join('\n')); proce
 console.log('\n✅ o aparelho novo entra sem repetir e com tudo o que já havia');
 console.log('✅ juntar repetidos atravessa a sincronização');
 console.log('✅ o que um aparelho lança chega ao outro');
+console.log('✅ o aparelho que estava aberto não ressuscita o que o outro apagou');
 console.log('\nTUDO PASSOU');

@@ -8,7 +8,7 @@
  */
 
 import { mergeData } from '../domain/sync.ts';
-import type { FinanceData, SyncableRecord, TableName } from '../domain/types.ts';
+import type { FinanceData, SyncableRecord, TableName, Tombstone } from '../domain/types.ts';
 import { TABLE_NAMES } from '../domain/types.ts';
 import type { FinanceRepository } from './repository.ts';
 import type { RemoteStore } from './remote.ts';
@@ -26,6 +26,21 @@ export interface SyncState {
 const CURSOR_KEY = 'financeiro-pessoal:cursor';
 
 /**
+ * A lápide de um registro que voltou a existir não sobe.
+ *
+ * Editar depois de apagar ressuscita, de propósito: quem mexeu por último
+ * decidiu depois. Mas o registro vivo e a lápide dele são gravados no servidor
+ * um depois do outro, e a lápide vindo atrás mataria de novo justamente o que
+ * a pessoa acabou de decidir manter. Se o registro está vivo aqui, a lápide
+ * ficou para trás e não tem mais o que dizer.
+ */
+function lapidesQueAindaValem(data: FinanceData): Tombstone[] {
+  return data.tombstones.filter(
+    (t) => !(data[t.table] as readonly SyncableRecord[]).some((r) => r.id === t.id),
+  );
+}
+
+/**
  * O que mudou aqui e o servidor ainda não viu.
  *
  * Reenviar algo que o servidor já tem é inofensivo — a gravação é por
@@ -35,13 +50,13 @@ const CURSOR_KEY = 'financeiro-pessoal:cursor';
 export function localChanges(data: FinanceData, since: string | null): FinanceData {
   const changes = emptyData();
   changes.version = data.version;
-  if (!since) return { ...data };
+  if (!since) return { ...data, tombstones: lapidesQueAindaValem(data) };
 
   for (const table of TABLE_NAMES) {
     const novos = (data[table] as readonly SyncableRecord[]).filter((r) => r.updatedAt > since);
     (changes[table] as SyncableRecord[]).push(...novos);
   }
-  changes.tombstones = data.tombstones.filter((t) => t.deletedAt > since);
+  changes.tombstones = lapidesQueAindaValem(data).filter((t) => t.deletedAt > since);
   return changes;
 }
 
@@ -125,7 +140,21 @@ export class SyncingRepository implements FinanceRepository {
       const marca = this.now();
       const merged = mergeData(current, remoto, marca);
 
-      const paraEnviar = localChanges(current, this.syncedThrough);
+      // Enviar a partir do FUNDIDO, e não do retrato local de antes.
+      //
+      // Aqui morava o defeito que apagava o trabalho de duas pessoas: o que
+      // este aparelho tem em mãos ainda contém o que o outro acabou de apagar,
+      // porque a notícia da exclusão chegou agora, na linha de cima. Enviando
+      // `current`, essa linha viva caía por cima da linha apagada no servidor
+      // — a gravação é por registro — e o cadastro ressuscitava para todo
+      // mundo. Com duas pessoas usando, sempre havia um aparelho para desfazer
+      // o que o outro tinha acabado de limpar.
+      //
+      // `merged` já respeita as lápides recém-chegadas, então o que sobe é o
+      // que de fato deve existir. Reenviar o que veio do servidor é
+      // inofensivo: a gravação é idempotente, e continua valendo que é melhor
+      // mandar de novo do que deixar um lançamento para trás.
+      const paraEnviar = localChanges(merged, this.syncedThrough);
       if (hasChanges(paraEnviar)) await this.remote.push(paraEnviar);
 
       // `merged` é um retrato de antes das idas à rede. Gravá-lo direto

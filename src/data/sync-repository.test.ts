@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { Entry, FinanceData } from '../domain/types.ts';
+import type { Category, Entry, FinanceData } from '../domain/types.ts';
 import { MemoryRemote } from './memory-remote.ts';
 import { emptyData } from './schema.ts';
 import { InMemoryRepository, SyncingRepository, hasChanges, localChanges } from './sync-repository.ts';
@@ -294,5 +294,57 @@ describe('economia de rede', () => {
     await celular.sincroniza();
     await celular.sincroniza();
     expect(remote.pushes).toBe(pushesDepoisDoPrimeiro);
+  });
+});
+
+/*
+ * O relato, na terceira rodada: "só as categorias com problema, lançamentos
+ * corretos". Essa assimetria é a pista. Ninguém apaga lançamento em lote —
+ * mas o botão "Juntar repetidos" apaga categorias em lote, e era ali que a
+ * exclusão estava sendo desfeita.
+ *
+ * O aparelho que ainda não soube da exclusão reenviava o seu retrato de antes
+ * da fusão. Como a gravação no servidor é por registro, essa linha viva caía
+ * por cima da linha apagada — e a categoria ressuscitava para todo mundo. Com
+ * duas pessoas usando, sempre havia um aparelho para desfazer o que o outro
+ * tinha acabado de limpar.
+ */
+describe('uma exclusão não pode ser desfeita por quem ainda não soube dela', () => {
+  const categoria = (id: string, updatedAt: string): Category =>
+    ({ id, name: `Categoria ${id}`, kind: 'expense', emoji: '📦', color: 'blue', updatedAt });
+
+  it('o aparelho atrasado não ressuscita a categoria que o outro apagou', async () => {
+    const remote = new MemoryRemote();
+    const nasceu = tick();
+
+    // Os dois aparelhos começam com a mesma categoria.
+    const a = aparelho(remote);
+    const b = aparelho(remote);
+    for (const ap of [a, b]) {
+      await ap.grava((d) => ({ ...d, categories: [categoria('c1', nasceu)] }));
+      await ap.sincroniza();
+    }
+    expect(b.dados().categories).toHaveLength(1);
+
+    // A apaga — é o "Juntar repetidos".
+    const morreu = tick();
+    await a.grava((d) => ({
+      ...d, categories: [], tombstones: [{ table: 'categories', id: 'c1', deletedAt: morreu }],
+    }));
+    await a.sincroniza();
+
+    // B recarrega a página: `syncedThrough` volta a zero e ele reenvia tudo o
+    // que tem. É exatamente aqui que a categoria voltava.
+    const bDepois = aparelho(remote);
+    await bDepois.grava(() => ({ ...emptyData(), categories: [categoria('c1', nasceu)] }));
+    await bDepois.sincroniza();
+
+    expect(bDepois.dados().categories).toHaveLength(0);
+
+    // E o servidor não pode ter ficado com ela viva, senão volta no próximo
+    // aparelho que entrar — que é o caso da esposa, no celular dela.
+    const c = aparelho(remote);
+    await c.sincroniza();
+    expect(c.dados().categories).toEqual([]);
   });
 });
