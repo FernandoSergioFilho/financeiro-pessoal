@@ -860,6 +860,23 @@ textarea.input { resize: vertical; min-height: 64px; }
   .segmented.duas-linhas { grid-template-columns: 1fr 1fr; }
 }
 
+/* Os dois eixos do recorte da lista: tipo e situação, lado a lado no
+   notebook e um embaixo do outro no celular. O rótulo à esquerda existe para
+   que duas filas de botões não sejam lidas como um controle só quebrado. */
+.eixos-do-recorte { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.eixos-do-recorte .eixo { display: grid; gap: 4px; min-width: 0; }
+.rotulo-do-eixo {
+  font-size: 0.72rem; font-weight: 640; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text-3);
+}
+/* 960 e não 720: lado a lado num tablet de 834px cada eixo fica com ~400px,
+   e quatro opções ali espremem "Transferências" e "Atrasados" para fora da
+   tela — a varredura pegou a página rolando de lado. Empilhados, cada eixo
+   usa a largura inteira e as quatro cabem. */
+@media (max-width: 960px) {
+  .eixos-do-recorte { grid-template-columns: 1fr; }
+}
+
 /* O tutorial em sanfona: fechado é um índice, aberto é o capítulo. */
 .tutorial { display: grid; gap: 8px; }
 .tutorial .capitulo {

@@ -40,6 +40,53 @@ import { EntryList } from '../components/EntryList.tsx';
 import { Card, Dot, EmptyState } from '../components/primitives.tsx';
 import type { IrPara } from '../navegacao.ts';
 
+/**
+ * O que o painel mostra: tudo, ou só uma parte dele.
+ *
+ * O painel cresceu até ficar longo demais para a pergunta mais frequente —
+ * "filtrei por 'em aberto', o que é que está em aberto?" —, porque entre o
+ * filtro e a lista havia os cartões, dois gráficos e mais dois gráficos. Rolar
+ * até lá toda vez é o tipo de atrito que faz a pessoa parar de usar.
+ *
+ * Um segundo controle, logo abaixo do primeiro e com a mesma cara, resolve sem
+ * tirar nada de ninguém: quem quer a leitura completa continua com ela em
+ * "Tudo", e quem quer a lista escolhe "Lançamentos" uma vez e pronto.
+ *
+ * A escolha fica guardada neste aparelho, como o tema. Ela é preferência de
+ * quem está olhando, não da carteira: entrar no `FinanceData` a faria viajar
+ * para o Supabase e para dentro dos backups, e mudaria a tela do outro.
+ */
+type VistaDoPainel = 'tudo' | 'numeros' | 'graficos' | 'lancamentos';
+
+const VISTAS: { valor: VistaDoPainel; rotulo: string; explicacao: string }[] = [
+  { valor: 'tudo', rotulo: 'Tudo', explicacao: 'A leitura completa do período, como sempre foi.' },
+  { valor: 'numeros', rotulo: 'Números', explicacao: 'Só os cartões de saldo, entradas, saídas e contas.' },
+  { valor: 'graficos', rotulo: 'Gráficos', explicacao: 'Só o percurso do saldo, as categorias e os meses.' },
+  { valor: 'lancamentos', rotulo: 'Lançamentos', explicacao: 'A lista do período, logo abaixo do filtro.' },
+];
+
+const CHAVE_DA_VISTA = 'financeiro-pessoal:vista-do-painel';
+
+function lerVista(): VistaDoPainel {
+  try {
+    const guardada = window.localStorage.getItem(CHAVE_DA_VISTA);
+    return VISTAS.some((v) => v.valor === guardada) ? (guardada as VistaDoPainel) : 'tudo';
+  } catch {
+    // Janela anônima ou armazenamento bloqueado: a leitura completa, que é o
+    // que a pessoa veria se nunca tivesse escolhido nada.
+    return 'tudo';
+  }
+}
+
+function guardarVista(vista: VistaDoPainel): void {
+  try {
+    window.localStorage.setItem(CHAVE_DA_VISTA, vista);
+  } catch {
+    // Sem poder lembrar, o painel abre completo da próxima vez. Não é motivo
+    // para impedir a troca agora.
+  }
+}
+
 /** Quantas barras cabem no gráfico de entradas e saídas por mês. */
 const MAX_BARRAS = 12;
 
@@ -119,6 +166,8 @@ export function Dashboard({
   // O recorte é aplicado antes de qualquer conta, para que todo indicador da
   // tela fale do mesmo conjunto — e não um do total e outro só do realizado.
   const [recorte, setRecorte] = useState<RecorteDeSituacao>('tudo');
+  const [vista, setVista] = useState<VistaDoPainel>(lerVista);
+  const mostra = (qual: Exclude<VistaDoPainel, 'tudo'>) => vista === 'tudo' || vista === qual;
   const entradas = useMemo(() => filtrarPorSituacao(doPeriodo, recorte), [doPeriodo, recorte]);
   const sufixo = sufixoDoRecorte(recorte);
 
@@ -322,9 +371,30 @@ export function Dashboard({
         <BotaoDeAnalise periodo={periodo} entradas={entradas} />
       </div>
 
+      {/* O segundo eixo, com a mesma cara do primeiro e logo abaixo dele: o de
+          cima diz QUAIS lançamentos contam, o de baixo diz O QUE mostrar sobre
+          eles. Em "Lançamentos" a lista encosta no filtro, que era o pedido. */}
+      <div className="segmented duas-linhas">
+        {VISTAS.map((opcao) => (
+          <button
+            key={opcao.valor}
+            type="button"
+            aria-pressed={vista === opcao.valor}
+            title={opcao.explicacao}
+            onClick={() => {
+              setVista(opcao.valor);
+              guardarVista(opcao.valor);
+            }}
+          >
+            {opcao.rotulo}
+          </button>
+        ))}
+      </div>
+
       <AvisoDeCaixa fluxo={fluxo} irPara={irPara} />
 
       {/* O que decide o dia vem primeiro e maior; o resto é contexto. */}
+      {mostra('numeros') && (<>
       <div className="grid split" style={{ alignItems: 'stretch' }}>
         <CartaoDisponivel orcamento={orcamento} />
         <MedidorDeRitmo orcamento={orcamento} />
@@ -390,85 +460,27 @@ export function Dashboard({
         </button>
       </div>
 
-      {/* `start`: sem isto os dois cartões esticam até a altura do mais alto, e
-          o gráfico de linha fica com um vazio enorme embaixo. */}
-      <div className="grid split" style={{ alignItems: 'start' }}>
-        <Card title={percurso.length > 1 ? `Saldo ao longo ${nomeDoPeriodo}` : 'Saldo no dia'}>
-          {percurso.length > 1 ? (
-            <SaldoDoMes data={percurso} />
-          ) : (
-            <p className="dim" style={{ fontSize: '0.86rem' }}>
-              Um dia sozinho não tem percurso. O saldo ao fim de {formatDate(janela.ate)} é{' '}
-              <strong className="num">{formatMoney(percurso[0]?.balance ?? saldoDeAbertura)}</strong>.
-            </p>
-          )}
-        </Card>
+      </>)}
 
-        <Card
-          title={comparavel ? 'O que mudou desde o período anterior' : 'O que mudou'}
-          action={
-            comparavel && mudancas.length > 0 ? (
-              <button
-                type="button"
-                className="btn sm ghost"
-                title={`Abrir ${rotuloDoPeriodo(moverPeriodo(periodo, -1))}`}
-                onClick={() => irPara({ pagina: 'painel', periodo: moverPeriodo(periodo, -1) })}
-              >
-                Ver {rotuloDoPeriodo(moverPeriodo(periodo, -1)).toLowerCase()}
-              </button>
-            ) : undefined
-          }
-        >
-          {!comparavel ? (
-            <p className="dim" style={{ fontSize: '0.86rem' }}>
-              Escolha um dia, mês, trimestre ou ano para comparar com o período anterior.
-            </p>
-          ) : mudancas.length > 0 ? (
-            <ComparativoCategorias data={mudancas} comparadoCom={`com ${rotuloDoPeriodo(moverPeriodo(periodo, -1)).toLowerCase()}`} />
-          ) : (
-            <p className="dim" style={{ fontSize: '0.86rem' }}>
-              Nada mudou em relação ao período anterior — ou ainda não há com o que comparar.
-            </p>
-          )}
-        </Card>
-      </div>
-
-      <div className="grid split">
-        <Card
-          title="Últimos lançamentos"
-          action={
-            <button type="button" className="btn sm ghost" onClick={() => onNavigate('lancamentos')}>
-              Ver todos
-            </button>
-          }
-          tight
-        >
-          <EntryList entries={recent} onOpen={onOpenEntry} groupByDay={false} />
-        </Card>
-
-        <div className="grid" style={{ alignContent: 'start' }}>
-          <Card title="Gastos por categoria">
-            {byCategory.length > 0 ? (
-              <CategoryBars
-                data={byCategory}
-                onAbrir={(categoryId) => irPara({ pagina: 'lancamentos', filtro: { categoryId } })}
-              />
-            ) : (
-              <p className="dim" style={{ fontSize: '0.86rem' }}>
-                Nenhuma saída registrada neste período.
-              </p>
-            )}
-          </Card>
-
-          <Card title="Entradas e saídas por mês">
-            <MonthlyBars
-              data={series}
-              currentKey={monthKey(today())}
-              onAbrir={(mes) => irPara({ pagina: 'painel', periodo: periodoDoMes(mes) })}
-            />
-          </Card>
-        </div>
-      </div>
+      {mostra('lancamentos') && (<>
+      {/* Em "Tudo" continua sendo a amostra de sempre; na vista de lançamentos
+          é a lista inteira do período, que é o que a pessoa foi buscar ao
+          escolher essa vista — e ela já obedece ao recorte de cima. */}
+      <Card
+        title={vista === 'lancamentos' ? `Lançamentos ${nomeDoPeriodo}` : 'Últimos lançamentos'}
+        action={
+          <button type="button" className="btn sm ghost" onClick={() => onNavigate('lancamentos')}>
+            {vista === 'lancamentos' ? 'Abrir a aba' : 'Ver todos'}
+          </button>
+        }
+        tight
+      >
+        <EntryList
+          entries={vista === 'lancamentos' ? entradas : recent}
+          onOpen={onOpenEntry}
+          groupByDay={vista === 'lancamentos'}
+        />
+      </Card>
 
       <div className="grid split" style={{ alignItems: 'start' }}>
         <Card
@@ -512,7 +524,80 @@ export function Dashboard({
           )}
         </Card>
       </div>
+      </>)}
 
+      {/* `start`: sem isto os dois cartões esticam até a altura do mais alto, e
+          o gráfico de linha fica com um vazio enorme embaixo. */}
+      {mostra('graficos') && (<>
+      <div className="grid split" style={{ alignItems: 'start' }}>
+        <Card title={percurso.length > 1 ? `Saldo ao longo ${nomeDoPeriodo}` : 'Saldo no dia'}>
+          {percurso.length > 1 ? (
+            <SaldoDoMes data={percurso} />
+          ) : (
+            <p className="dim" style={{ fontSize: '0.86rem' }}>
+              Um dia sozinho não tem percurso. O saldo ao fim de {formatDate(janela.ate)} é{' '}
+              <strong className="num">{formatMoney(percurso[0]?.balance ?? saldoDeAbertura)}</strong>.
+            </p>
+          )}
+        </Card>
+
+        <Card
+          title={comparavel ? 'O que mudou desde o período anterior' : 'O que mudou'}
+          action={
+            comparavel && mudancas.length > 0 ? (
+              <button
+                type="button"
+                className="btn sm ghost"
+                title={`Abrir ${rotuloDoPeriodo(moverPeriodo(periodo, -1))}`}
+                onClick={() => irPara({ pagina: 'painel', periodo: moverPeriodo(periodo, -1) })}
+              >
+                Ver {rotuloDoPeriodo(moverPeriodo(periodo, -1)).toLowerCase()}
+              </button>
+            ) : undefined
+          }
+        >
+          {!comparavel ? (
+            <p className="dim" style={{ fontSize: '0.86rem' }}>
+              Escolha um dia, mês, trimestre ou ano para comparar com o período anterior.
+            </p>
+          ) : mudancas.length > 0 ? (
+            <ComparativoCategorias data={mudancas} comparadoCom={`com ${rotuloDoPeriodo(moverPeriodo(periodo, -1)).toLowerCase()}`} />
+          ) : (
+            <p className="dim" style={{ fontSize: '0.86rem' }}>
+              Nada mudou em relação ao período anterior — ou ainda não há com o que comparar.
+            </p>
+          )}
+        </Card>
+      </div>
+
+      {/* Os gráficos de categoria e de meses saíram de dentro da fila dos
+          lançamentos e viraram uma fila própria: com o seletor de vista, cada
+          fila precisa poder aparecer sozinha sem deixar meia grade órfã. */}
+      <div className="grid split" style={{ alignItems: 'start' }}>
+          <Card title="Gastos por categoria">
+            {byCategory.length > 0 ? (
+              <CategoryBars
+                data={byCategory}
+                onAbrir={(categoryId) => irPara({ pagina: 'lancamentos', filtro: { categoryId } })}
+              />
+            ) : (
+              <p className="dim" style={{ fontSize: '0.86rem' }}>
+                Nenhuma saída registrada neste período.
+              </p>
+            )}
+          </Card>
+
+          <Card title="Entradas e saídas por mês">
+            <MonthlyBars
+              data={series}
+              currentKey={monthKey(today())}
+              onAbrir={(mes) => irPara({ pagina: 'painel', periodo: periodoDoMes(mes) })}
+            />
+          </Card>
+      </div>
+      </>)}
+
+      {mostra('numeros') && (
       <Card title="Saldo por conta">
         <div className="grid cols-3">
           {agruparPorInstituicao(accounts.filter((account) => !account.archived)).map((grupo) => {
@@ -570,6 +655,7 @@ export function Dashboard({
           })}
         </div>
       </Card>
+      )}
     </>
   );
 }

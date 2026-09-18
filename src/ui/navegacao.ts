@@ -13,9 +13,17 @@
 
 import type { FiltroBasico } from '../domain/filtros.ts';
 import type { Periodo } from '../domain/period.ts';
+import type { AtalhoDeRecorte } from '../domain/recorte-lista.ts';
 
-/** Recortes que a lista de lançamentos entende. */
-export type RecorteDaLista = 'all' | 'expense' | 'income' | 'transfer' | 'pending' | 'atrasados';
+/**
+ * Recortes que a lista de lançamentos entende como atalho.
+ *
+ * Um valor só, de propósito: quem clica em "Saídas" no painel está pedindo uma
+ * coisa. Lá na lista ele vira posição nos dois eixos (tipo e situação), e a
+ * pessoa ajusta qualquer um deles sem perder o outro — ver
+ * `domain/recorte-lista.ts`.
+ */
+export type RecorteDaLista = AtalhoDeRecorte;
 
 export interface Destino {
   pagina: string;

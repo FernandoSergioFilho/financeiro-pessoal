@@ -5,6 +5,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { today } from '../../domain/date.ts';
 import { descreverImpactoEmLancamentos, impactoDeApagarLancamentos } from '../../domain/exclusao.ts';
 import { FILTRO_VAZIO, casaComFiltro, type FiltroBasico } from '../../domain/filtros.ts';
+import {
+  RECORTE_ABERTO, SITUACOES, TIPOS, descreverRecorte, dimensoesDoAtalho, passaNoRecorte, temRecorte,
+  type RecorteDaLista,
+} from '../../domain/recorte-lista.ts';
 import { formatMoney } from '../../domain/money.ts';
 import { rotuloDoPeriodo, type Periodo } from '../../domain/period.ts';
 import { periodTotals } from '../../domain/summary.ts';
@@ -15,24 +19,7 @@ import { EntryList } from '../components/EntryList.tsx';
 import { BarraDeFiltros, ContagemFiltrada } from '../components/Filtros.tsx';
 import { BarraDeSelecao } from '../components/Selecao.tsx';
 import { Card, ConfirmDialog } from '../components/primitives.tsx';
-import type { DestinoAplicado, RecorteDaLista } from '../navegacao.ts';
-
-const FILTERS: { value: RecorteDaLista; label: string }[] = [
-  { value: 'all', label: 'Tudo' },
-  { value: 'expense', label: 'Saídas' },
-  { value: 'income', label: 'Entradas' },
-  { value: 'transfer', label: 'Transferências' },
-  { value: 'pending', label: 'Em aberto' },
-  { value: 'atrasados', label: 'Atrasados' },
-];
-
-/** O recorte aplicado a um lançamento. Atrasado = em aberto com data já passada. */
-function passaNoRecorte(entry: DisplayEntry, recorte: RecorteDaLista, hoje: string): boolean {
-  if (recorte === 'all') return true;
-  if (recorte === 'pending') return entry.status === 'pending';
-  if (recorte === 'atrasados') return entry.status === 'pending' && entry.date < hoje;
-  return entry.kind === recorte;
-}
+import type { DestinoAplicado } from '../navegacao.ts';
 
 export function EntriesPage({
   periodo,
@@ -48,7 +35,7 @@ export function EntriesPage({
 }) {
   const { data, api } = useFinance();
   const entries = usePeriodEntries(periodo);
-  const [filter, setFilter] = useState<RecorteDaLista>('all');
+  const [recorte, setRecorte] = useState<RecorteDaLista>(RECORTE_ABERTO);
   const [busca, setBusca] = useState<FiltroBasico>(FILTRO_VAZIO);
   // Modo, e não uma caixa a mais na linha: a linha já tem a caixa de "pago" e
   // o gesto de arrastar, e três controles no mesmo lugar seria erro garantido.
@@ -61,13 +48,13 @@ export function EntriesPage({
   useEffect(() => {
     if (!destino || destino.pagina !== 'lancamentos') return;
     setBusca({ ...FILTRO_VAZIO, ...destino.filtro });
-    setFilter(destino.recorte ?? 'all');
+    setRecorte(dimensoesDoAtalho(destino.recorte ?? 'all'));
   }, [destino]);
 
   const hoje = today();
   const filtered = useMemo(
-    () => entries.filter((entry) => passaNoRecorte(entry, filter, hoje) && casaComFiltro(entry, busca)),
-    [entries, filter, busca, hoje],
+    () => entries.filter((entry) => passaNoRecorte(entry, recorte, hoje) && casaComFiltro(entry, busca)),
+    [entries, recorte, busca, hoje],
   );
 
   const totals = periodTotals(filtered);
@@ -110,19 +97,50 @@ export function EntriesPage({
     <>
       <BarraDeFiltros valor={busca} onChange={setBusca} placeholder="Buscar lançamento…" />
 
-      <div className="row wrap">
-        <div className="segmented scroll-x">
-          {FILTERS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={filter === option.value}
-              onClick={() => setFilter(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
+      {/* Dois controles, e não um: tipo e situação são perguntas
+          independentes, e a lista responde às duas ao mesmo tempo. Os rótulos
+          à esquerda existem para que duas filas de botões não sejam lidas como
+          um controle só quebrado no meio. */}
+      <div className="eixos-do-recorte">
+        <div className="eixo">
+          <span className="rotulo-do-eixo">Tipo</span>
+          <div className="segmented duas-linhas">
+            {TIPOS.map((opcao) => (
+              <button
+                key={opcao.valor}
+                type="button"
+                aria-pressed={recorte.tipo === opcao.valor}
+                onClick={() => setRecorte((r) => ({ ...r, tipo: opcao.valor }))}
+              >
+                {opcao.rotulo}
+              </button>
+            ))}
+          </div>
         </div>
+        <div className="eixo">
+          <span className="rotulo-do-eixo">Situação</span>
+          <div className="segmented duas-linhas">
+            {SITUACOES.map((opcao) => (
+              <button
+                key={opcao.valor}
+                type="button"
+                aria-pressed={recorte.situacao === opcao.valor}
+                title={opcao.explicacao}
+                onClick={() => setRecorte((r) => ({ ...r, situacao: opcao.valor }))}
+              >
+                {opcao.rotulo}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="row wrap">
+        {temRecorte(recorte) && (
+          <button type="button" className="btn sm ghost" onClick={() => setRecorte(RECORTE_ABERTO)}>
+            ✕ Limpar recorte
+          </button>
+        )}
         <span className="spacer" />
         <button
           type="button"
@@ -139,7 +157,9 @@ export function EntriesPage({
             singular="lançamento"
             plural="lançamentos"
           />{' '}
-          em {rotuloDoPeriodo(periodo)} · <span className="good">{formatMoney(totals.income)}</span> ·{' '}
+          em {rotuloDoPeriodo(periodo)}
+          {temRecorte(recorte) && <> · {descreverRecorte(recorte)}</>} ·{' '}
+          <span className="good">{formatMoney(totals.income)}</span> ·{' '}
           <span className="bad">{formatMoney(totals.expense)}</span>
         </span>
       </div>

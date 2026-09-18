@@ -457,7 +457,11 @@ for (const width of [390, 1280]) {
   await page.waitForTimeout(800);
   const depoisDoAviso = await page.evaluate(() => ({
     rota: location.hash,
-    recorte: document.querySelector('.segmented button[aria-pressed="true"]')?.textContent ?? '',
+    // O eixo da situação, e não "o primeiro segmented da página": desde que
+    // tipo e situação viraram dois controles, o primeiro é o do tipo.
+    recorte: [...document.querySelectorAll('.eixo')]
+      .find((e) => e.querySelector('.rotulo-do-eixo')?.textContent === 'Situação')
+      ?.querySelector('button[aria-pressed="true"]')?.textContent ?? '',
     periodo: document.querySelector('.month-nav .label')?.textContent ?? '',
     quantos: document.querySelectorAll('.entry').length,
   }));
@@ -469,8 +473,11 @@ for (const width of [390, 1280]) {
   // Uma barra de categoria leva aos lançamentos daquela categoria.
   await page.goto(`${APP}#/painel`);
   await page.waitForTimeout(800);
-  const categoria = await page.locator('.bar-row.clicavel .bar-label .text').first().innerText();
-  await page.locator('.bar-row.clicavel').first().click();
+  // Dentro do cartão de categorias, e não a primeira barra da página: a lista
+  // de faturas usa a mesma classe e agora aparece antes dele.
+  const barras = page.locator('.card:has(.card-head h2:text-is("Gastos por categoria")) .bar-row.clicavel');
+  const categoria = await barras.first().locator('.bar-label .text').innerText();
+  await barras.first().click();
   await page.waitForTimeout(800);
   const depoisDaBarra = await page.evaluate(() => ({
     rota: location.hash,

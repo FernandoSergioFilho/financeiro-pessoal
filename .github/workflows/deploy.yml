@@ -50,6 +50,7 @@ jobs:
           npm run test:simulacao
           npm run test:dialogos
           npm run test:chave
+          npm run test:recortes
           npm run build
           npm run test:dois
 

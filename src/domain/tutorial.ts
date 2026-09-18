@@ -98,6 +98,20 @@ export const CAPITULOS: Capitulo[] = [
           '"Confirmados" mostra o que de fato entrou e saiu; "Em aberto" mostra o que ainda está '
           + 'previsto. Todo número da tela respeita o filtro escolhido.',
       },
+      {
+        titulo: 'Combine tipo e situação',
+        detalhe:
+          'Em Lançamentos são dois controles, e eles se somam: escolher **Saídas** no de cima e '
+          + '**Atrasados** no de baixo mostra só as contas vencidas que você ainda tem a pagar. '
+          + 'Um não apaga o outro, e "Limpar recorte" devolve a lista inteira.',
+      },
+      {
+        titulo: 'Escolha o que o Painel mostra',
+        detalhe:
+          'Logo abaixo do filtro de situação há um segundo: **Tudo**, **Números**, **Gráficos** ou '
+          + '**Lançamentos**. Em "Lançamentos" a lista aparece logo ali, sem cartão nem gráfico no '
+          + 'meio. A escolha fica guardada neste aparelho.',
+      },
     ],
     nota:
       'Se você marcou muita coisa como paga por engano, Ajustes tem um "Desmarcar todos como '
