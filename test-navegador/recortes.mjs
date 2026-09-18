@@ -195,6 +195,42 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
   srv.close();
 }
 
+/* ------- A resposta de "Procurar atualização" fica ao lado do botão -------
+ *
+ * Ela ia para o aviso do topo da página, a uma tela inteira de distância do
+ * botão. Quem toca ali está no fim de uma página longa: o recado aparecia fora
+ * do campo de visão e a impressão era de que o botão não tinha feito nada —
+ * logo onde a pergunta é justamente "ele fez alguma coisa?".
+ */
+{
+  const ctx = await b.newContext({ viewport: { width: 390, height: 900 }, hasTouch: true, isMobile: true });
+  const p = await ctx.newPage();
+  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.goto(`${APP}#/ajustes`);
+  await p.waitForSelector('button:has-text("Procurar atualização")');
+
+  const botao = p.locator('button:has-text("Procurar atualização")');
+  await botao.click();
+  const recado = p.locator('.card:has(button:has-text("Procurar atualização")) .hint').last();
+  await recado.waitFor({ timeout: 10000 });
+
+  const [cxBotao, cxRecado] = [await botao.boundingBox(), await recado.boundingBox()];
+  const distancia = Math.abs(cxRecado.y - cxBotao.y);
+  cobrar(distancia < 120,
+    `o recado da versão está a ${Math.round(distancia)}px do botão — longe demais para ser lido junto`);
+  cobrar(cxRecado.y >= cxBotao.y - 8,
+    'o recado da versão aparece ACIMA do botão, e não junto dele');
+
+  // E não pode ter ido também para o aviso do topo: dois lugares dizendo a
+  // mesma coisa é pior do que um.
+  const noTopo = await p.locator('.banner[role="status"]').count();
+  cobrar(noTopo === 0, 'o recado da versão também foi para o aviso do topo da página');
+
+  const texto = (await recado.textContent())?.trim() ?? '';
+  cobrar(texto.length > 0, 'o botão de procurar atualização não disse nada');
+  await ctx.close();
+}
+
 await b.close();
 
 if (falhas.length) { console.log(falhas.map((f) => '❌ ' + f).join('\n')); process.exit(1); }
@@ -202,4 +238,5 @@ console.log('✅ tipo e situação combinam na lista de lançamentos');
 console.log('✅ cada vista do painel mostra só o que promete, e "Tudo" mostra tudo');
 console.log('✅ na vista de lançamentos a lista é o primeiro cartão');
 console.log('✅ a vista escolhida fica guardada no aparelho');
+console.log('✅ a resposta de "Procurar atualização" aparece ao lado do botão');
 console.log('\nTUDO PASSOU');

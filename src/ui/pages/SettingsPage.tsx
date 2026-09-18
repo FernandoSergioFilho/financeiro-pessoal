@@ -712,6 +712,9 @@ export function SettingsPage({
   const parcelasTortas = useMemo(() => parcelasComNomeErrado(data), [data]);
   const [juntando, setJuntando] = useState(false);
   const [message, setMessage] = useState('');
+  // Separado do `message` do topo de propósito: ver acima, no cartão da versão.
+  const [recadoDaVersao, setRecadoDaVersao] = useState('');
+  const [procurando, setProcurando] = useState(false);
 
   // Carteiras sincronizadas antes da correção da semeadura ficaram com contas e
   // categorias padrão repetidas, uma leva por aparelho. O aviso só aparece se
@@ -1189,16 +1192,31 @@ export function SettingsPage({
             <div className="title">Versão</div>
             <div className="dim num">{VERSAO_DO_APP}</div>
           </div>
-          <div className="row wrap" style={{ marginTop: 8 }}>
+          {/* A resposta fica COLADA no botão, e não no aviso do topo da
+              página. Quem toca aqui está no fim de uma tela longa; o recado
+              aparecia fora do campo de visão e a impressão era de que o botão
+              não fez nada — logo no lugar onde a pergunta é justamente "ele
+              fez alguma coisa?". */}
+          <div className="row wrap" style={{ marginTop: 8, gap: 10 }}>
             <button
               type="button"
               className="btn"
+              disabled={procurando}
               onClick={() => {
-                void procurarAtualizacao().then(setMessage);
+                setProcurando(true);
+                setRecadoDaVersao('');
+                void procurarAtualizacao()
+                  .then(setRecadoDaVersao)
+                  .finally(() => setProcurando(false));
               }}
             >
-              🔄 Procurar atualização
+              {procurando ? 'Procurando…' : '🔄 Procurar atualização'}
             </button>
+            {recadoDaVersao && (
+              <span className="hint" style={{ margin: 0, flex: '1 1 14rem' }}>
+                {recadoDaVersao}
+              </span>
+            )}
           </div>
         </Card>
       </div>
