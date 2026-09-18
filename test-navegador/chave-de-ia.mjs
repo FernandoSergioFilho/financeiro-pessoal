@@ -26,7 +26,11 @@ const APP='file://'+new URL('../financeiro.html', import.meta.url).pathname;
 const HOJE=new Date().toISOString().slice(0,10);
 const S=mkdtempSync(join(tmpdir(),'chave-'));
 const tmp=mkdtempSync(join(tmpdir(),'ou-')); const g=join(tmp,'g.ts');
-writeFileSync(g,`import { carteiraExemplo } from '/home/user/financeiro-pessoal/src/data/carteira-exemplo.ts';\nprocess.stdout.write(JSON.stringify(carteiraExemplo({ hoje: '${HOJE}' })));\n`);
+// Caminho relativo a ESTE arquivo, e nunca um absoluto: o runner do GitHub
+// clona o repositório noutro lugar, e um caminho da minha máquina fez três
+// publicações seguidas falharem em silêncio — o app ficou cinco dias sem
+// receber correção nenhuma. O teste `caminhos.test.ts` cobra isso agora.
+writeFileSync(g,`import { carteiraExemplo } from '${new URL('../src/data/carteira-exemplo.ts', import.meta.url).pathname}';\nprocess.stdout.write(JSON.stringify(carteiraExemplo({ hoje: '${HOJE}' })));\n`);
 const C=execFileSync('npx',['tsx',g],{encoding:'utf8',maxBuffer:32e6});
 const falhas=[];
 const b=await chromium.launch({executablePath:process.env.CHROMIUM});
