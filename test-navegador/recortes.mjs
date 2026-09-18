@@ -10,6 +10,8 @@
  * quebra: são duas filas de botões a mais numa tela que já estava cheia.
  */
 import { chromium } from 'playwright';
+import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,6 +26,24 @@ const C = execFileSync('npx', ['tsx', g], { encoding: 'utf8', maxBuffer: 32e6 })
 
 const falhas = [];
 const cobrar = (cond, msg) => { if (!cond) falhas.push(msg); };
+
+/* A fila de vistas do painel, apontada sem depender da ordem do DOM nem de
+   quantos `.segmented` a tela tem. Um `button:text-is("Números")` solto pega o
+   primeiro que casar na página, e essa ambiguidade foi o que fez a sonda
+   falhar no runner e passar aqui — o pior tipo de falha, porque bloqueia a
+   publicação sem apontar nada. */
+const VISTAS = '.segmented.duas-linhas:has(button:text-is("Gráficos"))';
+
+/** Escolhe a vista e SÓ SEGUE quando o aparelho confirmou que guardou. */
+async function escolherVista(p, rotulo, esperado) {
+  await p.click(`${VISTAS} button:text-is("${rotulo}")`);
+  await p.waitForFunction(
+    (q) => localStorage.getItem('financeiro-pessoal:vista-do-painel') === q,
+    esperado,
+    { timeout: 5000 },
+  );
+  await p.waitForSelector(`${VISTAS} button[aria-pressed="true"]:text-is("${rotulo}")`);
+}
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM });
 
 /** Nenhum controle pode ficar fora da tela nem empurrar a página de lado. */
@@ -99,8 +119,7 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
   const tem = async (titulo) => (await p.locator(`.card-head h2:text-is("${titulo}")`).count()) > 0;
   const temGrafico = async () => (await p.locator('svg.chart, .chart svg, .barras, .category-bars').count()) > 0;
 
-  await p.click('button:text-is("Lançamentos")');
-  await p.waitForTimeout(500);
+  await escolherVista(p, 'Lançamentos', 'lancamentos');
   cobrar(!(await tem('Gastos por categoria')), `${largura}/${tema}: a vista de lançamentos ainda mostra gráfico de categorias`);
   cobrar((await p.locator('.stat-label:text-is("Dinheiro disponível")').count()) === 0,
     `${largura}/${tema}: a vista de lançamentos ainda mostra os cartões de números`);
@@ -113,36 +132,69 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
     `${largura}/${tema}: a lista não é o primeiro cartão da vista (é "${ordem[0]}")`);
   await conferirCss(p, 'painel/lançamentos', largura, tema);
 
-  await p.click('button:text-is("Gráficos")');
-  await p.waitForTimeout(500);
+  await escolherVista(p, 'Gráficos', 'graficos');
   cobrar(await tem('Gastos por categoria'), `${largura}/${tema}: a vista de gráficos não mostra as categorias`);
   cobrar(!(await tem('Faturas em aberto')), `${largura}/${tema}: a vista de gráficos mostra a lista de faturas`);
 
-  await p.click('button:text-is("Números")');
-  await p.waitForTimeout(500);
+  await escolherVista(p, 'Números', 'numeros');
   cobrar(await tem('Saldo por conta'), `${largura}/${tema}: a vista de números não mostra o saldo por conta`);
   cobrar(!(await temGrafico()) || !(await tem('Gastos por categoria')), `${largura}/${tema}: a vista de números mostra gráfico`);
   await conferirCss(p, 'painel/números', largura, tema);
 
   // "Tudo" continua sendo a leitura completa de sempre.
-  await p.click('.segmented.duas-linhas button:text-is("Tudo")');
-  await p.waitForTimeout(500);
+  await escolherVista(p, 'Tudo', 'tudo');
   for (const titulo of ['Gastos por categoria', 'Faturas em aberto', 'Saldo por conta']) {
     cobrar(await tem(titulo), `${largura}/${tema}: "Tudo" perdeu o cartão "${titulo}"`);
   }
   await conferirCss(p, 'painel/tudo', largura, tema);
 
-  // E a escolha sobrevive a recarregar a página.
-  await p.click('button:text-is("Números")');
-  await p.waitForTimeout(400);
-  await p.reload();
-  await p.waitForSelector('.segmented');
-  await p.waitForTimeout(700);
-  const guardada = await p.locator('.segmented.duas-linhas button[aria-pressed="true"]').first().textContent();
-  cobrar(guardada?.trim() === 'Números', `${largura}/${tema}: a vista escolhida não sobreviveu à recarga (voltou "${guardada?.trim()}")`);
-
   await ctx.close();
 }
+/* ------- A escolha sobrevive a recarregar, no build servido por HTTP -------
+ *
+ * Esta é a única checagem que NÃO roda sobre o `financeiro.html` de arquivo
+ * único, e a razão é concreta: em `file://` o Chromium perde uma gravação no
+ * `localStorage` feita instantes antes de um reload, mais ou menos uma vez em
+ * oito. O valor estava gravado (o teste confirma antes de recarregar) e ainda
+ * assim voltava vazio.
+ *
+ * Isso é artefato do `file://`, e não do aplicativo: quem usa o app o abre por
+ * https, instalado ou no navegador. Deixar a cobrança no arquivo único fazia a
+ * publicação falhar ao acaso — e publicação que falha ao acaso é pior do que
+ * checagem nenhuma, porque ensina a ignorar o vermelho.
+ */
+{
+  // O MESMO arquivo único das outras checagens, só que servido por http em vez
+  // de aberto do disco. É o que isola a variável: se passar aqui e falhar em
+  // `file://`, o problema é do protocolo, não do aplicativo. (O `dist/` não
+  // serve para isto: ele tem o Supabase configurado e para no portão de login.)
+  const ARQUIVO = new URL('../financeiro.html', import.meta.url).pathname;
+  const srv = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(readFileSync(ARQUIVO));
+  });
+  await new Promise((r) => srv.listen(4601, r));
+
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
+  const p = await ctx.newPage();
+  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.goto('http://localhost:4601/#/painel');
+  await p.waitForSelector(`${VISTAS} button[aria-pressed="true"]`);
+  await escolherVista(p, 'Números', 'numeros');
+
+  await p.reload();
+  await p.waitForSelector(`${VISTAS} button[aria-pressed="true"]`);
+  const naTela = (await p.locator(`${VISTAS} button[aria-pressed="true"]`).textContent())?.trim();
+  const noAparelho = await p.evaluate(() => {
+    try { return localStorage.getItem('financeiro-pessoal:vista-do-painel'); }
+    catch (e) { return `ERRO AO LER: ${e}`; }
+  });
+  cobrar(naTela === 'Números',
+    `a vista não sobreviveu à recarga — tela mostra "${naTela}", aparelho guardou "${noAparelho}"`);
+  await ctx.close();
+  srv.close();
+}
+
 await b.close();
 
 if (falhas.length) { console.log(falhas.map((f) => '❌ ' + f).join('\n')); process.exit(1); }
