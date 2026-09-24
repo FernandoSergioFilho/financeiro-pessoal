@@ -109,6 +109,27 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
     `${largura}/${tema}: a ordem em que se escolhe os eixos muda o resultado (${saidasAtrasadas} vs ${porTipo['Saídas']})`);
   cobrar(saidasAtrasadas <= saidas,
     `${largura}/${tema}: somar a situação não restringiu as saídas (${saidasAtrasadas} de ${saidas})`);
+  /* O filtro e a etiqueta da linha têm de contar a MESMA história.
+   *
+   * Foi assim que o defeito apareceu para o usuário: com "Atrasados" ligado, a
+   * lista mostrava linhas etiquetadas "Previsto" — compras de agosto numa
+   * fatura que só vence dia 28. Uma das duas estava mentindo, e era o filtro.
+   */
+  await p.click('.eixo:has(.rotulo-do-eixo:text-is("Tipo")) button:text-is("Tudo")');
+  await p.click('.eixo:has(.rotulo-do-eixo:text-is("Situação")) button:text-is("Atrasados")');
+  await p.waitForTimeout(300);
+  const mentindo = await p.evaluate(() =>
+    [...document.querySelectorAll('.entry')]
+      .filter((e) => [...e.querySelectorAll('.tag.pending')].some((t) => t.textContent.trim() === 'Previsto'))
+      .map((e) => e.querySelector('.entry-title .text')?.textContent?.trim() ?? '?')
+      .slice(0, 4));
+  cobrar(mentindo.length === 0,
+    `${largura}/${tema}: o filtro "Atrasados" mostra linhas etiquetadas "Previsto" — ${mentindo.join(', ')}`);
+
+  // E o contrário, para o teste não passar com uma lista vazia.
+  const quantosAtrasados = await p.locator('.entry').count();
+  cobrar(quantosAtrasados > 0, `${largura}/${tema}: nenhum atrasado na carteira de exemplo — o teste não provaria nada`);
+
   await conferirCss(p, 'lançamentos', largura, tema);
 
   /* ------------------- 2. Painel: a vista manda na tela ------------------- */
@@ -235,6 +256,7 @@ await b.close();
 
 if (falhas.length) { console.log(falhas.map((f) => '❌ ' + f).join('\n')); process.exit(1); }
 console.log('✅ tipo e situação combinam na lista de lançamentos');
+console.log('✅ o filtro "Atrasados" e a etiqueta da linha contam a mesma história');
 console.log('✅ cada vista do painel mostra só o que promete, e "Tudo" mostra tudo');
 console.log('✅ na vista de lançamentos a lista é o primeiro cartão');
 console.log('✅ a vista escolhida fica guardada no aparelho');

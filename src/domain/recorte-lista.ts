@@ -16,6 +16,7 @@
  * escolher "confirmado e atrasado", que não quer dizer nada.
  */
 
+import { quandoSai } from './faturas.ts';
 import type { DisplayEntry } from './types.ts';
 
 export type TipoDaLista = 'tudo' | 'expense' | 'income' | 'transfer';
@@ -79,7 +80,11 @@ function passaNaSituacao(entry: DisplayEntry, situacao: SituacaoDaLista, hoje: s
     case 'em-aberto':
       return entry.status === 'pending';
     case 'atrasado':
-      return entry.status === 'pending' && entry.date < hoje;
+      // Pela data em que o dinheiro SAI, e não pela data da compra. Uma compra
+      // no cartão tem duas datas: o dia em que foi feita e o dia em que a
+      // fatura vence. Olhando a primeira, a fatura que vence dia 28 aparecia
+      // inteira como atrasada no dia 24 — foi o que o usuário viu na tela.
+      return entry.status === 'pending' && quandoSai(entry) < hoje;
     default:
       return true;
   }
