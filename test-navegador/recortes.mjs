@@ -171,6 +171,66 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
 
   await ctx.close();
 }
+/* ------- A fatura que já venceu saiu do "Dinheiro disponível" -------
+ *
+ * O defeito que o usuário fotografou: na mesma tela, para o mesmo dia, o aviso
+ * vermelho dizia -R$ 543,99 e o gráfico dizia -R$ 3.119,53. A diferença era o
+ * total das faturas de cartão já vencidas — o gráfico descontava, o saldo não.
+ *
+ * Aqui a carteira é montada para a resposta ser um número só e sabido: R$ 1.000
+ * na conta, uma compra de R$ 300 no cartão feita há dois meses e meio, cuja
+ * fatura venceu faz tempo. Se o saldo mostrar R$ 1.000,00, o dinheiro da fatura
+ * voltou a existir — que é exatamente o defeito.
+ */
+{
+  const diasAtras = (n) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  const T = '2026-01-01T00:00:00.000Z';
+  const carteira = JSON.stringify({
+    version: 2,
+    accounts: [
+      { id: 'cc', name: 'Conta corrente', kind: 'checking', openingBalance: 100000, color: 'green', updatedAt: T },
+      { id: 'card', name: 'Cartão', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 25, dueDay: 5, updatedAt: T },
+    ],
+    categories: [],
+    entries: [{
+      id: 'compra', date: diasAtras(75), description: 'Compra antiga', amount: 30000, kind: 'expense',
+      accountId: 'card', toAccountId: null, categoryId: null, status: 'settled', recurringId: null,
+      occurrenceDate: null, purchaseId: null, installmentNumber: null, installmentTotal: null,
+      createdAt: T, updatedAt: T,
+    }],
+    recurring: [], purchases: [], tombstones: [],
+  });
+
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => falhas.push(`erro de página (fatura×saldo): ${e}`));
+  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), carteira);
+  await p.goto(`${APP}#/painel`);
+  await p.waitForSelector('.card.stat');
+  await p.waitForTimeout(600);
+
+  const lido = await p.evaluate(() => {
+    const cartao = (rotulo) => [...document.querySelectorAll('.card.stat')]
+      .find((c) => c.textContent.startsWith(rotulo));
+    return {
+      disponivel: cartao('Dinheiro disponível')?.querySelector('.stat-value')?.textContent?.trim() ?? null,
+      dica: cartao('Dinheiro disponível')?.querySelector('.stat-hint')?.textContent?.trim() ?? '',
+    };
+  });
+
+  // Sem isto, um seletor que deixasse de casar faria o teste passar calado.
+  cobrar(lido.disponivel !== null, 'não achei o cartão "Dinheiro disponível" na tela');
+  cobrar(/700,00/.test(lido.disponivel ?? ''),
+    `a fatura vencida não saiu do saldo: "Dinheiro disponível" mostra ${lido.disponivel} (deveria ser R$ 700,00)`);
+  cobrar(!/faturas por vencer/.test(lido.dica),
+    `a fatura que já saiu ainda é contada como "por vencer": ${lido.dica}`);
+  await ctx.close();
+}
+
 /* ------- A escolha sobrevive a recarregar, no build servido por HTTP -------
  *
  * Esta é a única checagem que NÃO roda sobre o `financeiro.html` de arquivo
@@ -261,4 +321,5 @@ console.log('✅ cada vista do painel mostra só o que promete, e "Tudo" mostra 
 console.log('✅ na vista de lançamentos a lista é o primeiro cartão');
 console.log('✅ a vista escolhida fica guardada no aparelho');
 console.log('✅ a resposta de "Procurar atualização" aparece ao lado do botão');
+console.log('✅ a fatura que já venceu saiu do "Dinheiro disponível"');
 console.log('\nTUDO PASSOU');

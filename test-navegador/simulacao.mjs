@@ -984,7 +984,10 @@ for (const [rota, nome, singular] of [
     ],
     categories: [],
     entries: [{
-      id: 'sal', date: `${HOJE.slice(0, 8)}05`, description: 'Salário', amount: 400000, kind: 'income',
+      // Dia 01, e não 05: "Dinheiro disponível" só conta até HOJE, então um
+      // salário no dia 5 faz os dois números divergirem legitimamente em todo
+      // dia 1 a 4 do mês. O teste passava por sorte de calendário.
+      id: 'sal', date: `${HOJE.slice(0, 8)}01`, description: 'Salário', amount: 400000, kind: 'income',
       accountId: 'cc', toAccountId: null, categoryId: null, status: 'settled', recurringId: null,
       occurrenceDate: null, purchaseId: null, installmentNumber: null, installmentTotal: null,
       createdAt: T, updatedAt: T,
