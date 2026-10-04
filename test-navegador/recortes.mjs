@@ -171,6 +171,68 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
 
   await ctx.close();
 }
+/* ------- Selecionar vários e marcar como pago -------
+ *
+ * Dava para selecionar vários e APAGAR, mas não para selecionar vários e dizer
+ * que foram pagos — era preciso tocar o ✓ de cada linha. Com trinta contas
+ * atrasadas isso é trinta toques.
+ *
+ * A barra de seleção já tinha quatro controles; a 390px um botão a mais é onde
+ * o CSS costuma estourar, então o teste mede o alcance de cada um.
+ */
+for (const largura of [390, 1280]) {
+  const ctx = await b.newContext({ viewport: { width: largura, height: 1000 }, hasTouch: largura < 600, isMobile: largura < 600 });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => falhas.push(`erro de página (lote) ${largura}: ${e}`));
+  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.goto(`${APP}#/lancamentos`);
+  await p.waitForSelector('.eixos-do-recorte');
+
+  // Só os que estão em aberto, que é o caso de uso: "paguei tudo isso".
+  await p.click('.eixo:has(.rotulo-do-eixo:text-is("Situação")) button:text-is("Em aberto")');
+  await p.waitForTimeout(400);
+  const emAbertoAntes = await p.locator('.entry').count();
+  cobrar(emAbertoAntes > 3, `${largura}: a carteira de exemplo tem poucos em aberto — o teste não provaria nada`);
+
+  await p.click('button:has-text("Selecionar")');
+  await p.waitForSelector('.barra-selecao');
+  await p.click(`.barra-selecao button:has-text("Marcar os ${emAbertoAntes} da lista")`);
+  await p.waitForTimeout(300);
+
+  const botao = p.locator('.barra-selecao button.primary');
+  const rotulo = (await botao.textContent())?.trim() ?? '';
+  cobrar(/Confirmar/.test(rotulo), `${largura}: o botão de confirmar em lote não apareceu (achei "${rotulo}")`);
+
+  // Nenhum controle da barra pode ficar fora do alcance do dedo.
+  const fora = await p.evaluate(() => [...document.querySelectorAll('.barra-selecao button')]
+    .filter((bt) => { const r = bt.getBoundingClientRect();
+      return r.right > window.innerWidth + 1 || r.left < -1 || r.width < 24 || r.height < 24; })
+    .map((bt) => bt.textContent.trim()));
+  cobrar(fora.length === 0, `${largura}: botão da barra de seleção inalcançável — ${fora.join(', ')}`);
+
+  // Conferir ANTES de clicar: um botão desabilitado faria o `click` esperar
+  // trinta segundos e morrer com um rastro de pilha, em vez de dizer o que
+  // está errado numa linha.
+  if (!(await botao.isEnabled())) {
+    falhas.push(`${largura}: o botão "${rotulo}" está desabilitado com ${emAbertoAntes} em aberto selecionados`);
+    await ctx.close();
+    continue;
+  }
+  await botao.click();
+  await p.waitForTimeout(600);
+
+  const emAbertoDepois = await p.locator('.entry').count();
+  cobrar(emAbertoDepois === 0,
+    `${largura}: confirmar em lote deixou ${emAbertoDepois} de ${emAbertoAntes} ainda em aberto`);
+
+  // E o caminho de volta, no mesmo botão.
+  await p.click('.eixo:has(.rotulo-do-eixo:text-is("Situação")) button:text-is("Confirmados")');
+  await p.waitForTimeout(400);
+  const confirmados = await p.locator('.entry').count();
+  cobrar(confirmados >= emAbertoAntes, `${largura}: os confirmados não cresceram depois do lote`);
+  await ctx.close();
+}
+
 /* ------- A fatura que já venceu saiu do "Dinheiro disponível" -------
  *
  * O defeito que o usuário fotografou: na mesma tela, para o mesmo dia, o aviso
@@ -322,4 +384,5 @@ console.log('✅ na vista de lançamentos a lista é o primeiro cartão');
 console.log('✅ a vista escolhida fica guardada no aparelho');
 console.log('✅ a resposta de "Procurar atualização" aparece ao lado do botão');
 console.log('✅ a fatura que já venceu saiu do "Dinheiro disponível"');
+console.log('✅ dá para selecionar vários e marcar como pago, e a barra cabe na tela');
 console.log('\nTUDO PASSOU');

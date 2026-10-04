@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { desmarcarTodosComoPagos, quantosEstaoPagos } from './pagamentos.ts';
-import type { Entry, FinanceData } from './types.ts';
+import {
+  desmarcarTodosComoPagos, lerLoteDePagamento, quantosEstaoPagos, rotuloDoLote,
+} from './pagamentos.ts';
+import type { DisplayEntry, Entry, FinanceData } from './types.ts';
 
 const ANTES = '2026-01-01T00:00:00.000Z';
 const AGORA = '2026-09-10T12:00:00.000Z';
@@ -80,5 +82,65 @@ describe('quantosEstaoPagos', () => {
       lancamento({ id: 't', kind: 'transfer', toAccountId: 'a2' }),
     ]);
     expect(quantosEstaoPagos(data)).toBe(1);
+  });
+});
+
+/*
+ * O pedido: "preciso de uma forma de selecionar vários para marcar como pago,
+ * da mesma forma que consigo selecionar vários lançamentos pra excluí-los".
+ */
+describe('confirmar o que está selecionado', () => {
+  const linha = (id: string, over: Partial<DisplayEntry> = {}): DisplayEntry =>
+    ({
+      id, date: '2026-10-01', description: id, amount: 1000, kind: 'expense',
+      accountId: 'cc', toAccountId: null, categoryId: null, status: 'pending',
+      recurringId: null, occurrenceDate: null, purchaseId: null,
+      installmentNumber: null, installmentTotal: null,
+      createdAt: '2026-10-01', updatedAt: '2026-10-01', ...over,
+    }) as DisplayEntry;
+
+  it('com algo em aberto, o botão confirma — e só o que está em aberto', () => {
+    const lote = lerLoteDePagamento([
+      linha('a'),
+      linha('b', { status: 'settled' }),
+      linha('c'),
+    ]);
+    expect(lote.acao).toBe('confirmar');
+    expect(lote.aConfirmar.map((e) => e.id)).toEqual(['a', 'c']);
+    expect(rotuloDoLote(lote)).toBe('✓ Confirmar 2');
+  });
+
+  it('com tudo já confirmado, ele desmarca em vez de não fazer nada', () => {
+    const lote = lerLoteDePagamento([
+      linha('a', { status: 'settled' }),
+      linha('b', { status: 'settled' }),
+    ]);
+    expect(lote.acao).toBe('desmarcar');
+    expect(rotuloDoLote(lote)).toBe('↩ Desmarcar 2');
+  });
+
+  it('sem nada selecionado, não há ação', () => {
+    const lote = lerLoteDePagamento([]);
+    expect(lote.acao).toBe('nada');
+    expect(lote.aConfirmar).toEqual([]);
+  });
+
+  it('conta quantas previsões virarão lançamentos gravados', () => {
+    // Confirmar uma ocorrência prevista é o que a grava. Marcar trinta de uma
+    // vez cria trinta registros, e isso precisa estar dito antes.
+    const lote = lerLoteDePagamento([
+      linha('a'),
+      linha('prevista', { projected: true } as Partial<DisplayEntry>),
+      linha('outra-prevista', { projected: true } as Partial<DisplayEntry>),
+    ]);
+    expect(lote.previstos).toBe(2);
+    expect(lote.aConfirmar).toHaveLength(3);
+  });
+
+  it('transferência selecionada à mão entra na conta', () => {
+    // Ao contrário do "desmarcar todos" de Ajustes, que a ignora de propósito:
+    // aqui a pessoa escolheu a linha, e tirá-la calada seria pior.
+    const lote = lerLoteDePagamento([linha('t', { kind: 'transfer' })]);
+    expect(lote.aConfirmar.map((e) => e.id)).toEqual(['t']);
   });
 });

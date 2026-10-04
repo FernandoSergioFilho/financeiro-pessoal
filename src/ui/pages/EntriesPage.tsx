@@ -10,6 +10,7 @@ import {
   type RecorteDaLista,
 } from '../../domain/recorte-lista.ts';
 import { formatMoney } from '../../domain/money.ts';
+import { lerLoteDePagamento, rotuloDoLote } from '../../domain/pagamentos.ts';
 import { rotuloDoPeriodo, type Periodo } from '../../domain/period.ts';
 import { periodTotals } from '../../domain/summary.ts';
 import type { DisplayEntry } from '../../domain/types.ts';
@@ -64,6 +65,31 @@ export function EntriesPage({
     [filtered, marcados],
   );
   const impacto = impactoDeApagarLancamentos(data, selecionados);
+  const lote = useMemo(() => lerLoteDePagamento(selecionados), [selecionados]);
+
+  /**
+   * Confirmar (ou desmarcar) tudo o que está selecionado.
+   *
+   * Sem diálogo de confirmação, ao contrário de apagar: isto se desfaz com o
+   * mesmo botão, e pedir "tem certeza?" para uma ação reversível só ensina a
+   * clicar em "sim" sem ler — inclusive quando a pergunta importa.
+   *
+   * A seleção não se desfaz no fim. Quem acabou de confirmar trinta contas
+   * costuma querer olhar o que mudou antes de sair do modo.
+   */
+  function aplicarLote() {
+    if (lote.acao === 'nada') return;
+    if (lote.acao === 'desmarcar') {
+      for (const entrada of selecionados) api.updateEntry(entrada.id, { status: 'pending' });
+      return;
+    }
+    for (const entrada of lote.aConfirmar) {
+      // A ocorrência prevista não existe como registro: confirmar é o que a
+      // grava, exatamente como o ✓ de uma linha sozinha já faz.
+      if ('projected' in entrada && entrada.projected) api.materialize(entrada, { status: 'settled' });
+      else api.updateEntry(entrada.id, { status: 'settled' });
+    }
+  }
 
   function alternar(entry: DisplayEntry) {
     setMarcados((atual) => {
@@ -186,9 +212,26 @@ export function EntriesPage({
           >
             {marcados.size === filtered.length ? 'Desmarcar todos' : `Marcar os ${filtered.length} da lista`}
           </button>
+          {/* A ação que faltava: dava para selecionar vários e apagar, mas não
+              para selecionar vários e dizer que foram pagos. */}
+          <button
+            type="button"
+            className="btn sm primary"
+            disabled={lote.acao === 'nada'}
+            onClick={aplicarLote}
+          >
+            {rotuloDoLote(lote)}
+          </button>
+          {/* Uma linha só para os dois botões: antes dizia apenas "são
+              previstos", que não explicava consequência nenhuma — e com o
+              confirmar em lote ao lado, duas frases sobre previstos viravam
+              ruído. Previsto é ocorrência de conta fixa: ela não existe como
+              registro, então confirmar é o que a grava e apagar é pular aquele
+              mês da regra. */}
           {impacto.previstos > 0 && (
             <span className="dim" style={{ fontSize: '0.82rem' }}>
-              · {impacto.previstos} {impacto.previstos === 1 ? 'é previsto' : 'são previstos'}
+              · {impacto.previstos} {impacto.previstos === 1 ? 'é previsto' : 'são previstos'}:
+              confirmar grava, apagar pula o mês
             </span>
           )}
         </BarraDeSelecao>
