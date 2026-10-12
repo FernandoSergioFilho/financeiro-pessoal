@@ -171,6 +171,57 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
 
   await ctx.close();
 }
+/* ------- Dentro da fatura, a ordem é a das compras -------
+ *
+ * O relato, com a tela na mão: numa fatura que vence dia 08, as onze compras
+ * apareciam em ordem alfabética, com as datas ao lado saltando de 03 set para
+ * 08 set, depois 06, depois 01. Dentro de uma fatura, a ordem que faz sentido
+ * é a do extrato do cartão.
+ *
+ * Os nomes aqui são alfabéticos ao contrário das datas de propósito: se a
+ * ordem voltar a ser por nome, a lista sai exatamente invertida.
+ */
+{
+  const T = '2026-01-01T00:00:00.000Z';
+  const compra = (id, nome, dia) => ({
+    id, date: `2026-09-${dia}`, description: nome, amount: 1000, kind: 'expense',
+    accountId: 'card', toAccountId: null, categoryId: null, status: 'settled',
+    recurringId: null, occurrenceDate: null, purchaseId: null,
+    installmentNumber: null, installmentTotal: null, createdAt: T, updatedAt: T,
+  });
+  const carteira = JSON.stringify({
+    version: 2,
+    accounts: [
+      { id: 'cc', name: 'Conta corrente', kind: 'checking', openingBalance: 100000, color: 'green', updatedAt: T },
+      { id: 'card', name: 'Cartão', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 25, dueDay: 8, updatedAt: T },
+    ],
+    categories: [],
+    entries: [compra('a', 'Zebra', '02'), compra('b', 'Macaco', '10'), compra('c', 'Abacaxi', '20')],
+    recurring: [], purchases: [], tombstones: [],
+  });
+
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => falhas.push(`erro de página (ordem): ${e}`));
+  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), carteira);
+  await p.goto(`${APP}#/lancamentos`);
+  await p.waitForSelector('.eixos-do-recorte');
+  // As três caem na fatura que vence em 08/10; o período precisa alcançá-la.
+  await p.evaluate(() => { location.hash = '#/lancamentos'; });
+  await p.waitForTimeout(500);
+
+  const naTela = await p.evaluate(() =>
+    [...document.querySelectorAll('.entry .entry-title .text')].map((n) => n.textContent.trim()));
+
+  if (naTela.length < 3) {
+    falhas.push(`a ordem da fatura não pôde ser conferida: só ${naTela.length} linhas na tela`);
+  } else {
+    cobrar(JSON.stringify(naTela) === JSON.stringify(['Zebra', 'Macaco', 'Abacaxi']),
+      `dentro da fatura a ordem não é a das compras: ${naTela.join(' → ')} (esperado Zebra → Macaco → Abacaxi)`);
+  }
+  await ctx.close();
+}
+
 /* ------- Selecionar vários e marcar como pago -------
  *
  * Dava para selecionar vários e APAGAR, mas não para selecionar vários e dizer
@@ -385,4 +436,5 @@ console.log('✅ a vista escolhida fica guardada no aparelho');
 console.log('✅ a resposta de "Procurar atualização" aparece ao lado do botão');
 console.log('✅ a fatura que já venceu saiu do "Dinheiro disponível"');
 console.log('✅ dá para selecionar vários e marcar como pago, e a barra cabe na tela');
+console.log('✅ dentro da fatura, a ordem é a das compras');
 console.log('\nTUDO PASSOU');

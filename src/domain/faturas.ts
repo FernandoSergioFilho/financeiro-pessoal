@@ -187,6 +187,36 @@ export function quandoSai(entrada: { date: string; caixa?: string }): string {
 }
 
 /**
+ * A ordem em que os lançamentos aparecem na lista.
+ *
+ * Três chaves, nesta ordem, e cada uma responde a uma pergunta diferente:
+ *
+ * 1. **Quando o dinheiro sai.** É o que a lista existe para mostrar, e é por
+ *    ela que os dias se agrupam. Uma compra de setembro numa fatura de
+ *    novembro vem depois de uma compra de outubro na fatura de outubro.
+ * 2. **Quando a compra foi feita.** Dentro de uma fatura, todas as compras
+ *    saem no mesmo dia, e sem esta chave elas saíam em ordem alfabética: a
+ *    fatura que vence dia 08 listava "Mini Kalzone, Mp *Planetapet, Nina
+ *    Saude…" com as datas saltando de 03 set para 08, depois 06, depois 01.
+ *    Dentro da fatura, a ordem que faz sentido é a do extrato do cartão.
+ * 3. **O nome**, só para o resultado não depender da ordem de chegada quando
+ *    as duas datas empatam.
+ *
+ * Fora do cartão a segunda chave é inócua: lá a data da compra É a data de
+ * caixa, e o desempate cai direto no nome, como sempre foi.
+ */
+export function compararNaLista(
+  a: { date: string; caixa?: string; description: string },
+  b: { date: string; caixa?: string; description: string },
+): number {
+  return (
+    quandoSai(a).localeCompare(quandoSai(b))
+    || a.date.localeCompare(b.date)
+    || a.description.localeCompare(b.description)
+  );
+}
+
+/**
  * A lista com a data de caixa já calculada em cada item.
  *
  * Quem agrupa por mês precisa dela: sem isto, a lista do período mostraria a

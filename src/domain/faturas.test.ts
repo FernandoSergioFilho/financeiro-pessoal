@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  diaDoMes, faturaAberta, faturaDaCompra, faturasAbertas, proximoDiaDoMes,
+  compararNaLista, diaDoMes, faturaAberta, faturaDaCompra, faturasAbertas, proximoDiaDoMes,
 } from './faturas.ts';
 import type { Account, DisplayEntry } from './types.ts';
 
@@ -236,5 +236,52 @@ describe('vencimento em fim de semana', () => {
     // 05/10/2026 é segunda-feira.
     const fatura = faturaDaCompra(cartao({ closingDay: 1, dueDay: 5 }), '2026-09-15')!;
     expect(fatura.vence).toBe('2026-10-05');
+  });
+});
+
+/*
+ * O relato, com a tela na mão: numa fatura que vence 08/10, as onze compras
+ * apareciam em ordem alfabética — "Mini Kalzone", "Mp *Planetapet", "Nina
+ * Saude", "Panvel"… — e as datas de compra ao lado saltavam de 03 set para 08
+ * set, depois 06, depois 01. Dentro de uma fatura, a ordem que faz sentido é a
+ * do extrato do cartão: a ordem em que as compras aconteceram.
+ */
+describe('a ordem da lista', () => {
+  const lanc = (description: string, date: string, caixa?: string) =>
+    ({ description, date, ...(caixa ? { caixa } : {}) }) as DisplayEntry;
+
+  const nomes = (lista: DisplayEntry[]) => [...lista].sort(compararNaLista).map((e) => e.description);
+
+  it('dentro da mesma fatura, ordena pela data da compra', () => {
+    const fatura = '2026-10-08';
+    expect(nomes([
+      lanc('Mini Kalzone', '2026-09-08', fatura),
+      lanc('Panvel', '2026-09-01', fatura),
+      lanc('Nina Saude', '2026-09-06', fatura),
+    ])).toEqual(['Panvel', 'Nina Saude', 'Mini Kalzone']);
+  });
+
+  it('o vencimento continua mandando mais que a data da compra', () => {
+    // Uma compra mais antiga que caia numa fatura posterior vem depois: o que
+    // a lista responde é quando o dinheiro sai.
+    expect(nomes([
+      lanc('compra nova, fatura de outubro', '2026-09-20', '2026-10-08'),
+      lanc('compra velha, fatura de novembro', '2026-09-02', '2026-11-08'),
+    ])).toEqual(['compra nova, fatura de outubro', 'compra velha, fatura de novembro']);
+  });
+
+  it('mesma fatura e mesmo dia de compra: desempata pelo nome', () => {
+    const fatura = '2026-10-08';
+    expect(nomes([
+      lanc('Zebra', '2026-09-01', fatura),
+      lanc('Abacaxi', '2026-09-01', fatura),
+    ])).toEqual(['Abacaxi', 'Zebra']);
+  });
+
+  it('fora do cartão, nada muda: a data da compra é a data de caixa', () => {
+    expect(nomes([
+      lanc('Luz', '2026-10-10'),
+      lanc('Água', '2026-10-05'),
+    ])).toEqual(['Água', 'Luz']);
   });
 });

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 
 import { addDays, monthEnd, monthStart, today } from '../domain/date.ts';
-import { dataDeCaixa, quandoSai } from '../domain/faturas.ts';
+import { compararNaLista, dataDeCaixa, quandoSai } from '../domain/faturas.ts';
 import { foraDoCaixa } from '../domain/investimentos.ts';
 import { intervaloDoPeriodo, limiteDaPrevisao, type Periodo } from '../domain/period.ts';
 import { projectAll } from '../domain/recurrence.ts';
@@ -83,9 +83,8 @@ export function entriesInRange(data: FinanceData, from: string, to: string): Dis
       const sai = quandoSai(entrada);
       return sai >= from && sai <= to;
     })
-    .sort(
-      (a, b) => quandoSai(a).localeCompare(quandoSai(b)) || a.description.localeCompare(b.description),
-    );
+    // A regra inteira mora em `compararNaLista`, com o porquê de cada chave.
+    .sort(compararNaLista);
 }
 
 export function useEntriesInRange(from: string, to: string): DisplayEntry[] {
