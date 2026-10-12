@@ -171,6 +171,71 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
 
   await ctx.close();
 }
+/* ------- Lançar só parte das parcelas -------
+ *
+ * O pedido: "se existem 12 parcelas de uma compra, mas eu vou adicionar só 7
+ * delas". É pôr em dia uma compra que já está na metade. As etiquetas têm de
+ * sair 6/12 … 12/12, e não 1/7 — senão não batem com a fatura do banco.
+ *
+ * E o valor pode ser digitado por parcela, caso de quem tem a fatura na mão.
+ */
+for (const largura of [390, 1280]) {
+  const ctx = await b.newContext({ viewport: { width: largura, height: 1000 }, hasTouch: largura < 600, isMobile: largura < 600 });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => falhas.push(`erro de página (parcelas) ${largura}: ${e}`));
+  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.goto(`${APP}#/lancamentos`);
+  await p.waitForSelector('.eixos-do-recorte');
+
+  // No celular o botão do topo some e fica o "+" flutuante; os dois abrem o
+  // mesmo diálogo. Clicar no que estiver visível em vez de supor qual é.
+  await p.click(largura < 600 ? '.fab' : '.topbar button:has-text("Novo lançamento")');
+  await p.waitForSelector('.dialog');
+  await p.click('.dialog .segmented button:text-is("Parcelado")');
+  await p.waitForTimeout(300);
+
+  await p.fill('.dialog input[placeholder*="Notebook"]', 'Compra no meio');
+  await p.click('.dialog button:has-text("Sei o valor da parcela")');
+  await p.fill('.dialog input.money', '100,00');
+  await p.fill('.dialog input[type="number"] >> nth=0', '12');   // parcelas da compra
+  await p.fill('.dialog input[type="number"] >> nth=1', '6');    // a partir da 6
+  await p.waitForTimeout(400);
+
+  const resumo = (await p.locator('.dialog .banner').last().textContent())?.replace(/\s+/g, ' ').trim() ?? '';
+  cobrar(/da 6\/12 à 12\/12/.test(resumo), `${largura}: o resumo não diz o recorte — "${resumo}"`);
+  cobrar(/1\.200,00/.test(resumo), `${largura}: o resumo não mostra o total da compra (12 × 100) — "${resumo}"`);
+  cobrar(!/entram como pagas/.test(resumo), `${largura}: o resumo ainda promete que as vencidas entram pagas`);
+
+  await p.click('.dialog button:has-text("Adicionar")');
+  await p.waitForTimeout(800);
+
+  // Procura as parcelas criadas no período que as alcança.
+  const criadas = await p.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('financeiro-pessoal') || '{}');
+    const minhas = (d.entries ?? []).filter((e) => (e.description ?? '').startsWith('Compra no meio'));
+    const compra = (d.purchases ?? []).find((c) => c.description === 'Compra no meio');
+    return {
+      quantas: minhas.length,
+      nomes: minhas.map((e) => e.description).sort(),
+      valores: [...new Set(minhas.map((e) => e.amount))],
+      numeros: minhas.map((e) => e.installmentNumber).sort((a, z) => a - z),
+      compraTem: compra?.installments ?? null,
+      compraTotal: compra?.totalAmount ?? null,
+    };
+  });
+
+  cobrar(criadas.quantas === 7, `${largura}: criou ${criadas.quantas} parcelas em vez de 7`);
+  cobrar(JSON.stringify(criadas.numeros) === JSON.stringify([6, 7, 8, 9, 10, 11, 12]),
+    `${largura}: as parcelas criadas foram ${criadas.numeros.join(', ')} (esperado 6 a 12)`);
+  cobrar(criadas.nomes.includes('Compra no meio 6/12'),
+    `${largura}: a etiqueta não é "6/12" — ${criadas.nomes.join(', ')}`);
+  cobrar(JSON.stringify(criadas.valores) === JSON.stringify([10000]),
+    `${largura}: o valor por parcela não saiu exato: ${criadas.valores.join(', ')}`);
+  cobrar(criadas.compraTem === 12, `${largura}: a compra guardou ${criadas.compraTem} parcelas em vez de 12`);
+  cobrar(criadas.compraTotal === 120000, `${largura}: o total da compra ficou ${criadas.compraTotal} em vez de 120000`);
+  await ctx.close();
+}
+
 /* ------- Dentro da fatura, a ordem é a das compras -------
  *
  * O relato, com a tela na mão: numa fatura que vence dia 08, as onze compras
@@ -437,4 +502,5 @@ console.log('✅ a resposta de "Procurar atualização" aparece ao lado do botã
 console.log('✅ a fatura que já venceu saiu do "Dinheiro disponível"');
 console.log('✅ dá para selecionar vários e marcar como pago, e a barra cabe na tela');
 console.log('✅ dentro da fatura, a ordem é a das compras');
+console.log('✅ dá para lançar só parte das parcelas, com o valor por parcela');
 console.log('\nTUDO PASSOU');

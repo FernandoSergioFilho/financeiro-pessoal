@@ -256,3 +256,72 @@ describe('corrigirNomesDeParcelas', () => {
     expect(data.entries[1]!.description).toBe(errado); // intacta
   });
 });
+
+/*
+ * O pedido: "se existem 12 parcelas de uma compra, mas eu vou adicionar só 7
+ * delas". É o caso de pôr em dia uma compra que já está na metade — o app
+ * passa a aceitar lançar um pedaço, sem mentir sobre o tamanho da compra.
+ */
+describe('lançar só parte das parcelas', () => {
+  const doze = { ...draft, totalAmount: 120000, installments: 12, firstDate: '2026-10-08' };
+
+  it('da 6 em diante, lança as 7 que faltam', () => {
+    const { entries } = buildPurchase({ ...doze, primeiraParcela: 6, quantasLancar: 7 }, ids());
+    expect(entries).toHaveLength(7);
+    expect(entries.map((e) => e.description)).toEqual([
+      'Notebook 6/12', 'Notebook 7/12', 'Notebook 8/12',
+      'Notebook 9/12', 'Notebook 10/12', 'Notebook 11/12', 'Notebook 12/12',
+    ]);
+    expect(entries.map((e) => e.installmentNumber)).toEqual([6, 7, 8, 9, 10, 11, 12]);
+    expect(entries.every((e) => e.installmentTotal === 12)).toBe(true);
+  });
+
+  it('a data informada é a da primeira parcela QUE SE LANÇA', () => {
+    const { entries } = buildPurchase({ ...doze, primeiraParcela: 6, quantasLancar: 7 }, ids());
+    expect(entries[0]!.date).toBe('2026-10-08');
+    expect(entries.at(-1)!.date).toBe('2027-04-08'); // seis meses adiante
+  });
+
+  it('a compra guarda as 12, e a data da parcela 1', () => {
+    // Senão o cadastro ficaria dizendo "12 parcelas a partir de outubro", o
+    // que contradiz as etiquetas 6/12 e a fatura do banco.
+    const { purchase } = buildPurchase({ ...doze, primeiraParcela: 6, quantasLancar: 7 }, ids());
+    expect(purchase.installments).toBe(12);
+    expect(purchase.totalAmount).toBe(120000);
+    expect(purchase.firstDate).toBe('2026-05-08'); // cinco meses antes da sexta
+  });
+
+  it('sem dizer nada, nada muda: lança a compra inteira desde a 1', () => {
+    const { entries } = buildPurchase(doze, ids());
+    expect(entries).toHaveLength(12);
+    expect(entries[0]!.description).toBe('Notebook 1/12');
+    expect(entries[0]!.date).toBe('2026-10-08');
+  });
+
+  it('só a primeira parcela, sem dizer quantas, lança até o fim', () => {
+    const { entries } = buildPurchase({ ...doze, primeiraParcela: 10 }, ids());
+    expect(entries.map((e) => e.installmentNumber)).toEqual([10, 11, 12]);
+  });
+
+  it('o valor por parcela sai exato quando o total é múltiplo dele', () => {
+    // É assim que a tela resolve "quero digitar o valor da parcela": ela
+    // multiplica pelo TOTAL de parcelas da compra, não pelas que serão
+    // lançadas. 100,00 × 12 dividido por 12 dá 100,00 em cada, sem sobra.
+    const { entries } = buildPurchase(
+      { ...doze, totalAmount: 10000 * 12, primeiraParcela: 6, quantasLancar: 7 },
+      ids(),
+    );
+    expect(entries.every((e) => e.amount === 10000)).toBe(true);
+  });
+
+  it('o centavo que sobra continua na parcela certa, mesmo lançando um pedaço', () => {
+    // 1000,01 em 3 parcelas: 333,34 / 333,34 / 333,33. Lançando só da 2 em
+    // diante, as duas têm de ser as mesmas duas de sempre.
+    const inteiro = buildPurchase({ ...draft, totalAmount: 100001, installments: 3 }, ids());
+    const pedaco = buildPurchase(
+      { ...draft, totalAmount: 100001, installments: 3, primeiraParcela: 2 },
+      ids(),
+    );
+    expect(pedaco.entries.map((e) => e.amount)).toEqual(inteiro.entries.slice(1).map((e) => e.amount));
+  });
+});

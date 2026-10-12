@@ -76,11 +76,26 @@ export function descricaoDaParcela(base: string, numero: number, total: number):
 
 export interface PurchaseDraft {
   description: string;
+  /** O total da compra INTEIRA, mesmo quando só parte vai ser lançada. */
   totalAmount: number;
+  /** Quantas parcelas a compra tem — as 12 de "6/12". */
   installments: number;
+  /** A data da primeira parcela QUE SERÁ LANÇADA. */
   firstDate: string;
   accountId: string;
   categoryId?: string | null;
+  /**
+   * A partir de qual parcela lançar. 1 por padrão.
+   *
+   * Existe para pôr em dia uma compra que já está na metade: das 12 parcelas
+   * do notebook, cinco já foram pagas fora do app e só as sete que faltam
+   * precisam entrar. Sem isto, a única saída era cadastrar uma compra de 7
+   * parcelas — e aí as etiquetas sairiam "1/7" contra o "6/12" da fatura do
+   * banco.
+   */
+  primeiraParcela?: number;
+  /** Quantas lançar. Por padrão, todas as que faltam até o fim da compra. */
+  quantasLancar?: number;
 }
 
 /**
@@ -95,21 +110,34 @@ export function buildPurchase(
   // O nome da compra é o do estabelecimento; o número fica em cada parcela.
   const nomeBase = descricaoSemMarcaDeParcela(draft.description);
 
+  const primeira = Math.max(1, Math.min(draft.primeiraParcela ?? 1, draft.installments));
+  const quantas = Math.max(
+    1,
+    Math.min(draft.quantasLancar ?? draft.installments - primeira + 1, draft.installments - primeira + 1),
+  );
+
   const purchase: InstallmentPurchase = {
     id: newId(),
     description: nomeBase,
     totalAmount: draft.totalAmount,
     installments: draft.installments,
-    firstDate: draft.firstDate,
+    // A data da parcela 1, e não a da primeira que se lança: o cadastro
+    // descreve a compra inteira, e dizer "12 parcelas a partir de outubro"
+    // contradiria as etiquetas 6/12 e a fatura do banco.
+    firstDate: addMonths(draft.firstDate, -(primeira - 1)),
     accountId: draft.accountId,
     categoryId: draft.categoryId ?? null,
     createdAt: now,
     updatedAt: now,
   };
 
-  const amounts = splitInstallments(draft.totalAmount, draft.installments);
+  // Divide a compra INTEIRA e depois recorta: assim o centavo que sobra cai
+  // sempre na mesma parcela, lançando tudo ou lançando um pedaço.
+  const amounts = splitInstallments(draft.totalAmount, draft.installments)
+    .slice(primeira - 1, primeira - 1 + quantas);
 
   const entries: Entry[] = amounts.map((amount, i) => {
+    const numero = primeira + i;
     const date = addMonths(draft.firstDate, i);
     return {
       id: newId(),
@@ -117,7 +145,7 @@ export function buildPurchase(
       // Cada parcela diz qual é: sem isto, as dez linhas da lista ficavam com
       // o mesmo texto e só a etiqueta as distinguia — e, quando o texto vinha
       // do banco já numerado, ele contradizia a etiqueta.
-      description: descricaoDaParcela(nomeBase, i + 1, draft.installments),
+      description: descricaoDaParcela(nomeBase, numero, draft.installments),
       amount,
       kind: 'expense',
       accountId: draft.accountId,
@@ -133,7 +161,7 @@ export function buildPurchase(
       recurringId: null,
       occurrenceDate: null,
       purchaseId: purchase.id,
-      installmentNumber: i + 1,
+      installmentNumber: numero,
       installmentTotal: draft.installments,
       createdAt: now,
       updatedAt: now,

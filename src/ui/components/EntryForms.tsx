@@ -350,8 +350,14 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
   const { data, api } = useFinance();
   const { accounts, categories } = useLookups();
   const [description, setDescription] = useState('');
-  const [total, setTotal] = useState<number | null>(null);
+  const [valor, setValor] = useState<number | null>(null);
+  // "O valor que você digitou é o total da compra ou o de UMA parcela?"
+  // Quem está pondo em dia uma compra antiga tem na mão o valor da parcela,
+  // que é o que aparece na fatura; quem acabou de comprar tem o total.
+  const [tipoDoValor, setTipoDoValor] = useState<'total' | 'parcela'>('total');
   const [count, setCount] = useState(2);
+  // Lançar só um pedaço: das 12 parcelas, começar na 6 e gravar 7.
+  const [primeira, setPrimeira] = useState(1);
   const [firstDate, setFirstDate] = useState(today());
   const [accountId, setAccountId] = useState(
     accounts.find((a) => a.kind === 'credit_card' && !a.archived)?.id ?? accounts[0]?.id ?? '',
@@ -360,10 +366,21 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
   const [submitted, setSubmitted] = useState(false);
   const [repetidas, setRepetidas] = useState<InstallmentPurchase[] | null>(null);
 
+  // O total da compra INTEIRA, que é o que o domínio recebe. Digitando o valor
+  // da parcela, ele é esse valor vezes o TOTAL de parcelas — e não vezes as
+  // que serão lançadas: a compra é de 12 mesmo que só 7 entrem agora.
+  const total = valor === null ? null : tipoDoValor === 'total' ? valor : valor * count;
+  const quantas = Math.max(0, count - primeira + 1);
+
   const errors = {
-    total: !total || total <= 0 ? 'Informe o valor total da compra.' : undefined,
+    total: !total || total <= 0
+      ? tipoDoValor === 'total' ? 'Informe o valor total da compra.' : 'Informe o valor da parcela.'
+      : undefined,
     description: description.trim() ? undefined : 'Dê um nome à compra.',
     count: count >= 1 && count <= 120 ? undefined : 'Entre 1 e 120 parcelas.',
+    primeira: primeira >= 1 && primeira <= count
+      ? undefined
+      : `Entre 1 e ${count} — é a partir de qual parcela lançar.`,
     firstDate: isValidISO(firstDate) ? undefined : 'Data inválida.',
   };
   const valid = Object.values(errors).every((error) => !error);
@@ -373,23 +390,28 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
     // campo deixa a string vazia, e as funções de data recusam isso com uma
     // exceção. Lançada aqui, no meio do desenho da tela, ela derrubava a
     // árvore inteira do React e o app sumia — bastava apagar a data.
-    if (!total || total <= 0 || count < 1 || !isValidISO(firstDate)) return null;
-    const parts = splitInstallments(total, count);
+    if (!total || total <= 0 || count < 1 || quantas < 1 || !isValidISO(firstDate)) return null;
+    // Divide a compra inteira e recorta o pedaço que vai ser lançado — a mesma
+    // conta de `buildPurchase`, para o resumo não prometer um valor e o app
+    // gravar outro.
+    const parts = splitInstallments(total, count).slice(primeira - 1, primeira - 1 + quantas);
     const first = parts[0]!;
     const rest = parts.at(-1)!;
     return {
       first,
       rest,
       uneven: first !== rest,
-      lastDate: addMonths(firstDate, count - 1),
+      lastDate: addMonths(firstDate, quantas - 1),
     };
-  }, [total, count, firstDate]);
+  }, [total, count, firstDate, quantas, primeira]);
 
   function gravar() {
     api.addPurchase({
       description: description.trim(),
       totalAmount: total!,
       installments: count,
+      primeiraParcela: primeira,
+      quantasLancar: quantas,
       firstDate,
       accountId,
       categoryId,
@@ -448,11 +470,27 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
           )}
         </Field>
 
+        {/* Total ou parcela: quem acabou de comprar tem o total na mão; quem
+            está pondo em dia uma compra antiga tem o valor da parcela, que é o
+            que a fatura mostra. Antes só dava para digitar o total, e o resto
+            era conta de cabeça. */}
+        <div className="segmented duas-linhas" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <button type="button" aria-pressed={tipoDoValor === 'total'} onClick={() => setTipoDoValor('total')}>
+            Sei o valor total
+          </button>
+          <button type="button" aria-pressed={tipoDoValor === 'parcela'} onClick={() => setTipoDoValor('parcela')}>
+            Sei o valor da parcela
+          </button>
+        </div>
+
         <div className="grid cols-2 keep">
-          <Field label="Valor total" error={show('total')}>
-            {(id) => <MoneyInput id={id} value={total} onChange={setTotal} invalid={Boolean(show('total'))} />}
+          <Field
+            label={tipoDoValor === 'total' ? 'Valor total' : 'Valor da parcela'}
+            error={show('total')}
+          >
+            {(id) => <MoneyInput id={id} value={valor} onChange={setValor} invalid={Boolean(show('total'))} />}
           </Field>
-          <Field label="Parcelas" error={show('count')}>
+          <Field label="Parcelas da compra" hint="As 12 de &quot;6/12&quot;" error={show('count')}>
             {(id) => (
               <input
                 id={id}
@@ -467,8 +505,35 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
           </Field>
         </div>
 
+        {/* Lançar só um pedaço. Fica depois do total de parcelas porque depende
+            dele: "a partir da 6" só quer dizer alguma coisa sabendo que são 12. */}
+        <Field
+          label="Lançar a partir da parcela"
+          hint={
+            primeira > 1
+              ? `Grava ${quantas} ${quantas === 1 ? 'parcela' : 'parcelas'}: da ${primeira}/${count} à ${count}/${count}. As anteriores ficam de fora.`
+              : 'Deixe em 1 para lançar a compra inteira. Mude se parte dela já foi paga fora do app.'
+          }
+          error={show('primeira')}
+        >
+          {(id) => (
+            <input
+              id={id}
+              type="number"
+              min={1}
+              max={count}
+              className="input"
+              value={primeira}
+              onChange={(e) => setPrimeira(Number(e.target.value))}
+            />
+          )}
+        </Field>
+
         <div className="grid cols-2">
-          <Field label="Primeira parcela" error={show('firstDate')}>
+          <Field
+            label={primeira > 1 ? `Data da parcela ${primeira}/${count}` : 'Primeira parcela'}
+            error={show('firstDate')}
+          >
             {(id) => (
               <input
                 id={id}
@@ -505,12 +570,19 @@ function InstallmentForm({ onDone }: { onDone: () => void }) {
             </span>
             <span>
               <strong>
-                {count}× de {formatMoney(preview.rest)}
+                {primeira > 1
+                  ? `${quantas}× de ${formatMoney(preview.rest)}, da ${primeira}/${count} à ${count}/${count}`
+                  : `${count}× de ${formatMoney(preview.rest)}`}
               </strong>
               {preview.uneven && <> — a primeira sai {formatMoney(preview.first)} para fechar o total exato</>}
               <br />
               <span className="dim">
-                De {formatDate(firstDate)} a {formatDate(preview.lastDate)}. As parcelas já vencidas entram como pagas.
+                De {formatDate(firstDate)} a {formatDate(preview.lastDate)}.{' '}
+                {tipoDoValor === 'parcela' && <>Total da compra: {formatMoney(total!)}. </>}
+                {/* Dizia "as já vencidas entram como pagas", e é o contrário:
+                    toda parcela nasce prevista, de propósito — o porquê está
+                    em `buildPurchase`. O texto mentia desde aquela correção. */}
+                Todas entram como previstas; você confirma o que já pagou.
               </span>
             </span>
           </div>
