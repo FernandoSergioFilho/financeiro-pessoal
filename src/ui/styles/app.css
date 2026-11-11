@@ -1393,3 +1393,49 @@ textarea.input { resize: vertical; min-height: 64px; }
 }
 .comparativo-barra { position: absolute; top: 0; bottom: 0; border-radius: 3px; min-width: 2px; }
 .comparativo-valor { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+
+/* ------------------------------------------------------------------ ditado */
+/* O bloco de ditar fica no alto do formulário de lançamento avulso. Em tela
+   estreita o botão e a dica passam a uma coluna só: lado a lado, a dica com o
+   exemplo de frase sobrava três palavras por linha e virava um bloco alto e
+   ilegível ao lado de um botão pequeno. */
+.ditado { display: flex; flex-direction: column; gap: 8px; }
+.ditado-linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ditado-linha > .btn { flex: 0 0 auto; }
+.ditado-linha > .hint { flex: 1 1 14rem; min-width: 0; }
+
+.ditado-ouvindo {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.82rem; color: var(--text-2); font-weight: 600;
+  min-width: 0; flex-wrap: wrap;
+}
+.ditado-ouvindo .dim { font-weight: 400; }
+/* O ponto pulsando é a única coisa na tela que diz "o microfone está aberto
+   agora" — o indicador do navegador fica fora da página, e em celular nem
+   aparece enquanto a aba está em primeiro plano. */
+.ditado-pulso {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--bad); flex: 0 0 auto;
+  animation: ditado-pulsa 1.1s ease-in-out infinite;
+}
+@keyframes ditado-pulsa {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.75); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ditado-pulso { animation: none; }
+}
+
+/* O que foi ouvido, com a cara de citação: é texto de outra pessoa (do
+   reconhecedor), não um rótulo do app. */
+.ditado-texto {
+  margin: 0; font-size: 0.85rem; font-style: italic;
+  color: var(--text-2); line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .ditado-linha { flex-direction: column; align-items: stretch; }
+  .ditado-linha > .btn { width: 100%; }
+  .ditado-linha > .hint { flex: 1 1 auto; }
+}

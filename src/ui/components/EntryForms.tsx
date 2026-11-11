@@ -6,10 +6,12 @@
  * diferença é só "isso se repete?" e não três funções distintas do app.
  */
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { addMonths, formatDate, isValidISO, today } from '../../domain/date.ts';
+import { interpretarFala, type FalaEntendida } from '../../domain/fala.ts';
 import { faturaDaCompra } from '../../domain/faturas.ts';
+import { lembrar, nomesConhecidos, type Lembranca } from '../../domain/memoria.ts';
 import { formatMoney, splitInstallments } from '../../domain/money.ts';
 import { describeFrequency } from '../../domain/recurrence.ts';
 import {
@@ -28,7 +30,11 @@ import type {
 } from '../../domain/types.ts';
 import { useLookups } from '../../state/selectors.ts';
 import { useFinance, type EntryDraft, type RecurringDraft } from '../../state/store.tsx';
+import { usarDitado } from '../usarDitado.ts';
 import { ConfirmDialog, Dialog, Field, MoneyInput, Segmented } from './primitives.tsx';
+
+/** O `<datalist>` dos nomes já usados, compartilhado pelos campos de descrição. */
+const LISTA_DE_NOMES = 'nomes-ja-lancados';
 
 const KIND_OPTIONS: { value: EntryKind; label: string }[] = [
   { value: 'expense', label: 'Saída' },
@@ -159,13 +165,24 @@ function SingleFields({
   set,
   errors,
   lockKind,
+  aoMudarDescricao,
+  lembranca,
 }: {
   state: SingleState;
   set: (patch: Partial<SingleState>) => void;
   errors: Partial<Record<keyof SingleState, string>>;
   lockKind?: boolean;
+  /** Quando dado, é quem trata a descrição — é por ele que entra a memória. */
+  aoMudarDescricao?: (valor: string) => void;
+  /** O que foi lembrado deste nome, só para dizer de onde veio o preenchido. */
+  lembranca?: Lembranca | null;
 }) {
   const { categories } = useLookups();
+  const { data } = useFinance();
+  // Os nomes já usados, do mais repetido para o menos. O `<datalist>` é do
+  // próprio navegador: no celular ele vira a lista de sugestões do teclado, e
+  // no computador abre ao digitar — nada de componente novo para manter.
+  const nomes = useMemo(() => nomesConhecidos(data.entries), [data.entries]);
 
   return (
     <>
@@ -203,18 +220,29 @@ function SingleFields({
         </Field>
       </div>
 
-      <Field label="Descrição" error={errors.description}>
+      <Field
+        label="Descrição"
+        error={errors.description}
+        hint={lembranca ? dicaDaMemoria(lembranca) : undefined}
+      >
         {(id) => (
           <input
             id={id}
             className="input"
+            list={LISTA_DE_NOMES}
+            autoComplete="off"
             placeholder="Supermercado, salário, aluguel…"
             value={state.description}
             aria-invalid={Boolean(errors.description) || undefined}
-            onChange={(e) => set({ description: e.target.value })}
+            onChange={(e) => (aoMudarDescricao ?? ((valor: string) => set({ description: valor })))(e.target.value)}
           />
         )}
       </Field>
+      <datalist id={LISTA_DE_NOMES}>
+        {nomes.map((nome) => (
+          <option key={nome.chave} value={nome.nome} />
+        ))}
+      </datalist>
 
       <div className="grid cols-2">
         <Field label={state.kind === 'transfer' ? 'De' : 'Conta'} error={errors.accountId}>
@@ -272,6 +300,19 @@ function SingleFields({
       </label>
     </>
   );
+}
+
+/**
+ * "De onde veio isto que já está preenchido."
+ *
+ * Preencher sem dizer por que seria pior que não preencher: a pessoa veria uma
+ * categoria que ela não escolheu e não saberia se foi ela que errou. A frase
+ * cita o dia do lançamento que serviu de molde, que é o que permite conferir.
+ */
+function dicaDaMemoria(lembranca: Lembranca): string {
+  const partes = [`↺ Como em ${formatDate(lembranca.ultima)}`];
+  if (lembranca.valorEstavel) partes.push(formatMoney(lembranca.amount));
+  return `${partes.join(' · ')} — já preenchi o resto, confira.`;
 }
 
 /* -------------------------------------------------------------- parcelado */
@@ -970,11 +1011,186 @@ function AvisoDeFatura({ contaId, data }: { contaId: string; data: string }) {
   );
 }
 
+/**
+ * Ditar o lançamento em vez de digitá-lo.
+ *
+ * Quem acabou de pagar algo na rua não vai parar para preencher cinco campos;
+ * fala uma frase e confere. O reconhecimento é do navegador (ver
+ * `ui/usarDitado.ts`) e a interpretação da frase é função pura testada
+ * (`domain/fala.ts`).
+ *
+ * **O que foi entendido aparece escrito.** Sem isso, ditar seria uma aposta: a
+ * fala some e só restam os campos, sem como saber se o 45 virou valor ou dia.
+ * A linha "Entendi" existe para a conferência ser de uma olhada — e o texto
+ * ouvido fica à vista, porque metade dos erros é o navegador ter escutado
+ * outra coisa.
+ */
+function DitarLancamento({ aoEntender }: { aoEntender: (fala: FalaEntendida) => void }) {
+  const { accounts, categories } = useLookups();
+  const [ultima, setUltima] = useState<FalaEntendida | null>(null);
+
+  const ditado = usarDitado((texto) => {
+    const fala = interpretarFala(texto, {
+      hoje: today(),
+      contas: accounts.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name })),
+      categorias: categories
+        .filter((c) => !c.archived)
+        .map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+    });
+    setUltima(fala);
+    aoEntender(fala);
+  });
+
+  // Navegador sem reconhecimento de fala (Firefox, por exemplo): o botão
+  // simplesmente não existe, em vez de existir e não funcionar.
+  if (ditado.estado === 'indisponivel') return null;
+
+  const ouvindo = ditado.estado === 'ouvindo';
+
+  return (
+    <div className="ditado">
+      <div className="ditado-linha">
+        <button
+          type="button"
+          className={ouvindo ? 'btn danger' : 'btn'}
+          onClick={ouvindo ? ditado.parar : ditado.comecar}
+        >
+          {ouvindo ? '⏹ Parar' : '🎤 Ditar'}
+        </button>
+        {/* Em pé, a dica é curta: no celular ela fica logo abaixo do botão e
+            cada linha a mais empurra o formulário inteiro para fora da tela.
+            O aviso de que a fala sai do aparelho vai para a linha de "ouvindo",
+            que é o momento em que ele importa — e onde ninguém deixa de ler. */}
+        {ouvindo ? (
+          <span className="ditado-ouvindo">
+            <span className="ditado-pulso" aria-hidden="true" /> Ouvindo…{' '}
+            <span className="dim">o navegador transcreve a fala</span>
+          </span>
+        ) : (
+          <span className="hint" style={{ margin: 0 }}>
+            Ex.: "paguei o mercado 45 reais ontem"
+          </span>
+        )}
+      </div>
+
+      {(ouvindo || ditada(ultima)) && (
+        <p className="ditado-texto">"{ouvindo ? ditado.parcial : ultima!.texto}"</p>
+      )}
+
+      {ditado.erro && <p className="error">{ditado.erro}</p>}
+
+      {!ouvindo && ultima && (
+        ultima.achados.length > 0 ? (
+          <div className="banner ok">
+            <span className="emoji" aria-hidden="true">✅</span>
+            <span>
+              <strong>Entendi</strong> {ultima.achados.join(' · ')}
+              {ultima.description ? <> · <strong>{ultima.description}</strong></> : null}
+              <span className="dim"> — confira abaixo antes de adicionar.</span>
+            </span>
+          </div>
+        ) : (
+          <div className="banner warn">
+            <span className="emoji" aria-hidden="true">🤔</span>
+            <span>
+              Não achei valor nem data nisso. Diga os dois na mesma frase, como em{' '}
+              <strong>"mercado quarenta e cinco reais ontem"</strong>.
+            </span>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function ditada(fala: FalaEntendida | null): boolean {
+  return fala !== null && fala.texto !== '';
+}
+
 export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string; onClose: () => void }) {
   const { data, api } = useFinance();
   const [mode, setMode] = useState<NewMode>('single');
   const [state, set] = useSingleState(defaultDate ? { date: defaultDate } : {});
   const [submitted, setSubmitted] = useState(false);
+
+  /*
+   * A memória dos nomes.
+   *
+   * Escrever "Mercado" traz de volta a categoria, a conta e — quando o valor
+   * nunca mudou — o valor. O que a pessoa já mexeu com a própria mão fica
+   * intocado: preencher por cima do que alguém acabou de escolher seria pior
+   * que não preencher nada. É por isso que `mexeu` existe, e por isso que o
+   * campo de valor só é marcado como mexido quando o número muda de verdade
+   * (ver `MoneyInput`) — ele nasce em foco, e um clique fora não é uma escolha.
+   */
+  const mexeu = useRef({ valor: false, conta: false, categoria: false, tipo: false });
+  const [lembranca, setLembranca] = useState<Lembranca | null>(null);
+  const permitidos = useMemo(
+    () => ({
+      contas: new Set(data.accounts.filter((c) => !c.archived).map((c) => c.id)),
+      categorias: new Set(data.categories.filter((c) => !c.archived).map((c) => c.id)),
+    }),
+    [data.accounts, data.categories],
+  );
+
+  function definir(patch: Partial<SingleState>) {
+    if ('amount' in patch) mexeu.current.valor = true;
+    if ('accountId' in patch) mexeu.current.conta = true;
+    if ('categoryId' in patch) mexeu.current.categoria = true;
+    if ('kind' in patch) mexeu.current.tipo = true;
+    aplicar(patch);
+  }
+
+  /**
+   * Aplica o patch cuidando de uma incoerência que ele pode criar: categoria de
+   * entrada num lançamento de saída. O `<select>` não acha a opção, mostra
+   * vazio, e o lançamento seria gravado com uma categoria que a tela não
+   * mostrou.
+   */
+  function aplicar(patch: Partial<SingleState>) {
+    const kind = patch.kind ?? state.kind;
+    const esperado = kind === 'income' ? 'income' : 'expense';
+    const categoria = patch.categoryId !== undefined ? patch.categoryId : state.categoryId;
+    const serve = categoria !== null
+      && data.categories.some((c) => c.id === categoria && c.kind === esperado);
+    set(serve || categoria === null ? patch : { ...patch, categoryId: null });
+  }
+
+  /** O que a memória preenche: só o que ninguém mexeu ainda. */
+  function doLembrado(achada: Lembranca | null): Partial<SingleState> {
+    if (!achada) return {};
+    const patch: Partial<SingleState> = {};
+    // Transferência de propósito fora: ela pede uma conta de destino que a
+    // memória não guarda, e o formulário ficaria meio preenchido.
+    if (!mexeu.current.tipo && achada.kind !== 'transfer') patch.kind = achada.kind;
+    if (!mexeu.current.categoria) patch.categoryId = achada.categoryId;
+    if (!mexeu.current.conta) patch.accountId = achada.accountId;
+    if (!mexeu.current.valor && achada.valorEstavel) patch.amount = achada.amount;
+    return patch;
+  }
+
+  function aoMudarDescricao(description: string) {
+    const achada = lembrar(data.entries, description, permitidos);
+    setLembranca(achada);
+    aplicar({ description, ...doLembrado(achada) });
+  }
+
+  /** O ditado preenche; o que a frase disse vence o que a memória lembra. */
+  function aoDitar(fala: FalaEntendida) {
+    const achada = fala.description ? lembrar(data.entries, fala.description, permitidos) : null;
+    setLembranca(achada);
+    const patch: Partial<SingleState> = { ...doLembrado(achada) };
+    if (fala.description) patch.description = fala.description;
+    if (fala.amount !== null) patch.amount = fala.amount;
+    if (fala.date !== null) patch.date = fala.date;
+    if (fala.kind !== null) patch.kind = fala.kind;
+    if (fala.accountId !== null) patch.accountId = fala.accountId;
+    if (fala.toAccountId !== null) patch.toAccountId = fala.toAccountId;
+    if (fala.categoryId !== null) patch.categoryId = fala.categoryId;
+    if (fala.settled !== null) patch.settled = fala.settled;
+    setSubmitted(false);
+    aplicar(patch);
+  }
 
   // Lançar duas vezes a mesma conta é o erro mais fácil de cometer aqui, e o
   // mais silencioso: o saldo fica errado e nada avisa. Ver `domain/similar.ts`.
@@ -1105,7 +1321,14 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
 
       {mode === 'single' && (
         <form id="entry-form" onSubmit={submitSingle} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <SingleFields state={state} set={set} errors={shown} />
+          <DitarLancamento aoEntender={aoDitar} />
+          <SingleFields
+            state={state}
+            set={definir}
+            errors={shown}
+            aoMudarDescricao={aoMudarDescricao}
+            lembranca={lembranca}
+          />
         </form>
       )}
 

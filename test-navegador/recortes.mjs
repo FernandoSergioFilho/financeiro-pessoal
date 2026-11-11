@@ -248,8 +248,16 @@ for (const largura of [390, 1280]) {
  */
 {
   const T = '2026-01-01T00:00:00.000Z';
+  /* As datas saem do mês de HOJE, e não de um setembro escrito à mão.
+   *
+   * Com o mês fixo, a sonda passava em setembro e reprovava em novembro — e o
+   * que ela reprovava era a publicação, não o app. O período que a tela mostra
+   * é o mês corrente; então as três compras nascem nos dias 02, 06 e 10 deste
+   * mês e o cartão fecha no 20 e vence no 28, de modo que a fatura delas cai
+   * sempre dentro do período visível, seja qual for o dia de hoje. */
+  const MES = HOJE.slice(0, 7);
   const compra = (id, nome, dia) => ({
-    id, date: `2026-09-${dia}`, description: nome, amount: 1000, kind: 'expense',
+    id, date: `${MES}-${dia}`, description: nome, amount: 1000, kind: 'expense',
     accountId: 'card', toAccountId: null, categoryId: null, status: 'settled',
     recurringId: null, occurrenceDate: null, purchaseId: null,
     installmentNumber: null, installmentTotal: null, createdAt: T, updatedAt: T,
@@ -258,10 +266,10 @@ for (const largura of [390, 1280]) {
     version: 2,
     accounts: [
       { id: 'cc', name: 'Conta corrente', kind: 'checking', openingBalance: 100000, color: 'green', updatedAt: T },
-      { id: 'card', name: 'Cartão', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 25, dueDay: 8, updatedAt: T },
+      { id: 'card', name: 'Cartão', kind: 'credit_card', openingBalance: 0, color: 'magenta', closingDay: 20, dueDay: 28, updatedAt: T },
     ],
     categories: [],
-    entries: [compra('a', 'Zebra', '02'), compra('b', 'Macaco', '10'), compra('c', 'Abacaxi', '20')],
+    entries: [compra('a', 'Zebra', '02'), compra('b', 'Macaco', '06'), compra('c', 'Abacaxi', '10')],
     recurring: [], purchases: [], tombstones: [],
   });
 
@@ -271,7 +279,7 @@ for (const largura of [390, 1280]) {
   await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), carteira);
   await p.goto(`${APP}#/lancamentos`);
   await p.waitForSelector('.eixos-do-recorte');
-  // As três caem na fatura que vence em 08/10; o período precisa alcançá-la.
+  // As três caem na fatura que vence no dia 28 deste mês — dentro do período.
   await p.evaluate(() => { location.hash = '#/lancamentos'; });
   await p.waitForTimeout(500);
 

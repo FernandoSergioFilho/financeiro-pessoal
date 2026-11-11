@@ -106,7 +106,11 @@ export function MoneyInput({
         editing.current = false;
         const parsed = parseMoney(text);
         setText(parsed === null ? '' : formatAmount(parsed));
-        onChange(parsed);
+        // Só avisa quando o número mudou de verdade. Avisar sempre fazia o
+        // campo parecer editado só por ter recebido e perdido o foco — e o
+        // formulário de novo lançamento usa exatamente isso para saber o que
+        // pode preencher da memória e o que a pessoa já escolheu.
+        if (parsed !== value) onChange(parsed);
       }}
     />
   );
