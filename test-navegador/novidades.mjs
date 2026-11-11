@@ -11,7 +11,8 @@
  *  3. aparece uma vez só — fechar tem de valer depois de recarregar, senão a
  *     janela vira um pedágio em toda abertura;
  *  4. quem pulou versões vê as que faltam, e não só a última;
- *  5. dá para rever de propósito, em Ajustes.
+ *  5. o histórico inteiro fica em Ajustes, recolhido, e abre por completo —
+ *     sem paginar e sem teto, que é o ponto de ter um histórico.
  *
  * A recarga é servida por HTTP, e não por `file://`: naquele protocolo o que
  * a página grava em `localStorage` não sobrevive à recarga, e a sonda
@@ -163,7 +164,7 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light']]) 
   srv.close();
 }
 
-/* ============ 5. dá para rever de propósito, em Ajustes =================== */
+/* ============ 5. o histórico inteiro fica em Ajustes ====================== */
 {
   const { ctx, p } = await abrir(APP, { carteira: CARTEIRA, marca: NOVIDADES[0].id });
   cobrar((await p.locator('.overlay .novidades').count()) === 0,
@@ -171,15 +172,45 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light']]) 
 
   await p.goto(`${APP}#/ajustes`);
   await p.waitForTimeout(700);
-  const botao = p.locator('button:has-text("Ver o que mudou")');
-  if ((await botao.count()) === 0) {
-    falhas.push('não há como rever o que mudou em Ajustes');
+
+  const cartao = p.locator('.card:has(.card-head h2:text-is("Histórico de alterações"))');
+  if ((await cartao.count()) === 0) {
+    falhas.push('não há histórico de alterações em Ajustes');
   } else {
-    await botao.scrollIntoViewIfNeeded();
-    await botao.click();
-    await p.waitForTimeout(400);
-    const titulos = await titulosNaTela(p);
-    cobrar(titulos.length >= 2, `rever em Ajustes mostrou ${titulos.length} novidades — esperava o histórico`);
+    const secoes = cartao.locator('.novidades section');
+    const recolhido = await secoes.count();
+    cobrar(recolhido > 0 && recolhido < NOVIDADES.length,
+      `o histórico nasce mostrando ${recolhido} de ${NOVIDADES.length} — deveria nascer recolhido`);
+
+    // O primeiro da lista é o mais recente: é por onde se começa a ler.
+    const primeiro = (await secoes.first().textContent()) ?? '';
+    cobrar(primeiro.includes(NOVIDADES[0].titulo),
+      `o histórico não começa pela alteração mais recente — "${primeiro.slice(0, 60)}"`);
+
+    const abrirTudo = cartao.locator('button:has-text("Mostrar")');
+    if ((await abrirTudo.count()) === 0) {
+      falhas.push('o histórico não oferece ver as alterações anteriores');
+    } else {
+      await abrirTudo.scrollIntoViewIfNeeded();
+      await abrirTudo.click();
+      await p.waitForTimeout(400);
+      const todas = await secoes.count();
+      cobrar(todas === NOVIDADES.length,
+        `aberto, o histórico mostra ${todas} alterações de ${NOVIDADES.length} — está cortando`);
+      cobrar((await cartao.locator('button:has-text("Mostrar")').count()) === 0,
+        'o botão de mostrar o resto continua ali depois de tudo aberto');
+
+      // A mais antiga tem de estar entre elas: é o que faz dele um histórico.
+      const ultima = (await secoes.last().textContent()) ?? '';
+      cobrar(ultima.includes(NOVIDADES[NOVIDADES.length - 1].titulo),
+        `a alteração mais antiga não chegou ao fim da lista — "${ultima.slice(0, 60)}"`);
+      cobrar(!(await cartao.textContent() ?? '').includes('**'),
+        'sobrou asterisco cru no histórico');
+    }
+
+    if (await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)) {
+      falhas.push('o histórico faz a página de Ajustes rolar de lado');
+    }
   }
   await ctx.close();
 }
@@ -191,4 +222,4 @@ if (falhas.length) {
   for (const f of falhas) console.error('   ·', f);
   process.exit(1);
 }
-console.log('✅ o que mudou: aparece uma vez, para quem já usava, e dá para rever');
+console.log('✅ o que mudou: aparece uma vez, para quem já usava, e o histórico está inteiro em Ajustes');

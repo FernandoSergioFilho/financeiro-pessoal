@@ -13,12 +13,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 import {
-  CHAVE_DE_NOVIDADES, LIMITE_DE_NOVIDADES, NOVIDADES, novidadesNaoVistas, pedacosDoTexto,
-  type Novidade,
+  CHAVE_DE_NOVIDADES, NOVIDADES, novidadesNaoVistas, pedacosDoTexto, type Novidade,
 } from '../novidades.ts';
 import { formatDate } from '../domain/date.ts';
 import { useFinance } from '../state/store.tsx';
-import { Dialog } from './components/primitives.tsx';
+import { Card, Dialog } from './components/primitives.tsx';
+
+/** Quantas entradas o histórico mostra antes de alguém pedir o resto. */
+const QUANTAS_DE_INICIO = 3;
 
 function lerUltimaVista(): string | null {
   try {
@@ -39,7 +41,32 @@ function guardarUltimaVista(): void {
   }
 }
 
-/** A janela em si, também usada pelo botão "Ver o que mudou" dos Ajustes. */
+/** A lista em si, igual na janela e no histórico dos Ajustes. */
+function ListaDeNovidades({ novidades }: { novidades: readonly Novidade[] }) {
+  return (
+    <div className="novidades">
+      {novidades.map((novidade) => (
+        <section key={novidade.id}>
+          <h3>
+            {novidade.titulo}
+            <span className="dim num"> · {formatDate(novidade.data)}</span>
+          </h3>
+          <ul>
+            {novidade.itens.map((item) => (
+              <li key={item}>
+                {pedacosDoTexto(item).map((pedaco, i) =>
+                  pedaco.forte ? <strong key={i}>{pedaco.texto}</strong> : <span key={i}>{pedaco.texto}</span>,
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** A janela que aparece sozinha depois de o app se atualizar. */
 export function DialogoDeNovidades({
   novidades,
   onClose,
@@ -60,27 +87,47 @@ export function DialogoDeNovidades({
         </>
       }
     >
-      <div className="novidades">
-        {novidades.map((novidade) => (
-          <section key={novidade.id}>
-            <h3>
-              {novidade.titulo}
-              <span className="dim num"> · {formatDate(novidade.data)}</span>
-            </h3>
-            <ul>
-              {novidade.itens.map((item) => (
-                <li key={item}>
-                  {pedacosDoTexto(item).map((pedaco, i) =>
-                    pedaco.forte ? <strong key={i}>{pedaco.texto}</strong> : <span key={i}>{pedaco.texto}</span>,
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
+      <ListaDeNovidades novidades={novidades} />
       <p className="hint">Seus dados não mudam de lugar com a atualização.</p>
     </Dialog>
+  );
+}
+
+/**
+ * O histórico inteiro, no fim dos Ajustes.
+ *
+ * **Começa recolhido nas três últimas.** A lista desce até o primeiro dia do
+ * app, e despejá-la inteira numa página que já é longa empurraria para fora da
+ * tela tudo o que está acima dela. Quem quer o histórico pede por ele — e aí
+ * recebe tudo, sem paginar, porque a pergunta que leva alguém aqui é "quando
+ * foi que isso mudou?", e ela se responde rolando.
+ */
+export function HistoricoDeAlteracoes() {
+  const [tudo, setTudo] = useState(false);
+  const mostradas = tudo ? NOVIDADES : NOVIDADES.slice(0, QUANTAS_DE_INICIO);
+  const faltam = NOVIDADES.length - mostradas.length;
+
+  return (
+    <Card title="Histórico de alterações">
+      {/* Com a margem padrão o texto encosta no título da primeira alteração
+          e os dois viram um bloco só. */}
+      <p className="hint" style={{ margin: '0 0 14px' }}>
+        Tudo o que mudou no app, do mais recente para o mais antigo.{' '}
+        <span className="num">{NOVIDADES.length}</span> alterações desde{' '}
+        {formatDate(NOVIDADES[NOVIDADES.length - 1]?.data ?? NOVIDADES[0]!.data)}.
+      </p>
+      <ListaDeNovidades novidades={mostradas} />
+      {faltam > 0 && (
+        <button
+          type="button"
+          className="btn"
+          style={{ marginTop: 14 }}
+          onClick={() => setTudo(true)}
+        >
+          Mostrar as {faltam} anteriores
+        </button>
+      )}
+    </Card>
   );
 }
 
@@ -119,7 +166,3 @@ export function AvisoDeNovidades() {
   );
 }
 
-/** O que mostrar quando se pede para rever, em vez de esperar atualizar. */
-export function todasAsNovidades(): Novidade[] {
-  return NOVIDADES.slice(0, LIMITE_DE_NOVIDADES);
-}
