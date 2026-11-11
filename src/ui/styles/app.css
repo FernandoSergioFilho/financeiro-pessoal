@@ -1400,19 +1400,14 @@ textarea.input { resize: vertical; min-height: 64px; }
    exemplo de frase sobrava três palavras por linha e virava um bloco alto e
    ilegível ao lado de um botão pequeno. */
 .ditado { display: flex; flex-direction: column; gap: 8px; }
-/* Segurar para falar exige tirar do botão tudo o que o toque longo costuma
-   acionar: a seleção de texto, o menu de contexto do celular e, sobretudo, a
-   rolagem — sem `touch-action: none` o navegador interpreta o dedo parado
-   como início de arrasto, engole o `pointerup` e o microfone fica aberto. */
+/* O rótulo do botão troca entre "Ditar" e "Parar": sem impedir a seleção, um
+   toque um pouco mais longo no celular seleciona a palavra em vez de acionar.
+   `touch-action` fica no padrão de propósito — o botão é um alternador comum,
+   e tirar a rolagem dele atrapalharia quem começa a rolar a lista ali. */
 .ditado-botao {
-  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-}
-.ditado-botao[aria-pressed='true'] { transform: scale(0.98); }
-@media (prefers-reduced-motion: reduce) {
-  .ditado-botao[aria-pressed='true'] { transform: none; }
 }
 .ditado-linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ditado-linha > .btn { flex: 0 0 auto; }

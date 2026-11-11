@@ -17,26 +17,25 @@
  * fabricante do navegador para ser transcrito — é assim que a API funciona em
  * todos os sites que a usam. A tela diz isso antes de o microfone ligar.
  *
- * **Segurar para falar.** O microfone abre enquanto o botão está pressionado e
- * fecha quando se solta. É o gesto do rádio e dos aplicativos de mensagem, e
- * tem uma vantagem concreta sobre ligar e desligar com dois toques: não existe
- * o caso de esquecer o microfone aberto. Quem solta, encerrou.
+ * **Dois toques: um começa, outro encerra.** Chegou a ser "segure para falar",
+ * e voltou a ser toque por pedido de quem usa — é o gesto do botão de ditar do
+ * próprio Claude, e não exige manter o dedo parado enquanto se pensa na frase.
  *
- * Duas folgas fazem isso funcionar na prática:
+ * Duas folgas continuam valendo, e não são do gesto, são do reconhecedor:
  *
- * - **Soltar antes de o microfone abrir não perde a frase.** Entre o toque e o
- *   `onstart` há um intervalo — na primeira vez, o tempo inteiro de o navegador
- *   pedir permissão. Soltar nesse meio tempo só marca a intenção; o fechamento
- *   acontece quando o microfone de fato abriu.
- * - **Uma sobra de 400 ms depois de soltar.** Quem fala solta o botão junto com
- *   a última sílaba, e sem a sobra ela se perde.
+ * - **Encerrar antes de o microfone abrir não perde a frase.** Entre o toque e
+ *   o `onstart` há um intervalo — na primeira vez, o tempo inteiro de o
+ *   navegador pedir permissão. Tocar em "Parar" nesse meio tempo só marca a
+ *   intenção; o fechamento acontece quando o microfone de fato abriu.
+ * - **Uma sobra de 400 ms depois de mandar parar.** Quem fala costuma tocar no
+ *   botão junto com a última sílaba, e sem a sobra ela se perde.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type EstadoDoDitado = 'indisponivel' | 'parado' | 'ouvindo';
 
-/** O que dizer a quem acabou de soltar o botão: um erro ou só uma dica. */
+/** O que dizer a quem acabou de encerrar: um erro ou só uma dica. */
 export interface RecadoDoDitado {
   texto: string;
   tom: 'erro' | 'dica';
@@ -44,24 +43,23 @@ export interface RecadoDoDitado {
 
 /**
  * Quanto tempo o microfone fica aberto no mínimo, contado de quando ele abriu
- * de verdade. Sem isso, a última sílaba se perde — e um toque sem querer
- * devolveria um erro em vez de nada.
+ * de verdade. Sem isso, a última sílaba se perde.
  */
 const MINIMO_OUVINDO = 400;
 
 /**
- * Os dois jeitos de soltar sem lançar nada, que pedem respostas diferentes.
+ * Os dois jeitos de encerrar sem lançar nada, que pedem respostas diferentes.
  *
- * Quem só tocou não ouviu nem o próprio eco: não houve som nenhum. Quem falou
- * e soltou cedo viu as palavras aparecerem na tela e sumirem — dizer a essa
- * pessoa que "não ouvi nada" seria desmentir o que ela acabou de ver.
+ * Quem ligou e desligou sem falar não produziu som nenhum. Quem falou e parou
+ * cedo viu as palavras aparecerem na tela e sumirem — dizer a essa pessoa que
+ * "não ouvi nada" seria desmentir o que ela acabou de ver.
  */
 const NAO_OUVI: RecadoDoDitado = {
-  texto: 'Não ouvi nada. Segure o botão enquanto fala e solte quando terminar.',
+  texto: 'Não ouvi nada. Toque em Ditar, fale, e toque em Parar quando terminar.',
   tom: 'dica',
 };
-const SOLTOU_CEDO: RecadoDoDitado = {
-  texto: 'Soltou antes de a frase fechar. Segure o botão até terminar de falar.',
+const PAROU_CEDO: RecadoDoDitado = {
+  texto: 'Parou antes de a frase fechar. Fale a frase inteira antes de tocar em Parar.',
   tom: 'dica',
 };
 
@@ -94,7 +92,7 @@ interface Sessao {
   reconhecedor: Reconhecedor;
   /** Quando o microfone abriu de fato; `null` enquanto não abriu. */
   abriuEm: number | null;
-  /** O botão já foi solto? */
+  /** Já mandaram encerrar? */
   soltou: boolean;
   /** O fechamento agendado, para não agendar dois. */
   relogio: ReturnType<typeof setTimeout> | null;
@@ -133,10 +131,10 @@ export interface Ditado {
   /** O que está sendo ouvido agora, para a tela mostrar enquanto se fala. */
   parcial: string;
   recado: RecadoDoDitado | null;
-  /** O botão foi pressionado: abre o microfone. */
-  pressionar: () => void;
-  /** O botão foi solto: fecha o microfone e entrega a frase. */
-  soltar: () => void;
+  /** Primeiro toque: abre o microfone. */
+  comecar: () => void;
+  /** Segundo toque: fecha o microfone e entrega a frase. */
+  parar: () => void;
 }
 
 /**
@@ -177,13 +175,13 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
 
   useEffect(() => () => limpar(), [limpar]);
 
-  const pressionar = useCallback(() => {
+  const comecar = useCallback(() => {
     const Reconhecimento = construtor();
     if (!Reconhecimento) {
       setEstado('indisponivel');
       return;
     }
-    // Pressionar com um ditado em andamento: o novo manda.
+    // Começar com um ditado em andamento: o novo manda.
     limpar();
     setRecado(null);
     setParcial('');
@@ -201,8 +199,8 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
     let completo = '';
     reconhecedor.onstart = () => {
       atual.abriuEm = Date.now();
-      // Soltou enquanto o microfone ainda abria — na primeira vez, enquanto o
-      // navegador pedia permissão. A intenção estava guardada; agora vale.
+      // Mandaram parar enquanto o microfone ainda abria — na primeira vez,
+      // enquanto o navegador pedia permissão. A intenção estava guardada.
       if (atual.soltou) encerrar(atual);
     };
     reconhecedor.onresult = (evento) => {
@@ -229,9 +227,8 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
         aoTexto.current(texto);
         return;
       }
-      // Soltou e não veio frase: quase sempre é o toque curto de quem ainda
-      // não sabe que precisa segurar. Dizer isso vale mais que o silêncio.
-      setRecado((anterior) => anterior ?? (atual.ouviu ? SOLTOU_CEDO : NAO_OUVI));
+      // Encerrou e não veio frase. Dizer o que fazer vale mais que o silêncio.
+      setRecado((anterior) => anterior ?? (atual.ouviu ? PAROU_CEDO : NAO_OUVI));
     };
 
     try {
@@ -245,7 +242,7 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
     }
   }, [encerrar, limpar]);
 
-  const soltar = useCallback(() => {
+  const parar = useCallback(() => {
     const atual = sessao.current;
     if (!atual || atual.soltou) return;
     atual.soltou = true;
@@ -253,5 +250,5 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
     if (atual.abriuEm !== null) encerrar(atual);
   }, [encerrar]);
 
-  return { estado, parcial, recado, pressionar, soltar };
+  return { estado, parcial, recado, comecar, parar };
 }

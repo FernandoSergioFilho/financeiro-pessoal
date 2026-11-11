@@ -1025,18 +1025,14 @@ function AvisoDeFatura({ contaId, data }: { contaId: string; data: string }) {
  * ouvido fica à vista, porque metade dos erros é o navegador ter escutado
  * outra coisa.
  *
- * **Segura-se o botão para falar**, como no rádio. O microfone não fica aberto
- * esperando: quem solta, encerrou. A mecânica da folga entre soltar e fechar
- * está em `ui/usarDitado.ts`; aqui é só a ligação com o gesto, que precisa de
- * três cuidados para não escapar:
+ * **Dois toques**, como no botão de ditar do Claude: um começa a gravar, o
+ * outro encerra e preenche. Chegou a ser "segure para falar" e voltou atrás a
+ * pedido de quem usa — segurar obriga a manter o dedo parado justamente
+ * enquanto se pensa na frase.
  *
- * - `setPointerCapture` segura o evento no botão mesmo que o dedo escorregue
- *   para fora dele — sem isso o `pointerup` cai em outro elemento e o
- *   microfone fica aberto;
- * - `pointercancel` cobre o caso de o sistema tomar o gesto (um gesto de
- *   borda, uma chamada chegando);
- * - teclado funciona igual, segurando espaço ou enter, com `repeat` ignorado,
- *   senão a repetição automática reiniciaria o ditado dezenas de vezes.
+ * O botão é um alternador, e por isso carrega `aria-pressed`: para quem usa
+ * leitor de tela, é o que distingue "liga o microfone" de "manda alguma coisa
+ * acontecer".
  */
 function DitarLancamento({ aoEntender }: { aoEntender: (fala: FalaEntendida) => void }) {
   const { accounts, categories } = useLookups();
@@ -1059,7 +1055,6 @@ function DitarLancamento({ aoEntender }: { aoEntender: (fala: FalaEntendida) => 
   if (ditado.estado === 'indisponivel') return null;
 
   const ouvindo = ditado.estado === 'ouvindo';
-  const teclaDeSegurar = (tecla: string) => tecla === ' ' || tecla === 'Enter';
 
   return (
     <div className="ditado">
@@ -1068,29 +1063,9 @@ function DitarLancamento({ aoEntender }: { aoEntender: (fala: FalaEntendida) => 
           type="button"
           className={ouvindo ? 'btn danger ditado-botao' : 'btn ditado-botao'}
           aria-pressed={ouvindo}
-          onPointerDown={(e) => {
-            e.currentTarget.setPointerCapture(e.pointerId);
-            ditado.pressionar();
-          }}
-          onPointerUp={ditado.soltar}
-          onPointerCancel={ditado.soltar}
-          onLostPointerCapture={ditado.soltar}
-          // Segurar num celular abre o menu de contexto por cima do botão.
-          onContextMenu={(e) => e.preventDefault()}
-          onKeyDown={(e) => {
-            if (!teclaDeSegurar(e.key) || e.repeat) return;
-            e.preventDefault();
-            ditado.pressionar();
-          }}
-          onKeyUp={(e) => {
-            if (!teclaDeSegurar(e.key)) return;
-            e.preventDefault();
-            ditado.soltar();
-          }}
-          // Trocar de aba com o botão apertado deixaria o microfone aberto.
-          onBlur={ditado.soltar}
+          onClick={ouvindo ? ditado.parar : ditado.comecar}
         >
-          {ouvindo ? '🔴 Solte para lançar' : '🎤 Segure para falar'}
+          {ouvindo ? '⏹ Parar' : '🎤 Ditar'}
         </button>
         {/* Em pé, a dica é curta: no celular ela fica logo abaixo do botão e
             cada linha a mais empurra o formulário inteiro para fora da tela.
@@ -1098,6 +1073,9 @@ function DitarLancamento({ aoEntender }: { aoEntender: (fala: FalaEntendida) => 
             que é o momento em que ele importa — e onde ninguém deixa de ler. */}
         {ouvindo ? (
           <span className="ditado-ouvindo">
+            {/* Sem repetir "toque em Parar": o botão ao lado já diz isso, e a
+                frase mais longa quebrava em duas linhas a 390px, deixando um
+                "·" solto no começo da segunda. */}
             <span className="ditado-pulso" aria-hidden="true" /> Ouvindo…{' '}
             <span className="dim">o navegador transcreve a fala</span>
           </span>

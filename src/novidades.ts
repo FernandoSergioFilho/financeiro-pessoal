@@ -16,6 +16,13 @@
  * O `id` nunca muda depois de publicado — é por ele que o app sabe o que já
  * foi lido. Escreva para quem usa, não para quem programa: o que ficou
  * possível fazer, e onde. Correção interna, teste e refatoração não entram.
+ *
+ * **O texto de uma entrada antiga pode ser corrigido; o `id`, não.** Quando o
+ * app volta atrás numa decisão, a entrada que anunciou a decisão antiga passa
+ * a mentir para quem abrir o histórico. Aconteceu com o "segure para falar",
+ * que durou uma versão: a entrada que o anunciava foi reescrita, e a volta
+ * atrás ganhou entrada própria. Reescrever o texto não confunde o app, porque
+ * ele só compara `id`.
  */
 
 export interface Novidade {
@@ -30,11 +37,21 @@ export interface Novidade {
 /** Da mais recente para a mais antiga. */
 export const NOVIDADES: Novidade[] = [
   {
+    id: '2026-11-11-dois-toques-para-ditar',
+    data: '2026-11-11',
+    titulo: 'Ditar com dois toques',
+    itens: [
+      'Para ditar, **toque uma vez para começar** e **outra para parar**, como no botão de ditar do Claude. Por uma versão foi preciso segurar o botão; não é mais.',
+    ],
+  },
+  {
+    // Esta entrada anunciava também o "segure para falar", que durou uma
+    // versão. O texto daquele item saiu daqui para o histórico não contradizer
+    // o app; o `id` fica, que é a âncora de quem já leu.
     id: '2026-11-11-segurar-para-falar',
     data: '2026-11-11',
-    titulo: 'Segurar para falar, e este aviso',
+    titulo: 'Este aviso de versão',
     itens: [
-      'O botão de ditar agora funciona como rádio: **segure enquanto fala** e solte quando terminar. Não tem mais como esquecer o microfone aberto.',
       'Toda vez que o app se atualizar, esta janela aparece contando o que mudou. Dá para rever a qualquer momento em **Ajustes**, no fim da página.',
     ],
   },

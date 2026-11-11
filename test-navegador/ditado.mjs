@@ -14,8 +14,8 @@
  * nenhum teste de unidade.
  *
  * O que se cobra, nas três larguras:
- *  0. segurar abre o microfone e soltar fecha — e um toque rápido explica o
- *     gesto em vez de não fazer nada;
+ *  0. um toque abre o microfone e o toque seguinte fecha — e o segundo toque
+ *     encerra mesmo, em vez de recomeçar a gravação;
  *  1. a frase ditada preenche valor, data, nome, tipo e conta;
  *  2. o que foi entendido aparece escrito, para conferência;
  *  3. escrever um nome já usado traz de volta categoria, conta e — quando o
@@ -69,11 +69,11 @@ const CARTEIRA = JSON.stringify({
 /**
  * O reconhecedor de mentira, instalado antes de a página rodar.
  *
- * Imita o de verdade no que importa para o gesto de segurar: avisa quando o
- * microfone abriu (`onstart`), vai mandando o texto parcial enquanto está
- * aberto, e **só entrega a frase se ficou aberto tempo suficiente para alguém
- * ter falado**. É isso que permite provar que um toque rápido não produz
- * lançamento nenhum, e que segurar produz.
+ * Imita o de verdade no que importa: avisa quando o microfone abriu
+ * (`onstart`), vai mandando o texto parcial enquanto está aberto, e **só
+ * entrega a frase se ficou aberto tempo suficiente para alguém ter falado**.
+ * É isso que permite distinguir o microfone que ficou aberto do que fechou
+ * cedo demais.
  */
 function instalarFalso({ frase, precisaDe }) {
   window.__ditado = { idiomas: [], iniciou: 0, parou: 0, msAberto: 0 };
@@ -174,8 +174,8 @@ for (const largura of [390, 834, 1280]) {
     continue;
   }
   cobrar(await botao.isVisible(), `${largura}: o botão de ditar não aparece no diálogo`);
-  cobrar(/Segure/.test((await botao.textContent()) ?? ''),
-    `${largura}: o botão não convida a segurar — "${(await botao.textContent())?.trim()}"`);
+  cobrar(/Ditar/.test((await botao.textContent()) ?? ''),
+    `${largura}: o botão não convida a ditar — "${(await botao.textContent())?.trim()}"`);
   await conferirCss(p, 'diálogo antes de ditar', largura);
   if (!(await botao.isEnabled())) {
     falhas.push(`${largura}: o botão de ditar está desabilitado`);
@@ -183,43 +183,37 @@ for (const largura of [390, 834, 1280]) {
     continue;
   }
 
-  /* Primeiro o toque rápido: é o engano de quem ainda não sabe que precisa
-     segurar, e tem de virar explicação, não silêncio nem lançamento. */
+  /* O primeiro toque liga o microfone. */
   await botao.click();
-  await p.waitForTimeout(900);
-  cobrar((await p.locator('.dialog .banner.ok').count()) === 0,
-    `${largura}: um toque rápido já entendeu uma frase — o falso não deveria ter ouvido nada`);
-  const dicaCurta = (await p.locator('.dialog .ditado .hint').allTextContents()).join(' ');
-  cobrar(/Segure o botão/.test(dicaCurta),
-    `${largura}: o toque rápido não explicou que é preciso segurar — "${dicaCurta}"`);
-  cobrar(await p.locator('.dialog input.money').inputValue() === '',
-    `${largura}: o toque rápido mexeu no formulário`);
-  // E o microfone fechou: não pode ficar aberto depois de soltar.
-  cobrar(await p.evaluate(() => window.__ditado.parou) >= 1,
-    `${largura}: soltar o botão não fechou o microfone`);
-
-  /* Agora segurando, que é o gesto pedido. */
-  await botao.hover();
-  await p.mouse.down();
-  await p.waitForTimeout(250);
+  await p.waitForTimeout(200);
   cobrar(await botao.getAttribute('aria-pressed') === 'true',
-    `${largura}: segurando o botão, ele não se marca como pressionado`);
-  const segurando = (await botao.textContent()) ?? '';
-  cobrar(/Solte/.test(segurando), `${largura}: segurando, o botão ainda diz "${segurando.trim()}"`);
+    `${largura}: o primeiro toque não ligou o microfone`);
+  const gravando = (await botao.textContent()) ?? '';
+  cobrar(/Parar/.test(gravando), `${largura}: gravando, o botão ainda diz "${gravando.trim()}"`);
   cobrar((await p.locator('.dialog .ditado-ouvindo').count()) === 1,
-    `${largura}: segurando o botão, a tela não mostra que está ouvindo`);
+    `${largura}: gravando, a tela não mostra que está ouvindo`);
+  cobrar(await p.evaluate(() => window.__ditado.iniciou) === 1,
+    `${largura}: o primeiro toque ligou o microfone mais de uma vez`);
+
+  /* E o segundo toque ENCERRA — não recomeça. É a diferença entre um
+     alternador e dois botões disfarçados de um: se o segundo toque chamasse
+     de novo o "começar", o microfone reiniciaria e nunca fecharia. */
   await p.waitForTimeout(700);
-  await p.mouse.up();
+  await botao.click();
 
   if (!(await esperar(p, '.dialog .banner.ok:has-text("Entendi")',
-    `${largura}: segurar e soltar não produziu lançamento nenhum`))) {
+    `${largura}: ligar e desligar o microfone não produziu lançamento nenhum`))) {
     await ctx.close();
     continue;
   }
+  cobrar(await p.evaluate(() => window.__ditado.parou) === 1,
+    `${largura}: o segundo toque não fechou o microfone uma vez só`);
+  cobrar(await p.evaluate(() => window.__ditado.iniciou) === 1,
+    `${largura}: o segundo toque recomeçou a gravação em vez de encerrá-la`);
   cobrar(await botao.getAttribute('aria-pressed') === 'false',
-    `${largura}: depois de soltar, o botão continua marcado como pressionado`);
-  cobrar(/Segure/.test((await botao.textContent()) ?? ''),
-    `${largura}: depois de soltar, o botão não volta a convidar a segurar`);
+    `${largura}: depois de parar, o botão continua marcado como ligado`);
+  cobrar(/Ditar/.test((await botao.textContent()) ?? ''),
+    `${largura}: depois de parar, o botão não volta a convidar a ditar`);
 
   const idioma = await p.evaluate(() => window.__ditado.idiomas[0]);
   cobrar(idioma === 'pt-BR', `${largura}: o reconhecedor foi ligado em "${idioma}" e não em pt-BR`);
@@ -266,14 +260,14 @@ for (const largura of [390, 834, 1280]) {
   await ctx.close();
 }
 
-/* ============ 1b. a sobra de tempo depois de soltar ====================== */
+/* ============ 1b. a sobra de tempo depois de mandar parar ================= */
 /*
- * Quem fala solta o botão junto com a última sílaba. O microfone fica aberto
+ * Quem fala toca em "Parar" junto com a última sílaba. O microfone fica aberto
  * um instante a mais de propósito, senão essa sílaba se perde.
  *
- * Aqui o reconhecedor falso precisa de 300 ms para ter o que entregar, e o
- * toque é instantâneo: só a sobra do app pode fazer a frase chegar. Sem ela,
- * o microfone fecharia em zero e nada seria ouvido.
+ * Aqui o reconhecedor falso precisa de 300 ms para ter o que entregar, e os
+ * dois toques são seguidos: só a sobra do app pode fazer a frase chegar. Sem
+ * ela, o microfone fecharia em zero e nada seria ouvido.
  */
 {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
@@ -285,13 +279,14 @@ for (const largura of [390, 834, 1280]) {
   await p.waitForSelector('.eixos-do-recorte');
   await abrirNovo(p, 1280);
   await p.locator('.dialog .ditado-botao').click();
+  await p.locator('.dialog .ditado-botao').click();
   if (await esperar(p, '.dialog .banner.ok:has-text("Entendi")',
-    'a sobra depois de soltar não existe: o microfone fechou antes de a frase chegar')) {
+    'a sobra depois de parar não existe: o microfone fechou antes de a frase chegar')) {
     cobrar(await p.locator('.dialog input.money').inputValue() === '45,00',
       'com a sobra, o valor ainda não chegou ao formulário');
   }
   const aberto = await p.evaluate(() => window.__ditado.msAberto);
-  cobrar(aberto >= 300, `o microfone ficou aberto só ${aberto} ms depois de um toque instantâneo`);
+  cobrar(aberto >= 300, `o microfone ficou aberto só ${aberto} ms com dois toques seguidos`);
   await ctx.close();
 }
 
@@ -387,4 +382,4 @@ if (falhas.length) {
   for (const f of falhas) console.error('   ·', f);
   process.exit(1);
 }
-console.log('✅ ditado e memória: a frase preenche, o nome lembra, a mão manda');
+console.log('✅ ditado e memória: dois toques gravam, a frase preenche, o nome lembra');
