@@ -44,18 +44,29 @@ jobs:
       # apareciam na tela. Uma versão que não sobrevive a elas não vai ao ar.
       - name: Navegador
         run: |
-          # O `--with-deps` instala fontes e bibliotecas pelo apt, e o apt do
-          # runner já falhou resolvendo archive.ubuntu.com — uma publicação
-          # perdida sem nada a ver com o código. Três tentativas com espera
-          # entre elas: se as três falharem, é problema de verdade e o passo
-          # cai, em vez de seguir com um Chromium pela metade.
+          # Instalar o Chromium tem duas partes: baixar o navegador do CDN do
+          # Playwright, e instalar fontes e bibliotecas pelo apt do Ubuntu. A
+          # segunda já derrubou duas publicações seguidas sem resolver
+          # archive.ubuntu.com — e o que ela baixa, nessas horas, é uma lista
+          # de FONTES: japonesa, tailandesa, chinesa, cirílica. Nenhuma delas
+          # faz falta para um app em português.
+          #
+          # Então o apt deixa de mandar na publicação: duas tentativas com
+          # ele, e se não der, baixa só o navegador, que não passa por lá.
           instalou=
-          for tentativa in 1 2 3; do
+          for tentativa in 1 2; do
             if npx playwright install --with-deps chromium; then instalou=sim; break; fi
-            echo "instalação do Chromium falhou (tentativa $tentativa); esperando"
+            echo "apt do runner falhou (tentativa $tentativa); esperando"
             sleep $((tentativa * 20))
           done
-          [ -n "$instalou" ] || { echo "O Chromium não instalou em três tentativas."; exit 1; }
+          if [ -z "$instalou" ]; then
+            echo "Seguindo sem as dependências de sistema: só o navegador."
+            npx playwright install chromium
+          fi
+          # E conferir que ele ABRE, antes de qualquer sonda. Se faltar mesmo
+          # alguma biblioteca, o erro aparece aqui, dizendo o que falta — e não
+          # como seis sondas estourando o tempo sem explicar por quê.
+          node -e "require('playwright').chromium.launch().then((b) => b.close()).then(() => console.log('Chromium abre.'))"
           npm run build:single
           npm run test:telas
           npm run test:simulacao
