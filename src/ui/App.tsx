@@ -22,6 +22,7 @@ import { InvestimentosPage } from './pages/InvestimentosPage.tsx';
 import { RecurringPage } from './pages/RecurringPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import type { Destino, DestinoAplicado } from './navegacao.ts';
+import { AvisoDeNovidades } from './Novidades.tsx';
 import { useTheme } from './theme.ts';
 
 interface Page {
@@ -225,6 +226,9 @@ export function App() {
 
       {creating && <NewEntryDialog onClose={() => setCreating(false)} />}
       {editing && <EditEntryDialog entry={editing} onClose={() => setEditing(null)} />}
+      {/* Depois do portão: quem ainda não entrou não tem o que ler sobre
+          versão nova. */}
+      <AvisoDeNovidades />
     </div>
   );
 }

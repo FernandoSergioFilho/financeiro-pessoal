@@ -77,7 +77,9 @@ export function AvisoDeAtualizacao() {
       <span>
         <strong>Nova versão disponível</strong>
         <br />
-        <span className="dim">Seus lançamentos não se perdem ao atualizar.</span>
+        <span className="dim">
+          Seus lançamentos não se perdem — e eu conto o que mudou depois.
+        </span>
       </span>
       <div className="row" style={{ gap: 8 }}>
         <button type="button" className="btn primary sm" onClick={() => atualizar?.()}>

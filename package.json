@@ -17,11 +17,12 @@
     "test:telas": "node test-navegador/campos-de-data.mjs",
     "test:simulacao": "node test-navegador/simulacao.mjs",
     "test:dialogos": "node test-navegador/dialogos.mjs",
-    "verificar": "npm run typecheck && npm test && npm run build && npm run build:single && npm run test:telas && npm run test:simulacao && npm run test:dialogos && npm run test:chave && npm run test:recortes && npm run test:dois && npm run test:ditado",
+    "verificar": "npm run typecheck && npm test && npm run build && npm run build:single && npm run test:telas && npm run test:simulacao && npm run test:dialogos && npm run test:chave && npm run test:recortes && npm run test:dois && npm run test:ditado && npm run test:novidades",
     "test:chave": "node test-navegador/chave-de-ia.mjs",
     "test:dois": "node test-navegador/dois-aparelhos.mjs",
     "test:recortes": "node test-navegador/recortes.mjs",
-    "test:ditado": "node test-navegador/ditado.mjs"
+    "test:ditado": "node test-navegador/ditado.mjs",
+    "test:novidades": "node test-navegador/novidades.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

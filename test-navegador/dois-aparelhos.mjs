@@ -62,6 +62,8 @@ const b=await chromium.launch({executablePath:process.env.CHROMIUM});
 const abrir = async (nome) => {
   const ctx=await b.newContext({viewport:{width:1280,height:1000}});
   const p=await ctx.newPage();
+  // A janela de "o que mudou" cobriria a tela: aqui ela se declara lida.
+  await p.addInitScript(()=>localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'));
   p.on('pageerror',e=>console.log(`  !! ${nome}:`,String(e).slice(0,120)));
   await p.route(`**${REF}.supabase.co/**`, rotear);
   await p.goto('http://localhost:4600/',{waitUntil:'domcontentloaded'});

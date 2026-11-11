@@ -1400,6 +1400,20 @@ textarea.input { resize: vertical; min-height: 64px; }
    exemplo de frase sobrava três palavras por linha e virava um bloco alto e
    ilegível ao lado de um botão pequeno. */
 .ditado { display: flex; flex-direction: column; gap: 8px; }
+/* Segurar para falar exige tirar do botão tudo o que o toque longo costuma
+   acionar: a seleção de texto, o menu de contexto do celular e, sobretudo, a
+   rolagem — sem `touch-action: none` o navegador interpreta o dedo parado
+   como início de arrasto, engole o `pointerup` e o microfone fica aberto. */
+.ditado-botao {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.ditado-botao[aria-pressed='true'] { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) {
+  .ditado-botao[aria-pressed='true'] { transform: none; }
+}
 .ditado-linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ditado-linha > .btn { flex: 0 0 auto; }
 .ditado-linha > .hint { flex: 1 1 14rem; min-width: 0; }
@@ -1438,4 +1452,21 @@ textarea.input { resize: vertical; min-height: 64px; }
   .ditado-linha { flex-direction: column; align-items: stretch; }
   .ditado-linha > .btn { width: 100%; }
   .ditado-linha > .hint { flex: 1 1 auto; }
+}
+
+/* --------------------------------------------------------------- novidades */
+/* A lista de "o que mudou". Texto corrido e curto: é lido uma vez, de pé,
+   logo depois de o app atualizar. */
+.novidades { display: flex; flex-direction: column; gap: 16px; }
+.novidades section { display: flex; flex-direction: column; gap: 6px; }
+.novidades h3 {
+  margin: 0; font-size: 0.95rem; font-weight: 700; line-height: 1.3;
+}
+.novidades h3 .dim { font-weight: 400; font-size: 0.8rem; white-space: nowrap; }
+.novidades ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.novidades li { font-size: 0.88rem; line-height: 1.45; }
+/* Mais de uma versão de uma vez (quem ficou tempo sem abrir): uma linha
+   separa as levas, senão viram um bloco só de marcadores. */
+.novidades section + section {
+  border-top: 1px solid var(--border); padding-top: 14px;
 }

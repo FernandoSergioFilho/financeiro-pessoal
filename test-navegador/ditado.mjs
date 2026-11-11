@@ -14,6 +14,8 @@
  * nenhum teste de unidade.
  *
  * O que se cobra, nas três larguras:
+ *  0. segurar abre o microfone e soltar fecha — e um toque rápido explica o
+ *     gesto em vez de não fazer nada;
  *  1. a frase ditada preenche valor, data, nome, tipo e conta;
  *  2. o que foi entendido aparece escrito, para conferência;
  *  3. escrever um nome já usado traz de volta categoria, conta e — quando o
@@ -64,25 +66,44 @@ const CARTEIRA = JSON.stringify({
   recurring: [], purchases: [], tombstones: [],
 });
 
-/** O reconhecedor de mentira, instalado antes de a página rodar. */
-function instalarFalso(frase) {
-  window.__ditado = { idiomas: [], iniciou: 0 };
+/**
+ * O reconhecedor de mentira, instalado antes de a página rodar.
+ *
+ * Imita o de verdade no que importa para o gesto de segurar: avisa quando o
+ * microfone abriu (`onstart`), vai mandando o texto parcial enquanto está
+ * aberto, e **só entrega a frase se ficou aberto tempo suficiente para alguém
+ * ter falado**. É isso que permite provar que um toque rápido não produz
+ * lançamento nenhum, e que segurar produz.
+ */
+function instalarFalso({ frase, precisaDe }) {
+  window.__ditado = { idiomas: [], iniciou: 0, parou: 0, msAberto: 0 };
+  /** Abaixo disto, ninguém falou: o falso devolve silêncio, como o real. */
+  const PRECISA_DE = precisaDe;
   class Falso {
     constructor() {
       this.lang = ''; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1;
-      this.onresult = null; this.onerror = null; this.onend = null;
+      this.onstart = null; this.onresult = null; this.onerror = null; this.onend = null;
+      this._abriu = 0; this._parcial = null;
     }
     start() {
       window.__ditado.idiomas.push(this.lang);
       window.__ditado.iniciou += 1;
-      setTimeout(() => {
-        const resultados = [{ 0: { transcript: frase }, isFinal: true }];
-        this.onresult?.({ resultIndex: 0, results: resultados });
-        this.onend?.();
-      }, 20);
+      this._abriu = Date.now();
+      setTimeout(() => this.onstart?.(), 5);
+      this._parcial = setTimeout(() => {
+        this.onresult?.({ resultIndex: 0, results: [{ 0: { transcript: frase.slice(0, 18) }, isFinal: false }] });
+      }, 120);
     }
-    stop() { this.onend?.(); }
-    abort() {}
+    stop() {
+      window.__ditado.parou += 1;
+      window.__ditado.msAberto = Date.now() - this._abriu;
+      clearTimeout(this._parcial);
+      if (window.__ditado.msAberto >= PRECISA_DE) {
+        this.onresult?.({ resultIndex: 0, results: [{ 0: { transcript: frase }, isFinal: true }] });
+      }
+      this.onend?.();
+    }
+    abort() { clearTimeout(this._parcial); }
   }
   // Os dois nomes: o Chromium novo expõe o sem prefixo, e sobrescrever só o
   // `webkit` deixava o reconhecedor DE VERDADE rodando — que abre, não ouve
@@ -97,6 +118,17 @@ const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process
 async function abrirNovo(p, largura) {
   await p.click(largura < 600 ? '.fab' : '.topbar button:has-text("Novo lançamento")');
   await p.waitForSelector('.dialog');
+}
+
+/** Espera sem derrubar a sonda: um estouro vira uma linha de falha legível. */
+async function esperar(p, seletor, queixa) {
+  try {
+    await p.waitForSelector(seletor, { timeout: 5000 });
+    return true;
+  } catch {
+    falhas.push(queixa);
+    return false;
+  }
 }
 
 async function conferirCss(p, onde, largura) {
@@ -127,15 +159,23 @@ for (const largura of [390, 834, 1280]) {
   });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página (ditado) ${largura}: ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), CARTEIRA);
-  await p.addInitScript(instalarFalso, FRASE);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, CARTEIRA);
+  await p.addInitScript(instalarFalso, { frase: FRASE, precisaDe: 600 });
 
   await p.goto(`${APP}#/lancamentos`);
   await p.waitForSelector('.eixos-do-recorte');
   await abrirNovo(p, largura);
 
-  const botao = p.locator('.dialog .ditado button:has-text("Ditar")');
+  // Pelo papel, e não pelo rótulo: o texto do botão muda com o estado.
+  const botao = p.locator('.dialog .ditado-botao');
+  if ((await botao.count()) === 0) {
+    falhas.push(`${largura}: o botão de ditar não existe no diálogo`);
+    await ctx.close();
+    continue;
+  }
   cobrar(await botao.isVisible(), `${largura}: o botão de ditar não aparece no diálogo`);
+  cobrar(/Segure/.test((await botao.textContent()) ?? ''),
+    `${largura}: o botão não convida a segurar — "${(await botao.textContent())?.trim()}"`);
   await conferirCss(p, 'diálogo antes de ditar', largura);
   if (!(await botao.isEnabled())) {
     falhas.push(`${largura}: o botão de ditar está desabilitado`);
@@ -143,8 +183,43 @@ for (const largura of [390, 834, 1280]) {
     continue;
   }
 
+  /* Primeiro o toque rápido: é o engano de quem ainda não sabe que precisa
+     segurar, e tem de virar explicação, não silêncio nem lançamento. */
   await botao.click();
-  await p.waitForSelector('.dialog .banner.ok:has-text("Entendi")', { timeout: 5000 });
+  await p.waitForTimeout(900);
+  cobrar((await p.locator('.dialog .banner.ok').count()) === 0,
+    `${largura}: um toque rápido já entendeu uma frase — o falso não deveria ter ouvido nada`);
+  const dicaCurta = (await p.locator('.dialog .ditado .hint').allTextContents()).join(' ');
+  cobrar(/Segure o botão/.test(dicaCurta),
+    `${largura}: o toque rápido não explicou que é preciso segurar — "${dicaCurta}"`);
+  cobrar(await p.locator('.dialog input.money').inputValue() === '',
+    `${largura}: o toque rápido mexeu no formulário`);
+  // E o microfone fechou: não pode ficar aberto depois de soltar.
+  cobrar(await p.evaluate(() => window.__ditado.parou) >= 1,
+    `${largura}: soltar o botão não fechou o microfone`);
+
+  /* Agora segurando, que é o gesto pedido. */
+  await botao.hover();
+  await p.mouse.down();
+  await p.waitForTimeout(250);
+  cobrar(await botao.getAttribute('aria-pressed') === 'true',
+    `${largura}: segurando o botão, ele não se marca como pressionado`);
+  const segurando = (await botao.textContent()) ?? '';
+  cobrar(/Solte/.test(segurando), `${largura}: segurando, o botão ainda diz "${segurando.trim()}"`);
+  cobrar((await p.locator('.dialog .ditado-ouvindo').count()) === 1,
+    `${largura}: segurando o botão, a tela não mostra que está ouvindo`);
+  await p.waitForTimeout(700);
+  await p.mouse.up();
+
+  if (!(await esperar(p, '.dialog .banner.ok:has-text("Entendi")',
+    `${largura}: segurar e soltar não produziu lançamento nenhum`))) {
+    await ctx.close();
+    continue;
+  }
+  cobrar(await botao.getAttribute('aria-pressed') === 'false',
+    `${largura}: depois de soltar, o botão continua marcado como pressionado`);
+  cobrar(/Segure/.test((await botao.textContent()) ?? ''),
+    `${largura}: depois de soltar, o botão não volta a convidar a segurar`);
 
   const idioma = await p.evaluate(() => window.__ditado.idiomas[0]);
   cobrar(idioma === 'pt-BR', `${largura}: o reconhecedor foi ligado em "${idioma}" e não em pt-BR`);
@@ -191,6 +266,35 @@ for (const largura of [390, 834, 1280]) {
   await ctx.close();
 }
 
+/* ============ 1b. a sobra de tempo depois de soltar ====================== */
+/*
+ * Quem fala solta o botão junto com a última sílaba. O microfone fica aberto
+ * um instante a mais de propósito, senão essa sílaba se perde.
+ *
+ * Aqui o reconhecedor falso precisa de 300 ms para ter o que entregar, e o
+ * toque é instantâneo: só a sobra do app pode fazer a frase chegar. Sem ela,
+ * o microfone fecharia em zero e nada seria ouvido.
+ */
+{
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => falhas.push(`erro de página (sobra): ${e}`));
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, CARTEIRA);
+  await p.addInitScript(instalarFalso, { frase: FRASE, precisaDe: 300 });
+  await p.goto(`${APP}#/lancamentos`);
+  await p.waitForSelector('.eixos-do-recorte');
+  await abrirNovo(p, 1280);
+  await p.locator('.dialog .ditado-botao').click();
+  if (await esperar(p, '.dialog .banner.ok:has-text("Entendi")',
+    'a sobra depois de soltar não existe: o microfone fechou antes de a frase chegar')) {
+    cobrar(await p.locator('.dialog input.money').inputValue() === '45,00',
+      'com a sobra, o valor ainda não chegou ao formulário');
+  }
+  const aberto = await p.evaluate(() => window.__ditado.msAberto);
+  cobrar(aberto >= 300, `o microfone ficou aberto só ${aberto} ms depois de um toque instantâneo`);
+  await ctx.close();
+}
+
 /* =================== 2. a memória dos nomes, digitando ==================== */
 for (const largura of [390, 1280]) {
   const ctx = await b.newContext({
@@ -199,7 +303,7 @@ for (const largura of [390, 1280]) {
   });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página (memória) ${largura}: ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), CARTEIRA);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, CARTEIRA);
   await p.goto(`${APP}#/lancamentos`);
   await p.waitForSelector('.eixos-do-recorte');
   await abrirNovo(p, largura);
@@ -248,7 +352,7 @@ for (const largura of [390, 1280]) {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página (mão): ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), CARTEIRA);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, CARTEIRA);
   await p.goto(`${APP}#/lancamentos`);
   await p.waitForSelector('.eixos-do-recorte');
   await abrirNovo(p, 1280);

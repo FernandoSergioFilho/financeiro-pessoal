@@ -61,6 +61,7 @@ async function abrir({ width, tema }) {
     ([dados, escolhido]) => {
       localStorage.setItem('financeiro-pessoal', dados);
       localStorage.setItem('financeiro-pessoal:tema', escolhido);
+      localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia');
     },
     [CARTEIRA, tema],
   );

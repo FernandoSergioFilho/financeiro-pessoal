@@ -66,6 +66,8 @@ for (const [nome, abrir] of CENARIOS) {
   for (const [comoApagar, apagar] of Object.entries(APAGAR)) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await ctx.newPage();
+    // A janela de "o que mudou" cobriria a tela: aqui ela se declara lida.
+    await page.addInitScript(() => localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'));
 
     await page.goto(`${APP}#/ajustes`);
     await page.waitForTimeout(800);

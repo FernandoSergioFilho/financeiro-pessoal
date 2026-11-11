@@ -66,7 +66,7 @@ for (const [largura, tema] of [[390, 'light'], [834, 'dark'], [1280, 'light'], [
   const ctx = await b.newContext({ viewport: { width: largura, height: 1100 }, colorScheme: tema, hasTouch: largura < 600, isMobile: largura < 600 });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página ${largura}/${tema}: ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, C);
 
   /* ---------------- 1. Lançamentos: os dois eixos combinam ---------------- */
   await p.goto(`${APP}#/lancamentos`);
@@ -183,7 +183,7 @@ for (const largura of [390, 1280]) {
   const ctx = await b.newContext({ viewport: { width: largura, height: 1000 }, hasTouch: largura < 600, isMobile: largura < 600 });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página (parcelas) ${largura}: ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, C);
   await p.goto(`${APP}#/lancamentos`);
   await p.waitForSelector('.eixos-do-recorte');
 
@@ -276,7 +276,7 @@ for (const largura of [390, 1280]) {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página (ordem): ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), carteira);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, carteira);
   await p.goto(`${APP}#/lancamentos`);
   await p.waitForSelector('.eixos-do-recorte');
   // As três caem na fatura que vence no dia 28 deste mês — dentro do período.
@@ -308,7 +308,7 @@ for (const largura of [390, 1280]) {
   const ctx = await b.newContext({ viewport: { width: largura, height: 1000 }, hasTouch: largura < 600, isMobile: largura < 600 });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página (lote) ${largura}: ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, C);
   await p.goto(`${APP}#/lancamentos`);
   await p.waitForSelector('.eixos-do-recorte');
 
@@ -394,7 +394,7 @@ for (const largura of [390, 1280]) {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => falhas.push(`erro de página (fatura×saldo): ${e}`));
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), carteira);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, carteira);
   await p.goto(`${APP}#/painel`);
   await p.waitForSelector('.card.stat');
   await p.waitForTimeout(600);
@@ -444,7 +444,7 @@ for (const largura of [390, 1280]) {
 
   const ctx = await b.newContext({ viewport: { width: 1280, height: 1000 } });
   const p = await ctx.newPage();
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, C);
   await p.goto('http://localhost:4601/#/painel');
   await p.waitForSelector(`${VISTAS} button[aria-pressed="true"]`);
   await escolherVista(p, 'Números', 'numeros');
@@ -472,7 +472,7 @@ for (const largura of [390, 1280]) {
 {
   const ctx = await b.newContext({ viewport: { width: 390, height: 900 }, hasTouch: true, isMobile: true });
   const p = await ctx.newPage();
-  await p.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), C);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, C);
   await p.goto(`${APP}#/ajustes`);
   await p.waitForSelector('button:has-text("Procurar atualização")');
 

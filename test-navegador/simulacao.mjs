@@ -55,6 +55,7 @@ async function abrir({ width = 1280, tema = 'light' } = {}) {
     ([dados, escolhido]) => {
       localStorage.setItem('financeiro-pessoal', dados);
       localStorage.setItem('financeiro-pessoal:tema', escolhido);
+      localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia');
     },
     [CARTEIRA, tema],
   );
@@ -547,7 +548,7 @@ for (const width of [390, 1280]) {
   const page = await ctx.newPage();
   const quebras = [];
   page.on('pageerror', (e) => quebras.push(String(e)));
-  await page.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), CARTEIRA);
+  await page.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, CARTEIRA);
   await page.goto(`${APP}#/lancamentos`);
   await page.waitForTimeout(900);
 
@@ -855,7 +856,7 @@ for (const [rota, nome, singular] of [
   for (const width of [390, 1280]) {
     const ctx = await browser.newContext({ viewport: { width, height: 1000 } });
     const page = await ctx.newPage();
-    await page.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), apertada);
+    await page.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, apertada);
     await page.goto(`${APP}#/painel`);
     await page.waitForTimeout(800);
 
@@ -1002,7 +1003,7 @@ for (const [rota, nome, singular] of [
   const page = await ctx.newPage();
   const quebras = [];
   page.on('pageerror', (e) => quebras.push(String(e)));
-  await page.addInitScript((d) => localStorage.setItem('financeiro-pessoal', d), carteira);
+  await page.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, carteira);
   await page.goto(`${APP}#/painel`);
   await page.waitForTimeout(900);
 

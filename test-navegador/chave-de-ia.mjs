@@ -45,7 +45,7 @@ for (const [w,tema] of [[390,'light'],[834,'dark'],[1280,'light'],[390,'dark']])
       {name:'models/gemini-pro-latest',displayName:'Gemini Pro',supportedGenerationMethods:['generateContent']}]})});
     else await rota.fulfill({status:200,contentType:'application/json',body:JSON.stringify({candidates:[{content:{parts:[{text:'Resumo de teste.'}]}}]})});
   });
-  await p.addInitScript((d)=>localStorage.setItem('financeiro-pessoal',d), C);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, C);
 
   // Sem chave: o aviso de "onde a resposta aparece" NÃO pode estar lá.
   await p.goto(`${APP}#/ajustes`); await p.waitForTimeout(900);
@@ -88,7 +88,7 @@ for (const [w,tema] of [[390,'light'],[834,'dark'],[1280,'light'],[390,'dark']])
 {
   const ctx=await b.newContext({viewport:{width:1280,height:1100}});
   const p=await ctx.newPage();
-  await p.addInitScript((d)=>localStorage.setItem('financeiro-pessoal',d), C);
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, C);
   await p.goto(`${APP}#/painel`); await p.waitForTimeout(800);
   await p.click('button:has-text("Analisar")'); await p.waitForTimeout(400);
   await p.click('.segmented button:text-is("Levar a uma IA")'); await p.waitForTimeout(400);

@@ -32,6 +32,7 @@ import { ChaveDeIA } from '../components/ChaveDeIA.tsx';
 import { TutorialDialog } from '../components/Tutorial.tsx';
 import type { IrPara } from '../navegacao.ts';
 import { procurarAtualizacao } from '../atualizacao.ts';
+import { DialogoDeNovidades, todasAsNovidades } from '../Novidades.tsx';
 import type { ThemeChoice } from '../theme.ts';
 import { VERSAO_DO_APP } from '../../versao.ts';
 
@@ -715,6 +716,7 @@ export function SettingsPage({
   // Separado do `message` do topo de propósito: ver acima, no cartão da versão.
   const [recadoDaVersao, setRecadoDaVersao] = useState('');
   const [procurando, setProcurando] = useState(false);
+  const [vendoNovidades, setVendoNovidades] = useState(false);
 
   // Carteiras sincronizadas antes da correção da semeadura ficaram com contas e
   // categorias padrão repetidas, uma leva por aparelho. O aviso só aparece se
@@ -1212,6 +1214,12 @@ export function SettingsPage({
             >
               {procurando ? 'Procurando…' : '🔄 Procurar atualização'}
             </button>
+            {/* O mesmo texto que aparece sozinho depois de atualizar. Fica
+                aqui porque "o que era mesmo que mudou?" é uma pergunta que
+                volta depois, e a janela já foi fechada. */}
+            <button type="button" className="btn ghost" onClick={() => setVendoNovidades(true)}>
+              ✨ Ver o que mudou
+            </button>
             {recadoDaVersao && (
               <span className="hint" style={{ margin: 0, flex: '1 1 14rem' }}>
                 {recadoDaVersao}
@@ -1224,6 +1232,9 @@ export function SettingsPage({
       {importando && <ImportarPlanilha onClose={() => setImportando(false)} />}
       {importandoBanco && <ImportarDoBanco onClose={() => setImportandoBanco(false)} />}
       {tutorial && <TutorialDialog onClose={() => setTutorial(false)} />}
+      {vendoNovidades && (
+        <DialogoDeNovidades novidades={todasAsNovidades()} onClose={() => setVendoNovidades(false)} />
+      )}
 
       {desmarcando && (
         <ConfirmDialog
