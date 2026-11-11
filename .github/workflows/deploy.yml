@@ -44,13 +44,26 @@ jobs:
       # apareciam na tela. Uma versão que não sobrevive a elas não vai ao ar.
       - name: Navegador
         run: |
-          npx playwright install --with-deps chromium
+          # O `--with-deps` instala fontes e bibliotecas pelo apt, e o apt do
+          # runner já falhou resolvendo archive.ubuntu.com — uma publicação
+          # perdida sem nada a ver com o código. Três tentativas com espera
+          # entre elas: se as três falharem, é problema de verdade e o passo
+          # cai, em vez de seguir com um Chromium pela metade.
+          instalou=
+          for tentativa in 1 2 3; do
+            if npx playwright install --with-deps chromium; then instalou=sim; break; fi
+            echo "instalação do Chromium falhou (tentativa $tentativa); esperando"
+            sleep $((tentativa * 20))
+          done
+          [ -n "$instalou" ] || { echo "O Chromium não instalou em três tentativas."; exit 1; }
           npm run build:single
           npm run test:telas
           npm run test:simulacao
           npm run test:dialogos
           npm run test:chave
           npm run test:recortes
+          npm run test:ditado
+          npm run test:novidades
           npm run build
           npm run test:dois
 
