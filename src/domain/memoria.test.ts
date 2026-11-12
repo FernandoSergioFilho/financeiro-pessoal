@@ -68,11 +68,18 @@ describe('lembrar', () => {
     expect(lembrar([entry({ description: 'Luz' })], 'Lu')).toBeNull();
   });
 
-  it('traz a conta, a categoria e o tipo do que já foi lançado', () => {
+  it('traz a categoria e o tipo do que já foi lançado', () => {
     const lembranca = lembrar([entry()], 'mercado');
-    expect(lembranca).toMatchObject({
-      kind: 'expense', accountId: 'nubank', categoryId: 'alim', quantas: 1,
-    });
+    expect(lembranca).toMatchObject({ kind: 'expense', categoryId: 'alim', quantas: 1 });
+  });
+
+  it('não lembra a conta: o mesmo nome é pago ora num cartão, ora noutro', () => {
+    // Três vezes no mesmo cartão e ainda assim nada de conta: a decisão é de
+    // produto, não falta de dados.
+    const lembranca = lembrar([
+      entry({ accountId: 'nubank' }), entry({ accountId: 'nubank' }), entry({ accountId: 'nubank' }),
+    ], 'Mercado');
+    expect(lembranca).not.toHaveProperty('accountId');
   });
 
   it('vence a categoria mais frequente, não a última', () => {
@@ -110,13 +117,13 @@ describe('lembrar', () => {
 
   it('não deixa o estorno estragar o voto das compras', () => {
     const lembranca = lembrar([
-      entry({ kind: 'expense', accountId: 'nubank', date: '2026-01-10' }),
-      entry({ kind: 'expense', accountId: 'nubank', date: '2026-02-10' }),
+      entry({ kind: 'expense', categoryId: 'alim', date: '2026-01-10' }),
+      entry({ kind: 'expense', categoryId: 'alim', date: '2026-02-10' }),
       // Devolveram: entrou na carteira. É o mais recente, e não pode virar o
       // padrão de um nome que é de saída dez vezes.
-      entry({ kind: 'income', accountId: 'carteira', date: '2026-10-10' }),
+      entry({ kind: 'income', categoryId: 'estornos', date: '2026-10-10' }),
     ], 'Mercado');
-    expect(lembranca).toMatchObject({ kind: 'expense', accountId: 'nubank', quantas: 2 });
+    expect(lembranca).toMatchObject({ kind: 'expense', categoryId: 'alim', quantas: 2 });
   });
 
   it('prefere o nome exato ao parecido', () => {
@@ -134,16 +141,13 @@ describe('lembrar', () => {
     expect(lembranca!.nome).toBe('Mercado do mês');
   });
 
-  it('pula a conta e a categoria que não existem mais', () => {
+  it('pula a categoria que não existe mais', () => {
     const entries = [
-      entry({ accountId: 'apagada', categoryId: 'arquivada', date: '2026-10-10' }),
-      entry({ accountId: 'nubank', categoryId: 'alim', date: '2026-01-10' }),
+      entry({ categoryId: 'arquivada', date: '2026-10-10' }),
+      entry({ categoryId: 'alim', date: '2026-01-10' }),
     ];
-    const lembranca = lembrar(entries, 'Mercado', {
-      contas: new Set(['nubank']),
-      categorias: new Set(['alim']),
-    });
-    expect(lembranca).toMatchObject({ accountId: 'nubank', categoryId: 'alim' });
+    const lembranca = lembrar(entries, 'Mercado', { categorias: new Set(['alim']) });
+    expect(lembranca!.categoryId).toBe('alim');
   });
 
   it('sem categoria em nenhuma vez, devolve sem categoria', () => {

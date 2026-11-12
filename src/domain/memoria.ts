@@ -17,6 +17,12 @@
  * mercado foi em "Alimentação" oito vezes e uma vez em "Casa", a sugestão é
  * Alimentação; se foi quatro e quatro, vale o que foi feito por último — é a
  * decisão mais nova sobre a mesma coisa.
+ *
+ * **A conta de propósito não entra.** Ela foi lembrada por uma versão e saiu a
+ * pedido de quem usa, com um argumento que o histórico confirma: o mesmo
+ * mercado é pago ora no Nubank, ora no C6, ora no Santander. A categoria de um
+ * nome é estável; o cartão que pagou, não. Adivinhar a conta errada é pior que
+ * não adivinhar nada, porque ela muda em silêncio o saldo de duas contas.
  */
 
 import { descricoesCasam, textoComparavel } from './similar.ts';
@@ -78,7 +84,6 @@ export interface Lembranca {
   /** O nome como está gravado — serve para dizer de onde veio a sugestão. */
   nome: string;
   kind: EntryKind;
-  accountId: string;
   categoryId: string | null;
   /** O valor do lançamento mais recente com este nome. */
   amount: number;
@@ -95,9 +100,7 @@ export interface Lembranca {
 }
 
 export interface Permitidos {
-  /** Ids de conta que ainda existem e não estão arquivadas. */
-  contas?: ReadonlySet<string>;
-  /** Idem para categorias. */
+  /** Ids de categoria que ainda existem e não estão arquivadas. */
   categorias?: ReadonlySet<string>;
 }
 
@@ -136,12 +139,8 @@ export function lembrar(
 
   const kind = maisVotado(ordenados.map((e) => e.kind))!;
   // Misturar um estorno (entrada) com as compras (saídas) estragaria o voto da
-  // conta e da categoria: daqui para baixo, só os do tipo que venceu.
+  // categoria: daqui para baixo, só os do tipo que venceu.
   const doTipo = ordenados.filter((e) => e.kind === kind);
-
-  const accountId = maisVotado(
-    doTipo.map((e) => e.accountId).filter((id) => permitido(id, permitidos.contas)),
-  ) ?? doTipo[0]!.accountId;
 
   const categoryId = maisVotado(
     doTipo
@@ -154,7 +153,6 @@ export function lembrar(
   return {
     nome: doTipo[0]!.description.trim(),
     kind,
-    accountId,
     categoryId,
     amount: valores[0]!,
     valorEstavel: valores.every((v) => v === valores[0]),

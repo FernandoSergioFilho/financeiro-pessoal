@@ -307,12 +307,15 @@ function SingleFields({
  *
  * Preencher sem dizer por que seria pior que não preencher: a pessoa veria uma
  * categoria que ela não escolheu e não saberia se foi ela que errou. A frase
- * cita o dia do lançamento que serviu de molde, que é o que permite conferir.
+ * cita o dia do lançamento que serviu de molde, que é o que permite conferir,
+ * e **nomeia o que foi preenchido** — senão quem lê fica procurando o que
+ * mudou na tela.
  */
 function dicaDaMemoria(lembranca: Lembranca): string {
-  const partes = [`↺ Como em ${formatDate(lembranca.ultima)}`];
-  if (lembranca.valorEstavel) partes.push(formatMoney(lembranca.amount));
-  return `${partes.join(' · ')} — já preenchi o resto, confira.`;
+  const quando = `↺ Como em ${formatDate(lembranca.ultima)}`;
+  return lembranca.valorEstavel
+    ? `${quando} — categoria e valor (${formatMoney(lembranca.amount)}) preenchidos; confira.`
+    : `${quando} — categoria preenchida; confira.`;
 }
 
 /* -------------------------------------------------------------- parcelado */
@@ -1133,26 +1136,25 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
   /*
    * A memória dos nomes.
    *
-   * Escrever "Mercado" traz de volta a categoria, a conta e — quando o valor
-   * nunca mudou — o valor. O que a pessoa já mexeu com a própria mão fica
-   * intocado: preencher por cima do que alguém acabou de escolher seria pior
-   * que não preencher nada. É por isso que `mexeu` existe, e por isso que o
-   * campo de valor só é marcado como mexido quando o número muda de verdade
-   * (ver `MoneyInput`) — ele nasce em foco, e um clique fora não é uma escolha.
+   * Escrever "Mercado" traz de volta a categoria, o tipo e — quando o valor
+   * nunca mudou — o valor. **A conta não**, de propósito: o mesmo mercado é
+   * pago ora num cartão, ora noutro, e o porquê está em `domain/memoria.ts`.
+   *
+   * O que a pessoa já mexeu com a própria mão fica intocado: preencher por
+   * cima do que alguém acabou de escolher seria pior que não preencher nada.
+   * É por isso que `mexeu` existe, e por isso que o campo de valor só é
+   * marcado como mexido quando o número muda de verdade (ver `MoneyInput`) —
+   * ele nasce em foco, e um clique fora não é uma escolha.
    */
-  const mexeu = useRef({ valor: false, conta: false, categoria: false, tipo: false });
+  const mexeu = useRef({ valor: false, categoria: false, tipo: false });
   const [lembranca, setLembranca] = useState<Lembranca | null>(null);
   const permitidos = useMemo(
-    () => ({
-      contas: new Set(data.accounts.filter((c) => !c.archived).map((c) => c.id)),
-      categorias: new Set(data.categories.filter((c) => !c.archived).map((c) => c.id)),
-    }),
-    [data.accounts, data.categories],
+    () => ({ categorias: new Set(data.categories.filter((c) => !c.archived).map((c) => c.id)) }),
+    [data.categories],
   );
 
   function definir(patch: Partial<SingleState>) {
     if ('amount' in patch) mexeu.current.valor = true;
-    if ('accountId' in patch) mexeu.current.conta = true;
     if ('categoryId' in patch) mexeu.current.categoria = true;
     if ('kind' in patch) mexeu.current.tipo = true;
     aplicar(patch);
@@ -1181,7 +1183,6 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
     // memória não guarda, e o formulário ficaria meio preenchido.
     if (!mexeu.current.tipo && achada.kind !== 'transfer') patch.kind = achada.kind;
     if (!mexeu.current.categoria) patch.categoryId = achada.categoryId;
-    if (!mexeu.current.conta) patch.accountId = achada.accountId;
     if (!mexeu.current.valor && achada.valorEstavel) patch.amount = achada.amount;
     return patch;
   }

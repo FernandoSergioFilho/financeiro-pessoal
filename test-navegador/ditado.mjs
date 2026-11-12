@@ -18,8 +18,8 @@
  *     encerra mesmo, em vez de recomeçar a gravação;
  *  1. a frase ditada preenche valor, data, nome, tipo e conta;
  *  2. o que foi entendido aparece escrito, para conferência;
- *  3. escrever um nome já usado traz de volta categoria, conta e — quando o
- *     valor nunca mudou — o valor;
+ *  3. escrever um nome já usado traz de volta a categoria e — quando o valor
+ *     nunca mudou — o valor, **sem nunca mexer na conta**;
  *  4. o que a pessoa escolheu com a mão não é sobrescrito pela memória;
  *  5. o bloco de ditar não rola a tela de lado nem encolhe o botão.
  */
@@ -230,6 +230,8 @@ for (const largura of [390, 834, 1280]) {
   cobrar(data === ONTEM, `${largura}: "ontem" virou ${data} (esperado ${ONTEM})`);
   cobrar(nome === 'Mercado', `${largura}: o nome ditado virou "${nome}" (esperado Mercado)`);
   cobrar(saida === 'true', `${largura}: "paguei" não deixou o tipo em Saída`);
+  // Dita, a conta vale: quem disse "no Nubank" escolheu. É só o nome digitado
+  // que não puxa conta nenhuma.
   cobrar(conta === 'nb', `${largura}: "no Nubank" não escolheu a conta (ficou "${conta}")`);
   // A categoria não foi dita: vem da memória dos três Mercados já lançados.
   cobrar(categoria === 'alim', `${largura}: a memória não trouxe a categoria do nome ditado (ficou "${categoria}")`);
@@ -315,21 +317,33 @@ for (const largura of [390, 1280]) {
     cobrar(opcoes.includes(esperado), `${largura}: "${esperado}" não está na lista de nomes já usados — ${opcoes.join(', ')}`);
   }
 
-  // Nome de valor que muda: traz categoria e conta, e NÃO chuta o valor.
+  /* A conta com que o diálogo nasce. Nenhum nome digitado pode mudá-la: o
+     mesmo mercado é pago ora num cartão, ora noutro, e adivinhar errado mexe
+     no saldo de duas contas sem ninguém pedir. Os lançamentos da carteira de
+     teste são todos em OUTRAS contas de propósito — se a memória voltar a
+     puxar a conta, ela muda aqui e a sonda vê. */
+  const contaInicial = await conta.inputValue();
+  cobrar(contaInicial !== 'nb' && contaInicial !== '',
+    `${largura}: a conta inicial ("${contaInicial}") não serve para o teste da conta`);
+
+  // Nome de valor que muda: traz a categoria, e NÃO chuta o valor.
   await nome.fill('Mercado');
   await p.waitForTimeout(350);
   cobrar(await categoria.inputValue() === 'alim', `${largura}: "Mercado" não trouxe a categoria`);
-  cobrar(await conta.inputValue() === 'nb', `${largura}: "Mercado" não trouxe a conta`);
+  cobrar(await conta.inputValue() === contaInicial,
+    `${largura}: "Mercado" mexeu na conta (de "${contaInicial}" para "${await conta.inputValue()}")`);
   cobrar(await valor.inputValue() === '', `${largura}: chutou um valor para um nome cujo valor muda ("${await valor.inputValue()}")`);
   const dica = (await p.locator('.dialog .field:has(input[list="nomes-ja-lancados"]) .hint').textContent()) ?? '';
   cobrar(/Como em/.test(dica), `${largura}: a dica não diz de onde veio o preenchido — "${dica}"`);
+  cobrar(/categoria/i.test(dica), `${largura}: a dica não diz o que foi preenchido — "${dica}"`);
 
-  // Nome de valor fixo: aí sim o valor vem pronto.
+  // Nome de valor fixo: aí sim o valor vem pronto. E a conta, de novo, não.
   await nome.fill('Aluguel');
   await p.waitForTimeout(350);
   cobrar(await valor.inputValue() === '1.800,00', `${largura}: "Aluguel" não trouxe o valor fixo (ficou "${await valor.inputValue()}")`);
   cobrar(await categoria.inputValue() === 'casa', `${largura}: "Aluguel" não trouxe a categoria Casa`);
-  cobrar(await conta.inputValue() === 'cc', `${largura}: "Aluguel" não trouxe a conta corrente`);
+  cobrar(await conta.inputValue() === contaInicial,
+    `${largura}: "Aluguel" mexeu na conta (ficou "${await conta.inputValue()}")`);
 
   // Nome de entrada: o tipo vira Entrada, e a categoria é de entrada.
   await nome.fill('Salário');
@@ -362,7 +376,7 @@ for (const largura of [390, 1280]) {
   cobrar(await p.locator('.dialog').getByLabel('Categoria', { exact: true }).inputValue() === 'casa',
     'a memória passou por cima da categoria escolhida na mão');
   cobrar(await p.locator('.dialog').getByLabel('Conta', { exact: true }).inputValue() === 'card',
-    'a memória passou por cima da conta escolhida na mão');
+    'a conta escolhida na mão não sobreviveu ao nome digitado');
   cobrar(await p.locator('.dialog input.money').inputValue() === '33,00',
     'a memória passou por cima do valor digitado');
 

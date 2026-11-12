@@ -44,6 +44,15 @@ export interface Novidade {
  */
 export const NOVIDADES: Novidade[] = [
   {
+    id: '2026-11-12-memoria-sem-a-conta',
+    data: '2026-11-12',
+    titulo: 'O nome lembra a categoria, e não a conta',
+    itens: [
+      'Escrever um nome já usado continua trazendo de volta a **categoria** e o tipo — e o valor, quando aquele nome sempre teve o mesmo valor.',
+      '**A conta deixou de ser preenchida.** O mesmo mercado é pago ora num cartão, ora noutro, e errar o cartão mexe no saldo de duas contas sem você pedir. Quando você **dita** a frase, porém, "no Nubank" continua valendo: ali você disse qual é.',
+    ],
+  },
+  {
     id: '2026-11-11-historico-de-alteracoes',
     data: '2026-11-11',
     titulo: 'Histórico de alterações nos Ajustes',
@@ -76,7 +85,7 @@ export const NOVIDADES: Novidade[] = [
     titulo: 'Ditar o lançamento, e lembrar o padrão de cada nome',
     itens: [
       'Em **+ Novo lançamento → Avulso** tem um botão de microfone. "Paguei o mercado quarenta e cinco reais ontem no Nubank" vira valor, data, nome, tipo e conta, e o app mostra o que entendeu antes de você confirmar.',
-      'O campo **Descrição** passou a oferecer os nomes que você já usou. Ao escolher um, voltam a categoria, a conta e o tipo — e o valor, quando aquele nome sempre teve o mesmo valor.',
+      'O campo **Descrição** passou a oferecer os nomes que você já usou. Ao escolher um, voltam a categoria e o tipo — e o valor, quando aquele nome sempre teve o mesmo valor.',
       'O que você escolher com a própria mão nunca é sobrescrito pelo que o app lembra.',
     ],
   },
