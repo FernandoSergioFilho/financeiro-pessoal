@@ -44,6 +44,16 @@ export interface Novidade {
  */
 export const NOVIDADES: Novidade[] = [
   {
+    id: '2026-11-12-ditado-mais-solto',
+    data: '2026-11-12',
+    titulo: 'O ditado entende mais, e não para quando você pensa',
+    itens: [
+      '**Ficar calado não encerra mais a gravação.** Pode parar no meio para lembrar o valor: o microfone continua aberto e só o segundo toque encerra, como no botão de áudio do Claude. Por segurança, se passarem cinco minutos ele encerra sozinho e avisa.',
+      'Muito mais jeitos de dizer a mesma coisa. Saída: **gastei, paguei, comprei, torrei, quitei, custou, me cobraram, descontaram, saiu da conta, passei no cartão, fiz um pix, almocei, abasteci**. Entrada: **recebi, caiu na conta, chegou na conta, pingou, me pagaram, creditaram, ganhei, vendi, estornaram, reembolsaram, rendeu, décimo terceiro, comissão**.',
+      'E o app distingue o que a mesma palavra quer dizer: *"chegou na conta"* é dinheiro entrando; *"chegou a conta de luz"*, não.',
+    ],
+  },
+  {
     id: '2026-11-12-memoria-sem-a-conta',
     data: '2026-11-12',
     titulo: 'O nome lembra a categoria, e não a conta',

@@ -181,6 +181,85 @@ describe('tipo', () => {
     expect(ler('mercado 45 reais').kind).toBeNull();
   });
 
+  it('aceita as muitas formas de dizer que saiu dinheiro', () => {
+    for (const frase of [
+      'gastei 45 reais no mercado',
+      'torrei 45 reais no mercado',
+      'comprei 45 reais de pão',
+      'quitei 45 reais da fatura',
+      'desembolsei 45 reais',
+      'custou 45 reais',
+      'me cobraram 45 reais',
+      'descontaram 45 reais',
+      'debitou 45 reais',
+      'saiu da conta 45 reais',
+      'foi descontado 45 reais',
+      'passei no cartão 45 reais',
+      'fiz um pix de 45 reais',
+      'almocei 45 reais',
+      'abasteci 45 reais',
+      'emprestei 45 reais para o João',
+      'dei entrada de 45 reais',
+    ]) {
+      expect(ler(frase).kind, frase).toBe('expense');
+    }
+  });
+
+  it('aceita as muitas formas de dizer que entrou dinheiro', () => {
+    for (const frase of [
+      'recebi 45 reais',
+      'caiu na conta 45 reais',
+      'chegou na conta 45 reais',
+      'chegou para minha conta 45 reais',
+      'entrou na conta 45 reais',
+      'pingou na conta 45 reais',
+      'me pagaram 45 reais',
+      'me depositaram 45 reais',
+      'creditaram 45 reais',
+      'ganhei 45 reais',
+      'vendi a bicicleta por 45 reais',
+      'estornaram 45 reais',
+      'me devolveram 45 reais',
+      'reembolsaram 45 reais',
+      'rendeu 45 reais',
+      'décimo terceiro 45 reais',
+      'comissão de 45 reais',
+    ]) {
+      expect(ler(frase).kind, frase).toBe('income');
+    }
+  });
+
+  it('a mesma palavra decide pelo que vem depois dela', () => {
+    // "Chegou na conta" é dinheiro entrando; "chegou a conta de luz" é a
+    // fatura chegando. Pôr "chegou" solto na lista de entrada transformaria
+    // toda conta que chega num dinheiro que entrou.
+    expect(ler('chegou na conta 2 mil reais').kind).toBe('income');
+    expect(ler('chegou a conta de luz 180 reais').kind).not.toBe('income');
+    // "Pagaram a conta" é gasto; "me pagaram" é recebimento.
+    expect(ler('me pagaram 500 reais').kind).toBe('income');
+    expect(ler('pagamos 500 reais do aluguel').kind).toBe('expense');
+  });
+
+  it('mandar dinheiro sem duas contas é saída, não transferência', () => {
+    const fala = ler('mandei 200 reais para o João');
+    expect(fala.kind).toBe('expense');
+    expect(fala.toAccountId).toBeNull();
+    // Com as duas contas, continua sendo transferência.
+    expect(ler('mandei 200 reais do Nubank para o Itaú').kind).toBe('transfer');
+  });
+
+  it('o verbo novo sai da descrição, e o substantivo fica', () => {
+    expect(ler('gastei 30 reais de gasolina').description).toBe('Gasolina');
+    // Sem substantivo nenhum na frase, o verbo vira o nome — mas só este
+    // punhado em que a tradução é óbvia.
+    expect(ler('almocei 30 reais').description).toBe('Almoço');
+    expect(ler('abasteci 200 reais').description).toBe('Combustível');
+    // "Paguei" não vira nome: pagar o quê é o que a frase não disse.
+    expect(ler('paguei 50 reais').description).toBe('');
+    expect(ler('caiu na conta o salário de 5 mil reais').description).toBe('Salário');
+    expect(ler('estornaram 45 reais da compra').description).toBe('Compra');
+  });
+
   it('só é transferência com as duas contas', () => {
     const duas = ler('transferi 500 reais do Nubank para o Itaú');
     expect(duas.kind).toBe('transfer');

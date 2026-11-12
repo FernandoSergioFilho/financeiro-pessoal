@@ -111,23 +111,92 @@ const DIAS_RELATIVOS: Record<string, number> = {
  * "recebi o salário de cinco mil" terminava sem descrição nenhuma.
  */
 const INDICAM_SAIDA = new Set([
-  'paguei', 'pagamos', 'pagou', 'pagar', 'gastei', 'gastamos', 'gastou',
-  'comprei', 'compramos', 'comprou', 'compra', 'saiu', 'saida', 'debitou',
-  'debitaram', 'torrei', 'despesa', 'gasto',
+  // pagar e quitar
+  'paguei', 'pagamos', 'pagou', 'pagar', 'quitei', 'quitamos', 'quitado',
+  // gastar
+  'gastei', 'gastamos', 'gastou', 'gastar', 'gasto', 'gastos', 'torrei',
+  'desembolsei', 'desembolso', 'despesa', 'despesas',
+  // comprar
+  'comprei', 'compramos', 'comprou', 'comprar', 'compra', 'compras',
+  'parcelei', 'financiei', 'aluguei', 'assinei',
+  // o dinheiro saindo, visto da conta
+  'saiu', 'sairam', 'saida', 'debitou', 'debitaram', 'debitado', 'debitei',
+  'descontaram', 'descontou', 'descontado', 'cobraram', 'cobrou', 'cobrado',
+  'cobranca', 'custou', 'custaram',
+  // mandar dinheiro para fora. Também são de transferência: quando as duas
+  // contas aparecem na frase, aquela regra ganha; sem isso, é saída mesmo —
+  // "mandei 200 para o João" não é transferência entre contas minhas.
+  'mandei', 'mandamos', 'enviei', 'enviamos', 'transferi', 'transferimos',
+  'passei', 'emprestei', 'doei',
+  // refeições, que no dia a dia aparecem como verbo
+  'almocei', 'jantei', 'lanchei', 'abasteci',
 ]);
 
 const INDICAM_ENTRADA = new Set([
-  'recebi', 'recebemos', 'recebeu', 'recebido', 'recebida', 'entrou',
-  'entrada', 'caiu', 'ganhei', 'ganhamos', 'salario', 'deposito',
-  'depositou', 'depositaram', 'rendeu', 'rendimento', 'reembolso',
-  'estorno', 'estornaram', 'devolveram', 'devolucao', 'vendi', 'vendemos',
-  'venda', 'receita',
+  // receber
+  'recebi', 'recebemos', 'recebeu', 'recebido', 'recebida', 'recebimento',
+  // o dinheiro chegando, visto da conta
+  'entrou', 'entraram', 'entrada', 'caiu', 'cairam', 'pingou', 'pingaram',
+  'creditaram', 'creditou', 'depositou', 'depositaram', 'deposito',
+  // ganhar
+  'ganhei', 'ganhamos', 'ganhou', 'ganho', 'lucro', 'lucrei',
+  // de onde o dinheiro costuma vir
+  'salario', 'ordenado', 'adiantamento', 'bonus', 'comissao', 'comissoes',
+  'honorarios', 'freela', 'freelance', 'premio', 'premiacao', 'vale',
+  'rendeu', 'rendimento', 'rendimentos', 'juros', 'receita', 'receitas',
+  // dinheiro que volta
+  'reembolso', 'reembolsaram', 'reembolsou', 'estorno', 'estornaram',
+  'estornou', 'devolveram', 'devolveu', 'devolucao', 'restituicao',
+  // vender
+  'vendi', 'vendemos', 'vendeu', 'venda', 'vendas',
 ]);
 
 const INDICAM_TRANSFERENCIA = new Set([
   'transferi', 'transferimos', 'transferencia', 'transferir', 'mandei',
-  'passei', 'movi', 'mandamos',
+  'passei', 'movi', 'mandamos', 'enviei', 'enviamos',
 ]);
+
+/**
+ * Expressões de duas ou três palavras, conferidas antes das palavras soltas.
+ *
+ * Existem porque algumas das formas mais naturais de dizer "entrou dinheiro"
+ * usam palavras que, sozinhas, significam o contrário. "Chegou" é o caso
+ * exemplar: *chegou na conta* é entrada, e *chegou a conta de luz* é saída —
+ * a mesma palavra, decidida pela preposição. Pôr "chegou" na lista de
+ * entrada transformaria toda conta que chega num dinheiro que entrou.
+ *
+ * O mesmo vale para "pagaram": quem pagou a conta gastou, mas quem *me*
+ * pagou me deu dinheiro.
+ */
+interface Expressao {
+  palavras: string[];
+  kind: EntryKind;
+}
+
+const EXPRESSOES: Expressao[] = [
+  { palavras: ['chegou', 'na', 'conta'], kind: 'income' },
+  { palavras: ['chegou', 'no', 'banco'], kind: 'income' },
+  { palavras: ['chegou', 'pra', 'conta'], kind: 'income' },
+  { palavras: ['chegou', 'para', 'minha', 'conta'], kind: 'income' },
+  { palavras: ['chegou', 'para', 'a', 'conta'], kind: 'income' },
+  { palavras: ['caiu', 'na', 'conta'], kind: 'income' },
+  { palavras: ['entrou', 'na', 'conta'], kind: 'income' },
+  { palavras: ['pingou', 'na', 'conta'], kind: 'income' },
+  { palavras: ['me', 'pagaram'], kind: 'income' },
+  { palavras: ['me', 'pagou'], kind: 'income' },
+  { palavras: ['nos', 'pagaram'], kind: 'income' },
+  { palavras: ['me', 'depositaram'], kind: 'income' },
+  { palavras: ['me', 'devolveram'], kind: 'income' },
+  { palavras: ['decimo', 'terceiro'], kind: 'income' },
+  { palavras: ['saiu', 'da', 'conta'], kind: 'expense' },
+  { palavras: ['foi', 'descontado'], kind: 'expense' },
+  { palavras: ['passei', 'no', 'cartao'], kind: 'expense' },
+  { palavras: ['passei', 'no', 'credito'], kind: 'expense' },
+  { palavras: ['passei', 'no', 'debito'], kind: 'expense' },
+  { palavras: ['fiz', 'um', 'pix'], kind: 'expense' },
+  { palavras: ['mandei', 'um', 'pix'], kind: 'expense' },
+  { palavras: ['dei', 'entrada'], kind: 'expense' },
+];
 
 /**
  * O que sai do texto por ser só maneira de narrar, e nunca nome de nada.
@@ -137,19 +206,40 @@ const INDICAM_TRANSFERENCIA = new Set([
  * "conta do Nubank" é outra coisa ainda.
  */
 const VERBOS = new Set([
-  'paguei', 'pagamos', 'pagou', 'pagar', 'gastei', 'gastamos', 'gastou',
-  'comprei', 'compramos', 'comprou', 'saiu', 'debitou', 'debitaram', 'torrei',
-  'recebi', 'recebemos', 'recebeu', 'entrou', 'caiu', 'ganhei', 'ganhamos',
-  'depositou', 'depositaram', 'estornaram', 'devolveram', 'vendi', 'vendemos',
-  'transferi', 'transferimos', 'transferir', 'mandei', 'mandamos', 'passei', 'movi',
+  'paguei', 'pagamos', 'pagou', 'pagar', 'pagaram', 'quitei', 'quitamos',
+  'gastei', 'gastamos', 'gastou', 'gastar', 'torrei', 'desembolsei',
+  'comprei', 'compramos', 'comprou', 'comprar', 'parcelei', 'financiei',
+  'aluguei', 'assinei', 'almocei', 'jantei', 'lanchei', 'abasteci',
+  'saiu', 'sairam', 'debitou', 'debitaram', 'debitei', 'descontaram',
+  'descontou', 'cobraram', 'cobrou', 'custou', 'custaram',
+  'recebi', 'recebemos', 'recebeu', 'entrou', 'entraram', 'caiu', 'cairam',
+  'pingou', 'pingaram', 'creditaram', 'creditou', 'depositou', 'depositaram',
+  'ganhei', 'ganhamos', 'ganhou', 'lucrei', 'rendeu', 'chegou',
+  'reembolsaram', 'reembolsou', 'estornaram', 'estornou', 'devolveram',
+  'devolveu', 'vendi', 'vendemos', 'vendeu',
+  'transferi', 'transferimos', 'transferir', 'mandei', 'mandamos', 'enviei',
+  'enviamos', 'passei', 'movi', 'emprestei', 'doei', 'fiz', 'dei',
 ]);
+
+/**
+ * Verbos que já são o nome do lançamento, quando nada mais sobra.
+ *
+ * "Almocei trinta reais" não tem substantivo nenhum, e a descrição sairia
+ * vazia; mas o nome está ali, dito como verbo. Vale só para este punhado em
+ * que a tradução é óbvia e única — "paguei" continua não virando nome, porque
+ * pagar o quê é justamente o que a frase não disse.
+ */
+const NOME_DO_VERBO: Record<string, string> = {
+  almocei: 'Almoço', almocamos: 'Almoço', jantei: 'Jantar', jantamos: 'Jantar',
+  lanchei: 'Lanche', lanchamos: 'Lanche', abasteci: 'Combustível',
+};
 
 /** Palavras sem conteúdo, tiradas das pontas do que sobra para a descrição. */
 const RECHEIO = new Set([
   'de', 'do', 'da', 'dos', 'das', 'no', 'na', 'nos', 'nas', 'o', 'a', 'os',
   'as', 'um', 'uma', 'em', 'com', 'por', 'pra', 'pro', 'para', 'pelo', 'pela',
   'foi', 'que', 'e', 'valor', 'total', 'ai', 'la', 'ali', 'aqui', 'meu',
-  'minha', 'nosso', 'nossa', 'ja',
+  'minha', 'nosso', 'nossa', 'ja', 'me', 'se', 'lhe',
 ]);
 
 /* ---------------------------------------------------------------- palavras */
@@ -597,25 +687,46 @@ function lerCategoria(
 /* ------------------------------------------------------------------- tipo */
 
 function lerTipo(palavras: Palavra[], contasAchadas: number): EntryKind | null {
-  // Quem fala diz o verbo primeiro: vale o indicador que aparece antes.
+  // Quem fala diz o verbo primeiro, então vale a pista que aparece antes. Em
+  // empate de posição ganha a expressão, que é mais específica que a palavra
+  // solta que a compõe: "chegou na conta" sabe mais do que "chegou".
   let escolhido: EntryKind | null = null;
-  for (const palavra of palavras) {
-    if (palavra.usada) continue;
-    // Transferência precisa das duas contas; sem isso a frase é só "mandei"
-    // alguma coisa, e o palpite erraria o tipo e a conta de uma vez.
-    if (INDICAM_TRANSFERENCIA.has(palavra.norm) && contasAchadas >= 2) {
-      escolhido = 'transfer';
-      break;
-    }
-    if (INDICAM_ENTRADA.has(palavra.norm)) {
-      escolhido = 'income';
-      break;
-    }
-    if (INDICAM_SAIDA.has(palavra.norm)) {
-      escolhido = 'expense';
-      break;
+  let onde = Number.POSITIVE_INFINITY;
+  let vencedora: Expressao | null = null;
+
+  for (const expressao of EXPRESSOES) {
+    const i = procurarSequencia(palavras, expressao.palavras);
+    if (i !== -1 && i < onde) {
+      onde = i;
+      escolhido = expressao.kind;
+      vencedora = expressao;
     }
   }
+  // A expressão inteira sai do texto: "caiu na conta o salário" tem de virar
+  // "Salário", e não "Conta o salário". Só a vencedora, porque as outras
+  // podem ter casado em cima do que é nome.
+  if (vencedora) marcar(palavras, onde, onde + vencedora.palavras.length);
+
+  palavras.forEach((palavra, i) => {
+    if (palavra.usada || i >= onde) return;
+    // Transferência precisa das duas contas; sem isso a frase é só "mandei"
+    // alguma coisa, e o palpite erraria o tipo e a conta de uma vez. Os
+    // mesmos verbos estão em `INDICAM_SAIDA`, que é onde eles caem então.
+    if (INDICAM_TRANSFERENCIA.has(palavra.norm) && contasAchadas >= 2) {
+      onde = i;
+      escolhido = 'transfer';
+      return;
+    }
+    if (INDICAM_ENTRADA.has(palavra.norm)) {
+      onde = i;
+      escolhido = 'income';
+      return;
+    }
+    if (INDICAM_SAIDA.has(palavra.norm)) {
+      onde = i;
+      escolhido = 'expense';
+    }
+  });
 
   // Os verbos saem do texto de qualquer modo: eles não são nome de nada, e
   // sobrariam na descrição ("Paguei o mercado"). Os substantivos que indicam o
@@ -625,6 +736,16 @@ function lerTipo(palavras: Palavra[], contasAchadas: number): EntryKind | null {
   }
 
   return escolhido;
+}
+
+/** Onde `agulha` começa dentro das palavras ainda não usadas; -1 se não está. */
+function procurarSequencia(palavras: readonly Palavra[], agulha: readonly string[]): number {
+  for (let i = 0; i + agulha.length <= palavras.length; i += 1) {
+    const trecho = palavras.slice(i, i + agulha.length);
+    if (trecho.some((p) => p.usada)) continue;
+    if (trecho.every((p, j) => p.norm === agulha[j])) return i;
+  }
+  return -1;
 }
 
 /* ------------------------------------------------------------------- pago */
@@ -663,8 +784,14 @@ function montarDescricao(palavras: readonly Palavra[]): string {
   while (fundo()) sobra = sobra.slice(0, -1);
 
   const texto = sobra.join(' ').trim();
-  if (!texto) return '';
-  return texto.charAt(0).toUpperCase() + texto.slice(1);
+  if (texto) return texto.charAt(0).toUpperCase() + texto.slice(1);
+
+  // Sem nada à mostra, o verbo pode ser o nome — "almocei" é "Almoço".
+  for (const palavra of palavras) {
+    const nome = NOME_DO_VERBO[palavra.norm];
+    if (nome) return nome;
+  }
+  return '';
 }
 
 /* ----------------------------------------------------------------- entrada */

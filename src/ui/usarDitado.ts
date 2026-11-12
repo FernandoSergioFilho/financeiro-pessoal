@@ -21,6 +21,14 @@
  * e voltou a ser toque por pedido de quem usa — é o gesto do botão de ditar do
  * próprio Claude, e não exige manter o dedo parado enquanto se pensa na frase.
  *
+ * **O silêncio não encerra.** Esta é a parte que o navegador não entrega de
+ * graça: o reconhecimento de fala fecha sozinho depois de alguns segundos sem
+ * som, e fechava o ditado junto — quem parava para pensar no valor voltava e
+ * já não estava mais gravando. Agora, quando ele fecha sozinho, o app abre de
+ * novo na hora e **continua somando no mesmo texto**. Só o segundo toque
+ * encerra de verdade. É assim que funciona o botão de áudio do Claude, e foi
+ * pedido para ser assim aqui.
+ *
  * Duas folgas continuam valendo, e não são do gesto, são do reconhecedor:
  *
  * - **Encerrar antes de o microfone abrir não perde a frase.** Entre o toque e
@@ -48,6 +56,25 @@ export interface RecadoDoDitado {
 const MINIMO_OUVINDO = 400;
 
 /**
+ * Teto para o microfone aberto, contado do primeiro toque.
+ *
+ * Um ditado é uma frase; cinco minutos é folga de sobra até para quem para no
+ * meio e pensa. O teto existe para o caso de a pessoa sair de perto com a
+ * gravação ligada — num celular, um microfone esquecido aberto come bateria
+ * em silêncio. Quando ele chega, o app encerra e **diz** que encerrou, em vez
+ * de simplesmente parar de ouvir.
+ */
+const LIMITE_DE_FALA = 5 * 60 * 1000;
+
+/**
+ * Religar depois de o reconhecedor fechar sozinho é o normal. Religar e fechar
+ * de novo na mesma hora, muitas vezes seguidas, é defeito — microfone perdido,
+ * aba em segundo plano — e aí o laço precisa parar em vez de girar.
+ */
+const RECOMECOS_SEGUIDOS = 5;
+const RAPIDO_DEMAIS = 300;
+
+/**
  * Os dois jeitos de encerrar sem lançar nada, que pedem respostas diferentes.
  *
  * Quem ligou e desligou sem falar não produziu som nenhum. Quem falou e parou
@@ -57,6 +84,14 @@ const MINIMO_OUVINDO = 400;
 const NAO_OUVI: RecadoDoDitado = {
   texto: 'Não ouvi nada. Toque em Ditar, fale, e toque em Parar quando terminar.',
   tom: 'dica',
+};
+const DEU_O_TEMPO: RecadoDoDitado = {
+  texto: 'Encerrei depois de cinco minutos gravando. Toque em Ditar para recomeçar.',
+  tom: 'dica',
+};
+const SE_PERDEU: RecadoDoDitado = {
+  texto: 'O microfone fechou sozinho e não voltou. Toque em Ditar para tentar de novo.',
+  tom: 'erro',
 };
 const PAROU_CEDO: RecadoDoDitado = {
   texto: 'Parou antes de a frase fechar. Fale a frase inteira antes de tocar em Parar.',
@@ -96,8 +131,16 @@ interface Sessao {
   soltou: boolean;
   /** O fechamento agendado, para não agendar dois. */
   relogio: ReturnType<typeof setTimeout> | null;
+  /** O teto de cinco minutos. */
+  teto: ReturnType<typeof setTimeout> | null;
   /** Veio algum texto? Se não veio, a tela explica o gesto. */
   ouviu: boolean;
+  /** Quando o trecho atual do reconhecimento começou. */
+  trechoDesde: number;
+  /** Quantas vezes ele fechou e voltou sem nada acontecer no meio. */
+  recomecos: number;
+  /** Erro que não adianta religar: permissão negada, microfone ausente. */
+  fatal: boolean;
 }
 
 type ConstrutorDeReconhecedor = new () => Reconhecedor;
@@ -119,7 +162,9 @@ export function ditadoDisponivel(): boolean {
 const RECADOS: Record<string, RecadoDoDitado | null> = {
   'not-allowed': { texto: 'O navegador não liberou o microfone. Autorize no cadeado da barra de endereço.', tom: 'erro' },
   'service-not-allowed': { texto: 'O navegador não liberou o microfone. Autorize no cadeado da barra de endereço.', tom: 'erro' },
-  'no-speech': NAO_OUVI,
+  // Silêncio não é erro: o app religa o reconhecedor e segue ouvindo. Só
+  // vira recado no fim, se não tiver vindo frase nenhuma.
+  'no-speech': null,
   'audio-capture': { texto: 'Não achei microfone neste aparelho.', tom: 'erro' },
   network: { texto: 'O reconhecimento de fala precisa de internet.', tom: 'erro' },
   // Interrompido de propósito (outro ditado começou): não há o que dizer.
@@ -169,8 +214,11 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
     const atual = sessao.current;
     if (!atual) return;
     if (atual.relogio) clearTimeout(atual.relogio);
-    atual.reconhecedor.abort();
+    if (atual.teto) clearTimeout(atual.teto);
+    // Antes do `abort`: senão o `onend` dele acharia que foi queda e religaria.
+    atual.soltou = true;
     sessao.current = null;
+    atual.reconhecedor.abort();
   }, []);
 
   useEffect(() => () => limpar(), [limpar]);
@@ -188,17 +236,29 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
 
     const reconhecedor = new Reconhecimento();
     reconhecedor.lang = 'pt-BR';
-    // Uma frase por vez: o lançamento é uma frase, e `continuous` deixaria o
-    // microfone aberto esperando a próxima, gastando bateria sem precisar.
-    reconhecedor.continuous = false;
+    // Verdadeiro, para o reconhecedor não encerrar na primeira pausa da fala.
+    // Não basta: ele fecha sozinho de todo jeito depois de um tempo calado, e
+    // é o `onend` abaixo que o levanta de novo.
+    reconhecedor.continuous = true;
     reconhecedor.interimResults = true;
     reconhecedor.maxAlternatives = 1;
 
-    const atual: Sessao = { reconhecedor, abriuEm: null, soltou: false, relogio: null, ouviu: false };
+    const atual: Sessao = {
+      reconhecedor, abriuEm: null, soltou: false, relogio: null, teto: null,
+      ouviu: false, trechoDesde: Date.now(), recomecos: 0, fatal: false,
+    };
 
     let completo = '';
     reconhecedor.onstart = () => {
+      atual.trechoDesde = Date.now();
+      if (atual.abriuEm !== null) return; // é um recomeço; o resto já foi feito
       atual.abriuEm = Date.now();
+      atual.teto = setTimeout(() => {
+        if (atual.soltou) return;
+        setRecado(DEU_O_TEMPO);
+        atual.soltou = true;
+        encerrar(atual);
+      }, LIMITE_DE_FALA);
       // Mandaram parar enquanto o microfone ainda abria — na primeira vez,
       // enquanto o navegador pedia permissão. A intenção estava guardada.
       if (atual.soltou) encerrar(atual);
@@ -211,15 +271,51 @@ export function usarDitado(onTexto: (texto: string) => void): Ditado {
         else emAndamento += resultado[0].transcript;
       }
       const texto = (completo + emAndamento).trim();
-      if (texto) atual.ouviu = true;
+      if (texto) {
+        atual.ouviu = true;
+        // Veio som: o laço de proteção contra religar à toa se desfaz.
+        atual.recomecos = 0;
+      }
       setParcial(texto);
     };
     reconhecedor.onerror = (evento) => {
-      const achado = evento.error in RECADOS ? RECADOS[evento.error]! : null;
-      setRecado(achado ?? (evento.error === 'aborted' ? null : { texto: 'Não consegui ouvir. Tente de novo.', tom: 'erro' }));
+      // Permissão negada e microfone ausente não melhoram religando.
+      if (evento.error === 'not-allowed' || evento.error === 'service-not-allowed'
+        || evento.error === 'audio-capture') {
+        atual.fatal = true;
+      }
+      const conhecido = evento.error in RECADOS;
+      const achado = conhecido ? RECADOS[evento.error]! : null;
+      if (conhecido) {
+        if (achado) setRecado(achado);
+        return;
+      }
+      setRecado({ texto: 'Não consegui ouvir. Tente de novo.', tom: 'erro' });
     };
     reconhecedor.onend = () => {
+      /*
+       * O reconhecedor fecha em dois casos, e eles pedem coisas opostas.
+       *
+       * Fechou porque mandaram parar: é o fim, entrega a frase. Fechou
+       * sozinho — o que ele faz depois de alguns segundos calado, mesmo com
+       * `continuous` ligado — e ninguém mandou parar: abre de novo, na hora,
+       * guardando o que já foi dito. Para quem está falando, nada aconteceu.
+       */
+      if (!atual.soltou && !atual.fatal && sessao.current === atual) {
+        atual.recomecos = Date.now() - atual.trechoDesde < RAPIDO_DEMAIS ? atual.recomecos + 1 : 0;
+        if (atual.recomecos < RECOMECOS_SEGUIDOS) {
+          try {
+            reconhecedor.start();
+            return;
+          } catch {
+            // Não voltou; cai no encerramento abaixo, com o recado.
+          }
+        }
+        setRecado(SE_PERDEU);
+      }
+
       if (atual.relogio) clearTimeout(atual.relogio);
+      if (atual.teto) clearTimeout(atual.teto);
       if (sessao.current === atual) sessao.current = null;
       setEstado('parado');
       const texto = completo.trim();

@@ -16,6 +16,9 @@
  * O que se cobra, nas três larguras:
  *  0. um toque abre o microfone e o toque seguinte fecha — e o segundo toque
  *     encerra mesmo, em vez de recomeçar a gravação;
+ *  0b. ficar calado NÃO encerra a gravação: o navegador fecha o reconhecedor
+ *     sozinho depois de alguns segundos sem som, e o app tem de reabrir na
+ *     hora, somando no mesmo texto. Só o segundo toque encerra;
  *  1. a frase ditada preenche valor, data, nome, tipo e conta;
  *  2. o que foi entendido aparece escrito, para conferência;
  *  3. escrever um nome já usado traz de volta a categoria e — quando o valor
@@ -258,6 +261,101 @@ for (const largura of [390, 834, 1280]) {
     cobrar(categoryId === 'alim', `${largura}: gravou a categoria ${categoryId}`);
     // "Paguei" no passado não é confirmação: o app não mexe no saldo sozinho.
     cobrar(status === 'pending', `${largura}: "paguei" marcou como pago sozinho (${status})`);
+  }
+  await ctx.close();
+}
+
+/* ============ 0b. o silêncio não encerra a gravação ====================== */
+/*
+ * O reconhecimento de fala do navegador fecha sozinho depois de alguns
+ * segundos calado — mesmo com `continuous` ligado. Era o que fazia o ditado
+ * morrer no meio: quem parava para pensar no valor voltava e já não estava
+ * mais gravando.
+ *
+ * Este falso fecha sozinho quando a sonda manda, como o de verdade faz no
+ * silêncio, e entrega a frase em DUAS partes — uma antes do fechamento, outra
+ * depois. Só sai um lançamento certo se o app tiver reaberto o microfone e
+ * guardado a primeira parte.
+ */
+function instalarFalsoQueCala({ parte1, parte2 }) {
+  window.__ditado = { iniciou: 0, parou: 0, continuo: null, calar: null };
+  class Falso {
+    constructor() {
+      this.lang = ''; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1;
+      this.onstart = null; this.onresult = null; this.onerror = null; this.onend = null;
+    }
+    start() {
+      window.__ditado.iniciou += 1;
+      window.__ditado.continuo = this.continuous;
+      const vez = window.__ditado.iniciou;
+      const dizer = (texto) => this.onresult?.({
+        resultIndex: 0, results: [{ 0: { transcript: texto }, isFinal: true }],
+      });
+      setTimeout(() => this.onstart?.(), 5);
+      setTimeout(() => dizer(vez === 1 ? parte1 : parte2), 80);
+      if (vez === 1) {
+        // É assim que o navegador avisa que ficou sem som: um erro, e o fim.
+        window.__ditado.calar = () => { this.onerror?.({ error: 'no-speech' }); this.onend?.(); };
+      }
+    }
+    stop() { window.__ditado.parou += 1; this.onend?.(); }
+    abort() {}
+  }
+  window.SpeechRecognition = Falso;
+  window.webkitSpeechRecognition = Falso;
+}
+
+for (const largura of [390, 1280]) {
+  const ctx = await b.newContext({
+    viewport: { width: largura, height: 1000 },
+    hasTouch: largura < 600, isMobile: largura < 600,
+  });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => falhas.push(`erro de página (silêncio) ${largura}: ${e}`));
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, CARTEIRA);
+  await p.addInitScript(instalarFalsoQueCala, {
+    parte1: 'paguei o mercado quarenta e cinco reais',
+    parte2: 'ontem no Nubank',
+  });
+
+  await p.goto(`${APP}#/lancamentos`);
+  await p.waitForSelector('.eixos-do-recorte');
+  await abrirNovo(p, largura);
+  const botao = p.locator('.dialog .ditado-botao');
+  await botao.click();
+  await p.waitForTimeout(300);
+
+  cobrar(await p.evaluate(() => window.__ditado.continuo) === true,
+    `${largura}: o reconhecedor foi ligado sem "continuous" — ele encerraria na primeira pausa da fala`);
+  const antesDoSilencio = (await p.locator('.dialog .ditado-texto').textContent()) ?? '';
+  cobrar(/mercado/.test(antesDoSilencio),
+    `${largura}: a primeira parte não apareceu na tela — "${antesDoSilencio}"`);
+
+  // Agora o silêncio: o navegador fecha o reconhecedor por conta própria.
+  await p.evaluate(() => window.__ditado.calar());
+  await p.waitForTimeout(600);
+
+  cobrar(await p.evaluate(() => window.__ditado.iniciou) >= 2,
+    `${largura}: o app não reabriu o microfone depois do silêncio — a gravação morreu sozinha`);
+  cobrar(await botao.getAttribute('aria-pressed') === 'true',
+    `${largura}: depois do silêncio o botão já não está gravando`);
+  cobrar(/Parar/.test((await botao.textContent()) ?? ''),
+    `${largura}: depois do silêncio o botão voltou a dizer "Ditar"`);
+  cobrar((await p.locator('.dialog .banner.ok').count()) === 0,
+    `${largura}: o silêncio sozinho já deu o lançamento por encerrado`);
+
+  // E só agora, no segundo toque, encerra.
+  await botao.click();
+  if (await esperar(p, '.dialog .banner.ok:has-text("Entendi")',
+    `${largura}: depois do silêncio, o segundo toque não encerrou o ditado`)) {
+    const valor = await p.locator('.dialog input.money').inputValue();
+    const conta = await p.locator('.dialog').getByLabel('Conta', { exact: true }).inputValue();
+    const data = await p.locator('.dialog input[type="date"]').inputValue();
+    // O valor veio da parte dita ANTES do silêncio, a conta e a data da parte
+    // dita DEPOIS: só batem as duas se o texto atravessou o fechamento.
+    cobrar(valor === '45,00', `${largura}: a fala anterior ao silêncio se perdeu (valor "${valor}")`);
+    cobrar(conta === 'nb', `${largura}: a fala posterior ao silêncio se perdeu (conta "${conta}")`);
+    cobrar(data === ONTEM, `${largura}: a data dita depois do silêncio se perdeu ("${data}")`);
   }
   await ctx.close();
 }
