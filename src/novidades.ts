@@ -44,6 +44,16 @@ export interface Novidade {
  */
 export const NOVIDADES: Novidade[] = [
   {
+    id: '2026-11-12-nome-ouvido-casa-com-o-seu',
+    data: '2026-11-12',
+    titulo: 'O nome ditado casa com o nome que você já usa',
+    itens: [
+      'O reconhecimento escreve em português do dicionário, e nome de mercado não é português do dicionário. Falar **"comprão"** agora vira o **"Komprão"** que já está na sua carteira — e a categoria vem junto, em vez de nascer um nome novo.',
+      'A comparação é **por som**: `c`, `k` e `qu` valem o mesmo, assim como `ç`, `ss` e `z`. Serve para Komprão, açaí, farmácia e qualquer nome escrito do jeito do dono.',
+      'A troca aparece escrita embaixo do campo, com o que foi ouvido entre aspas. Nome curto não é trocado — com três letras tudo fica perto de tudo.',
+    ],
+  },
+  {
     id: '2026-11-12-ditado-mais-solto',
     data: '2026-11-12',
     titulo: 'O ditado entende mais, e não para quando você pensa',

@@ -9,6 +9,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { addMonths, formatDate, isValidISO, today } from '../../domain/date.ts';
+import { aproximarNome } from '../../domain/aproximacao.ts';
 import { interpretarFala, type FalaEntendida } from '../../domain/fala.ts';
 import { faturaDaCompra } from '../../domain/faturas.ts';
 import { lembrar, nomesConhecidos, type Lembranca } from '../../domain/memoria.ts';
@@ -167,6 +168,7 @@ function SingleFields({
   lockKind,
   aoMudarDescricao,
   lembranca,
+  ouvidoAntes,
 }: {
   state: SingleState;
   set: (patch: Partial<SingleState>) => void;
@@ -176,6 +178,8 @@ function SingleFields({
   aoMudarDescricao?: (valor: string) => void;
   /** O que foi lembrado deste nome, só para dizer de onde veio o preenchido. */
   lembranca?: Lembranca | null;
+  /** O que o reconhecedor tinha ouvido, quando o app trocou por um nome já usado. */
+  ouvidoAntes?: string;
 }) {
   const { categories } = useLookups();
   const { data } = useFinance();
@@ -223,7 +227,7 @@ function SingleFields({
       <Field
         label="Descrição"
         error={errors.description}
-        hint={lembranca ? dicaDaMemoria(lembranca) : undefined}
+        hint={dicaDoCampo(lembranca, ouvidoAntes)}
       >
         {(id) => (
           <input
@@ -316,6 +320,21 @@ function dicaDaMemoria(lembranca: Lembranca): string {
   return lembranca.valorEstavel
     ? `${quando} — categoria e valor (${formatMoney(lembranca.amount)}) preenchidos; confira.`
     : `${quando} — categoria preenchida; confira.`;
+}
+
+/**
+ * A linha abaixo do campo de descrição.
+ *
+ * Quando o app trocou o que foi ouvido por um nome que já existe, isso vem
+ * primeiro e **com o que foi ouvido entre aspas**: trocar em silêncio faria a
+ * pessoa achar que o reconhecimento acertou de primeira, e no dia em que ele
+ * errar o nome ela não teria como desconfiar.
+ */
+function dicaDoCampo(lembranca: Lembranca | null | undefined, ouvidoAntes: string | undefined): string | undefined {
+  const partes: string[] = [];
+  if (ouvidoAntes) partes.push(`🔎 Ouvi "${ouvidoAntes}" e usei o nome que você já tem.`);
+  if (lembranca) partes.push(dicaDaMemoria(lembranca));
+  return partes.length > 0 ? partes.join(' ') : undefined;
 }
 
 /* -------------------------------------------------------------- parcelado */
@@ -1036,21 +1055,36 @@ function AvisoDeFatura({ contaId, data }: { contaId: string; data: string }) {
  * O botão é um alternador, e por isso carrega `aria-pressed`: para quem usa
  * leitor de tela, é o que distingue "liga o microfone" de "manda alguma coisa
  * acontecer".
+ *
+ * **O nome ouvido passa pelos nomes que já existem antes de qualquer outra
+ * coisa**, aqui dentro e não no formulário: a linha "Entendi" mostra o nome, e
+ * se o casamento acontecesse depois ela mostraria "Comprão" com o campo logo
+ * abaixo escrito "Komprão" — a tela se contradizendo sozinha.
  */
-function DitarLancamento({ aoEntender }: { aoEntender: (fala: FalaEntendida) => void }) {
+function DitarLancamento({
+  aoEntender,
+}: {
+  /** `ouvidoAntes` vem preenchido quando o nome ouvido virou outro já usado. */
+  aoEntender: (fala: FalaEntendida, ouvidoAntes: string) => void;
+}) {
   const { accounts, categories } = useLookups();
+  const { data } = useFinance();
   const [ultima, setUltima] = useState<FalaEntendida | null>(null);
+  const nomes = useMemo(() => nomesConhecidos(data.entries), [data.entries]);
 
   const ditado = usarDitado((texto) => {
-    const fala = interpretarFala(texto, {
+    const crua = interpretarFala(texto, {
       hoje: today(),
       contas: accounts.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name })),
       categorias: categories
         .filter((c) => !c.archived)
         .map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
     });
+    const achado = crua.description ? aproximarNome(crua.description, nomes) : null;
+    const fala = achado ? { ...crua, description: achado.nome } : crua;
+    const ouvidoAntes = achado && achado.motivo !== 'exato' ? crua.description : '';
     setUltima(fala);
-    aoEntender(fala);
+    aoEntender(fala, ouvidoAntes);
   });
 
   // Navegador sem reconhecimento de fala (Firefox, por exemplo): o botão
@@ -1148,6 +1182,8 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
    */
   const mexeu = useRef({ valor: false, categoria: false, tipo: false });
   const [lembranca, setLembranca] = useState<Lembranca | null>(null);
+  /** O que o reconhecedor ouviu, quando o app trocou por um nome já usado. */
+  const [ouvidoAntes, setOuvidoAntes] = useState('');
   const permitidos = useMemo(
     () => ({ categorias: new Set(data.categories.filter((c) => !c.archived).map((c) => c.id)) }),
     [data.categories],
@@ -1188,13 +1224,20 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
   }
 
   function aoMudarDescricao(description: string) {
+    setOuvidoAntes('');
     const achada = lembrar(data.entries, description, permitidos);
     setLembranca(achada);
     aplicar({ description, ...doLembrado(achada) });
   }
 
-  /** O ditado preenche; o que a frase disse vence o que a memória lembra. */
-  function aoDitar(fala: FalaEntendida) {
+  /**
+   * O ditado preenche; o que a frase disse vence o que a memória lembra.
+   *
+   * A descrição já chega casada com os nomes que existem — isso acontece em
+   * `DitarLancamento`, e o porquê está lá e em `domain/aproximacao.ts`.
+   */
+  function aoDitar(fala: FalaEntendida, ouvido: string) {
+    setOuvidoAntes(ouvido);
     const achada = fala.description ? lembrar(data.entries, fala.description, permitidos) : null;
     setLembranca(achada);
     const patch: Partial<SingleState> = { ...doLembrado(achada) };
@@ -1346,6 +1389,7 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
             errors={shown}
             aoMudarDescricao={aoMudarDescricao}
             lembranca={lembranca}
+            ouvidoAntes={ouvidoAntes}
           />
         </form>
       )}

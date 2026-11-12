@@ -19,6 +19,8 @@
  *  0b. ficar calado NÃO encerra a gravação: o navegador fecha o reconhecedor
  *     sozinho depois de alguns segundos sem som, e o app tem de reabrir na
  *     hora, somando no mesmo texto. Só o segundo toque encerra;
+ *  0c. o nome ouvido casa com um nome que já existe, mesmo escrito de outro
+ *     jeito: "comprão" do dicionário vira o "Komprão" da carteira;
  *  1. a frase ditada preenche valor, data, nome, tipo e conta;
  *  2. o que foi entendido aparece escrito, para conferência;
  *  3. escrever um nome já usado traz de volta a categoria e — quando o valor
@@ -65,6 +67,11 @@ const CARTEIRA = JSON.stringify({
     lanc('Aluguel', { amount: 180000, accountId: 'cc', categoryId: 'casa' }),
     // Salário: entrada, para provar que o tipo também é lembrado.
     lanc('Salário', { amount: 500000, accountId: 'cc', categoryId: 'sal', kind: 'income' }),
+    // O mercado com K: o reconhecedor vai escrever "comprão", do dicionário.
+    // Categoria diferente das outras de propósito, para provar que ela veio
+    // DESTE nome e não de outro.
+    lanc('Komprão', { amount: 15000, categoryId: 'casa' }),
+    lanc('Komprão', { amount: 23000, categoryId: 'casa' }),
   ],
   recurring: [], purchases: [], tombstones: [],
 });
@@ -121,6 +128,19 @@ const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process
 async function abrirNovo(p, largura) {
   await p.click(largura < 600 ? '.fab' : '.topbar button:has-text("Novo lançamento")');
   await p.waitForSelector('.dialog');
+}
+
+/**
+ * O texto de um elemento que pode não existir.
+ *
+ * `textContent()` num seletor sem correspondência fica trinta segundos
+ * esperando e derruba a sonda com um rastro de pilha — o que acusa, mas não
+ * diz o que houve. Ausente é uma resposta válida aqui: vira string vazia, e a
+ * cobrança diz o que faltou.
+ */
+async function texto(locator) {
+  const partes = await locator.allTextContents();
+  return partes.join(' ').replace(/\s+/g, ' ').trim();
 }
 
 /** Espera sem derrubar a sonda: um estouro vira uma linha de falha legível. */
@@ -327,7 +347,7 @@ for (const largura of [390, 1280]) {
 
   cobrar(await p.evaluate(() => window.__ditado.continuo) === true,
     `${largura}: o reconhecedor foi ligado sem "continuous" — ele encerraria na primeira pausa da fala`);
-  const antesDoSilencio = (await p.locator('.dialog .ditado-texto').textContent()) ?? '';
+  const antesDoSilencio = await texto(p.locator('.dialog .ditado-texto'));
   cobrar(/mercado/.test(antesDoSilencio),
     `${largura}: a primeira parte não apareceu na tela — "${antesDoSilencio}"`);
 
@@ -356,6 +376,61 @@ for (const largura of [390, 1280]) {
     cobrar(valor === '45,00', `${largura}: a fala anterior ao silêncio se perdeu (valor "${valor}")`);
     cobrar(conta === 'nb', `${largura}: a fala posterior ao silêncio se perdeu (conta "${conta}")`);
     cobrar(data === ONTEM, `${largura}: a data dita depois do silêncio se perdeu ("${data}")`);
+  }
+  await ctx.close();
+}
+
+/* ============ 0c. o nome ouvido casa com o nome que já existe ============= */
+/*
+ * O reconhecimento escreve em português correto, e nome de comércio não é
+ * português correto. Falar "comprão" devolve a palavra do dicionário; a
+ * carteira inteira tem "Komprão", que é o nome do mercado.
+ *
+ * Sem casar os dois, o mesmo mercado de todo sábado vira duas entradas na
+ * lista e a categoria não vem junto. A sonda cobra as duas coisas, e cobra
+ * também que a troca apareça escrita: trocar em silêncio faria quem ditou
+ * achar que o reconhecimento acertou de primeira.
+ */
+for (const largura of [390, 1280]) {
+  const ctx = await b.newContext({
+    viewport: { width: largura, height: 1000 },
+    hasTouch: largura < 600, isMobile: largura < 600,
+  });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => falhas.push(`erro de página (nome parecido) ${largura}: ${e}`));
+  await p.addInitScript((d) => { localStorage.setItem('financeiro-pessoal', d); localStorage.setItem('financeiro-pessoal:novidades-vistas', 'em-dia'); }, CARTEIRA);
+  await p.addInitScript(instalarFalso, {
+    frase: 'paguei no comprão oitenta reais',
+    precisaDe: 0,
+  });
+
+  await p.goto(`${APP}#/lancamentos`);
+  await p.waitForSelector('.eixos-do-recorte');
+  await abrirNovo(p, largura);
+  const botao = p.locator('.dialog .ditado-botao');
+  await botao.click();
+  await p.waitForTimeout(250);
+  await botao.click();
+
+  if (await esperar(p, '.dialog .banner.ok:has-text("Entendi")',
+    `${largura}: o ditado do nome parecido não produziu lançamento`)) {
+    const nome = await p.locator('.dialog input[list="nomes-ja-lancados"]').inputValue();
+    cobrar(nome === 'Komprão',
+      `${largura}: "comprão" não virou o nome que já existe (ficou "${nome}")`);
+
+    // A categoria do Komprão é "casa", diferente da dos outros nomes: só vem
+    // se o casamento tiver acontecido de verdade.
+    const categoria = await p.locator('.dialog').getByLabel('Categoria', { exact: true }).inputValue();
+    cobrar(categoria === 'casa',
+      `${largura}: a categoria do nome já usado não veio junto (ficou "${categoria}")`);
+
+    const dica = await texto(p.locator('.dialog .field:has(input[list="nomes-ja-lancados"]) .hint'));
+    cobrar(/Ouvi/.test(dica) && /compr/i.test(dica),
+      `${largura}: a troca de nome foi feita em silêncio — dica "${dica}"`);
+
+    // E o valor ditado não se perdeu no caminho.
+    cobrar(await p.locator('.dialog input.money').inputValue() === '80,00',
+      `${largura}: o valor ditado se perdeu ao casar o nome`);
   }
   await ctx.close();
 }
@@ -431,7 +506,7 @@ for (const largura of [390, 1280]) {
   cobrar(await conta.inputValue() === contaInicial,
     `${largura}: "Mercado" mexeu na conta (de "${contaInicial}" para "${await conta.inputValue()}")`);
   cobrar(await valor.inputValue() === '', `${largura}: chutou um valor para um nome cujo valor muda ("${await valor.inputValue()}")`);
-  const dica = (await p.locator('.dialog .field:has(input[list="nomes-ja-lancados"]) .hint').textContent()) ?? '';
+  const dica = await texto(p.locator('.dialog .field:has(input[list="nomes-ja-lancados"]) .hint'));
   cobrar(/Como em/.test(dica), `${largura}: a dica não diz de onde veio o preenchido — "${dica}"`);
   cobrar(/categoria/i.test(dica), `${largura}: a dica não diz o que foi preenchido — "${dica}"`);
 
