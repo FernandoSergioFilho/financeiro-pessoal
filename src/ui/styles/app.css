@@ -1465,3 +1465,16 @@ textarea.input { resize: vertical; min-height: 64px; }
 .novidades section + section {
   border-top: 1px solid var(--border); padding-top: 14px;
 }
+
+/* ----------------------------------------------------------------- alcance */
+/* As duas escolhas de "esta alteração vale para quando?". Botões altos, com
+   título e explicação empilhados: a decisão é entre dois caminhos, e cada um
+   precisa dizer o que faz com os outros meses antes de ser tocado. */
+.alcance { display: flex; flex-direction: column; gap: 10px; }
+.alcance .btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  width: 100%; text-align: left; padding: 12px 14px; height: auto;
+  white-space: normal; line-height: 1.35;
+}
+.alcance .btn strong { font-size: 0.95rem; }
+.alcance .btn .dim { font-size: 0.8rem; font-weight: 400; }

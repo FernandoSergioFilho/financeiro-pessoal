@@ -1421,8 +1421,67 @@ export function NewEntryDialog({ defaultDate, onClose }: { defaultDate?: string;
 
 /* ---------------------------------------------------------------- edição */
 
+/**
+ * "Esta alteração vale para quando?"
+ *
+ * A pergunta da agenda do Google, pelo mesmo motivo: uma série que muda no
+ * meio tem passado e futuro, e só quem está editando sabe de qual dos dois
+ * está falando. Uma assinatura que subiu de preço não reescreve os meses já
+ * pagos; um valor que estava errado desde sempre, sim — e aí o caminho é
+ * editar a conta recorrente, que esta caixa diz onde fica.
+ *
+ * São dois botões, e não duas marcações com um "OK" no fim: a escolha é a
+ * ação, e no celular um toque vale por dois.
+ */
+function EscolherAlcance({
+  descricao,
+  onSomenteEste,
+  onDaquiEmDiante,
+  onCancelar,
+}: {
+  descricao: string;
+  onSomenteEste: () => void;
+  onDaquiEmDiante: () => void;
+  onCancelar: () => void;
+}) {
+  return (
+    <Dialog
+      title="Alterar lançamento recorrente"
+      onClose={onCancelar}
+      footer={
+        <>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={onCancelar}>
+            Cancelar
+          </button>
+        </>
+      }
+    >
+      <p style={{ marginTop: 0 }}>
+        <strong>{descricao}</strong> se repete. Esta alteração vale para quando?
+      </p>
+      <div className="alcance">
+        <button type="button" className="btn" onClick={onSomenteEste}>
+          <strong>Somente este</strong>
+          <span className="dim">Os outros meses continuam como estão.</span>
+        </button>
+        <button type="button" className="btn" onClick={onDaquiEmDiante}>
+          <strong>Este e os futuros</strong>
+          <span className="dim">
+            Os meses que já passaram ficam como estão; daqui em diante vale o novo.
+          </span>
+        </button>
+      </div>
+      <p className="hint">
+        Para mudar <strong>todos</strong>, inclusive os que já passaram, edite a conta em{' '}
+        <strong>Contas recorrentes</strong>.
+      </p>
+    </Dialog>
+  );
+}
+
 export function EditEntryDialog({ entry, onClose }: { entry: DisplayEntry; onClose: () => void }) {
-  const { api } = useFinance();
+  const { api, data } = useFinance();
   const [state, set] = useSingleState({
     kind: entry.kind,
     amount: entry.amount,
@@ -1436,16 +1495,32 @@ export function EditEntryDialog({ entry, onClose }: { entry: DisplayEntry; onClo
   });
   const [submitted, setSubmitted] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [escolhendo, setEscolhendo] = useState(false);
 
   const errors = singleErrors(state);
   const isProjection = 'projected' in entry && entry.projected === true;
   const isInstallment = Boolean(entry.purchaseId);
+  // A regra viva por trás desta ocorrência. Pode não existir: lançamento que
+  // veio de uma recorrente apagada guarda o vínculo e perde a regra.
+  const regra = useMemo(
+    () => (entry.recurringId ? data.recurring.find((r) => r.id === entry.recurringId) : undefined),
+    [data.recurring, entry.recurringId],
+  );
 
   function submit(event: FormEvent) {
     event.preventDefault();
     setSubmitted(true);
     if (Object.keys(errors).length > 0) return;
+    // Com regra viva, a pergunta vem antes de gravar: só quem edita sabe se
+    // está corrigindo este mês ou mudando o que vem.
+    if (regra) {
+      setEscolhendo(true);
+      return;
+    }
+    gravar();
+  }
 
+  function gravar() {
     const draft = toDraft(state);
     if (isProjection) {
       // Editar uma ocorrência prevista a transforma em lançamento próprio,
@@ -1468,6 +1543,17 @@ export function EditEntryDialog({ entry, onClose }: { entry: DisplayEntry; onClo
     onClose();
   }
 
+  function gravarDaquiEmDiante() {
+    if (!regra) return;
+    api.mudarDaquiEmDiante(
+      regra,
+      entry.occurrenceDate ?? entry.date,
+      toDraft(state),
+      isProjection ? undefined : entry.id,
+    );
+    onClose();
+  }
+
   function remove() {
     if (isProjection && entry.recurringId && entry.occurrenceDate) {
       api.skipOccurrence(entry.recurringId, entry.occurrenceDate);
@@ -1475,6 +1561,17 @@ export function EditEntryDialog({ entry, onClose }: { entry: DisplayEntry; onClo
       api.deleteEntry(entry.id);
     }
     onClose();
+  }
+
+  if (escolhendo && regra) {
+    return (
+      <EscolherAlcance
+        descricao={regra.description}
+        onSomenteEste={gravar}
+        onDaquiEmDiante={gravarDaquiEmDiante}
+        onCancelar={() => setEscolhendo(false)}
+      />
+    );
   }
 
   if (confirming) {
@@ -1521,7 +1618,9 @@ export function EditEntryDialog({ entry, onClose }: { entry: DisplayEntry; onClo
             </span>
             <span>
               {entry.recurringId
-                ? 'Ocorrência de uma conta recorrente. A alteração vale só para este mês — para mudar todos, edite a conta recorrente.'
+                ? regra
+                  ? 'Ocorrência de uma conta recorrente. Ao salvar, você escolhe se a alteração vale só para este mês ou daqui em diante.'
+                  : 'Veio de uma conta recorrente que não existe mais. A alteração vale só para este lançamento.'
                 : `Parcela ${entry.installmentNumber}/${entry.installmentTotal} de uma compra parcelada.`}
             </span>
           </div>

@@ -27,6 +27,23 @@ export function occurrenceAt(rule: RecurringRule, index: number): string {
   }
 }
 
+/**
+ * Em que posição da série cai esta data — ou `null`, se ela não é ocorrência.
+ *
+ * Serve para dividir a regra: quem já tem um teto de ocorrências precisa
+ * saber quantas ficaram para trás do corte para descontá-las do teto da regra
+ * nova. Percorre desde o começo porque a resposta tem de ser exata, e a
+ * aproximação de `firstIndexNear` não serve para isso.
+ */
+export function indiceDaData(rule: RecurringRule, date: string): number | null {
+  for (let index = 0; index < MAX_STEPS; index += 1) {
+    const atual = occurrenceAt(rule, index);
+    if (atual === date) return index;
+    if (atual > date) return null;
+  }
+  return null;
+}
+
 /** Salto aproximado até a janela pedida, para não iterar desde 2010. */
 function firstIndexNear(rule: RecurringRule, from: string): number {
   const start = parseISO(rule.startDate);

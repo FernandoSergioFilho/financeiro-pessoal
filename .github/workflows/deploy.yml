@@ -75,6 +75,7 @@ jobs:
           npm run test:recortes
           npm run test:ditado
           npm run test:novidades
+          npm run test:recorrentes
           npm run build
           npm run test:dois
 

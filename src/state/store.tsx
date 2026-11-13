@@ -16,6 +16,7 @@ import {
 } from 'react';
 
 import type { Copia } from '../domain/backup.ts';
+import { dividirRecorrente } from '../domain/divisao-recorrente.ts';
 import { buildPurchase, type PurchaseDraft } from '../domain/installments.ts';
 import type {
   Account,
@@ -51,6 +52,14 @@ export interface FinanceApi {
   addRecurring(draft: RecurringDraft): RecurringRule;
   updateRecurring(id: string, patch: Partial<RecurringRule>): void;
   deleteRecurring(id: string): void;
+  /**
+   * Muda a conta recorrente desta ocorrência em diante, sem tocar no passado.
+   *
+   * É o que a assinatura que mudou de preço pede: os meses que já passaram
+   * foram pagos pelo valor antigo e continuam contando o valor antigo. O corte
+   * em si está em `domain/divisao-recorrente.ts`; aqui é só a gravação.
+   */
+  mudarDaquiEmDiante(regra: RecurringRule, ocorrencia: string, draft: EntryDraft, entryId?: string): void;
 
   addPurchase(draft: PurchaseDraft): void;
   deletePurchase(id: string): void;
@@ -194,6 +203,7 @@ export function FinanceProvider({
       deleteRecurring(id) {
         dispatch({ type: 'recurring/delete', id, deletedAt: now() });
       },
+      mudarDaquiEmDiante: () => undefined, // substituído abaixo, onde os dados são conhecidos
 
       addPurchase(draft) {
         const { purchase, entries } = buildPurchase(draft, newId, now());
@@ -237,16 +247,84 @@ export function FinanceProvider({
     };
   }, [now, repository]);
 
+  /**
+   * O corte da recorrência, aplicado.
+   *
+   * Mora aqui, e não dentro do `api` acima, porque precisa dos dados de agora
+   * — quais ocorrências já estão gravadas depois do corte. É o mesmo motivo
+   * de `isAccountInUse` morar aqui.
+   *
+   * São vários despachos em vez de uma ação só: cada um deles já existe,
+   * já é testado e já carimba o `updatedAt` que a sincronização usa. Uma ação
+   * nova que fizesse tudo junto teria de repetir essas três coisas.
+   */
+  const mudarDaquiEmDiante = useCallback(
+    (regra: RecurringRule, ocorrencia: string, draft: EntryDraft, entryId?: string) => {
+      const stamp = now();
+      const valores = {
+        description: draft.description,
+        amount: draft.amount,
+        kind: draft.kind,
+        accountId: draft.accountId,
+        toAccountId: draft.toAccountId ?? null,
+        categoryId: draft.categoryId ?? null,
+      };
+      const divisao = dividirRecorrente(regra, ocorrencia, draft.date, valores, data.entries);
+      const regraDaqui = divisao.nova
+        ? { ...divisao.nova, id: newId(), createdAt: stamp, updatedAt: stamp }
+        : null;
+
+      dispatch({ type: 'recurring/update', id: regra.id, patch: divisao.patchDaAnterior, updatedAt: stamp });
+      if (regraDaqui) dispatch({ type: 'recurring/create', rule: regraDaqui });
+
+      // O vínculo muda sempre; o valor, só no que ainda não foi confirmado.
+      for (const alcancada of divisao.mover) {
+        dispatch({
+          type: 'entry/update',
+          id: alcancada.id,
+          patch: {
+            ...(regraDaqui ? { recurringId: regraDaqui.id } : {}),
+            ...(alcancada.atualizarValores ? valores : {}),
+          },
+          updatedAt: stamp,
+        });
+      }
+
+      /*
+       * A ocorrência editada vira lançamento gravado mesmo quando a regra já
+       * diria tudo. É o que guarda o "já paguei" e a observação, que regra
+       * nenhuma carrega — sem isto, marcar como pago e escolher "daqui em
+       * diante" perderia a marca em silêncio.
+       *
+       * A `occurrenceDate` passa a ser o dia NOVO: é por ela que a projeção
+       * reconhece o mês como já gravado, e a regra daqui projeta no dia novo.
+       */
+      const vinculo = {
+        recurringId: regraDaqui?.id ?? regra.id,
+        occurrenceDate: draft.date,
+      };
+      if (entryId) {
+        dispatch({ type: 'entry/update', id: entryId, patch: { ...draft, ...vinculo }, updatedAt: stamp });
+      } else {
+        dispatch({
+          type: 'entry/create',
+          entry: { ...draft, ...vinculo, id: newId(), createdAt: stamp, updatedAt: stamp },
+        });
+      }
+    },
+    [data.entries, now],
+  );
+
   const value = useMemo<FinanceContextValue>(
     () => ({
       data,
       loading,
       storageBlocked,
-      api: { ...api, isAccountInUse: (id) => accountInUse(data, id) },
+      api: { ...api, isAccountInUse: (id) => accountInUse(data, id), mudarDaquiEmDiante },
       cloud,
       cloudApi,
     }),
-    [data, loading, storageBlocked, api, cloud, cloudApi],
+    [data, loading, storageBlocked, api, cloud, cloudApi, mudarDaquiEmDiante],
   );
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;

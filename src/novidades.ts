@@ -44,6 +44,16 @@ export interface Novidade {
  */
 export const NOVIDADES: Novidade[] = [
   {
+    id: '2026-11-13-mudar-daqui-em-diante',
+    data: '2026-11-13',
+    titulo: 'Mudar uma conta recorrente daqui em diante',
+    itens: [
+      'Ao salvar a alteração de um mês de uma conta que se repete, o app pergunta: **Somente este** ou **Este e os futuros**.',
+      'É o caso da assinatura que mudou de preço. Os meses que já passaram continuam com o valor antigo — eles já foram pagos assim — e daqui em diante vale o novo.',
+      'O que você já tinha confirmado como pago no futuro não muda de valor: ali o dinheiro já se moveu. Para mudar **tudo**, inclusive o passado, continue editando a conta em **Contas recorrentes**.',
+    ],
+  },
+  {
     id: '2026-11-12-nome-ouvido-casa-com-o-seu',
     data: '2026-11-12',
     titulo: 'O nome ditado casa com o nome que você já usa',
